@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,7 @@ const HEADER_ALIASES: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
+  if (!(await getCurrentUser())) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   let csvText = "";
   let companyId = "";
   const contentType = req.headers.get("content-type") || "";

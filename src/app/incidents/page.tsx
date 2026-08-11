@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import IncidentsClient from "./IncidentsClient";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,7 @@ export default async function IncidentsPage({
 }: {
   searchParams: { company?: string };
 }) {
+  await requireUser();
   const companyId = searchParams.company || undefined;
   const [incidents, companies] = await Promise.all([
     prisma.incident.findMany({

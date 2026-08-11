@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+
+async function guard() {
+  return (await getCurrentUser()) ? null : NextResponse.json({ error: "unauthorized" }, { status: 401 });
+}
 
 // PATCH /api/linegroups/[id]
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const g = await guard(); if (g) return g;
   const body = await req.json();
   const data: Record<string, unknown> = {};
   if ("name" in body) data.name = String(body.name).trim();
@@ -25,6 +31,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const g = await guard(); if (g) return g;
   try {
     await prisma.lineGroup.delete({ where: { id: params.id } });
     return NextResponse.json({ ok: true });

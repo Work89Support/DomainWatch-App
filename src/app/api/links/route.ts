@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/links — เพิ่มลิงก์ใหม่
 export async function POST(req: NextRequest) {
+  if (!(await getCurrentUser())) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = await req.json();
   if (!body?.name || !body?.url || !body?.companyId) {
     return NextResponse.json(

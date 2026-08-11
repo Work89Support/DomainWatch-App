@@ -31,6 +31,18 @@ export type DashboardData = {
     adminResponseMin: number | null;
     itResponseMin: number | null;
   }[];
+  // มิติไอที: ลิงก์สำรอง
+  linksWithBackup: number;
+  linksWithoutBackup: { id: string; name: string; company: string }[];
+  // มิติแอดมิน: คิวที่ต้องอัพเดต (ลิงก์ที่ล่ม)
+  updateQueue: {
+    incidentId: string;
+    linkName: string;
+    company: string;
+    url: string;
+    hasBackup: boolean;
+    detectedAt: string;
+  }[];
 };
 
 // companyId = undefined => รวมทุกบริษัท
@@ -58,6 +70,28 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
         include: { link: { include: { company: true } } },
       }),
     ]);
+
+  // มิติไอที: ลิงก์สำรอง
+  const hasBk = (l: (typeof links)[number]) => !!(l.backupUrl && l.backupUrl.trim());
+  const linksWithBackup = links.filter(hasBk).length;
+  const linksWithoutBackup = links
+    .filter((l) => !hasBk(l))
+    .map((l) => ({ id: l.id, name: l.name, company: l.company.name }));
+
+  // มิติแอดมิน: คิวลิงก์ที่ล่ม (เคสที่ยังไม่ปิด)
+  const openList = await prisma.incident.findMany({
+    where: { ...incWhere, status: { not: "CLOSED" } },
+    orderBy: { detectedAt: "desc" },
+    include: { link: { include: { company: true } } },
+  });
+  const updateQueue = openList.map((i) => ({
+    incidentId: i.id,
+    linkName: i.link.name,
+    company: i.link.company.name,
+    url: i.link.url,
+    hasBackup: !!(i.link.backupUrl && i.link.backupUrl.trim()),
+    detectedAt: i.detectedAt.toISOString(),
+  }));
 
   const upCount = links.filter((l) => l.lastStatus === "UP").length;
   const downCount = links.filter((l) => l.lastStatus === "DOWN").length;
@@ -155,5 +189,8 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
       adminResponseMin: i.adminResponseMin,
       itResponseMin: i.itResponseMin,
     })),
+    linksWithBackup,
+    linksWithoutBackup,
+    updateQueue,
   };
 }

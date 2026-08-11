@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Kanit } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
+import Topbar from "@/components/Topbar";
+import { getCurrentUser } from "@/lib/auth";
 
 const kanit = Kanit({
   subsets: ["latin", "thai"],
@@ -15,18 +17,26 @@ export const metadata: Metadata = {
   description: "ระบบบอทตรวจเช็คสถานะหน้าเว็บ/ลิงก์ พร้อม KPI และ Dashboard",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const user = await getCurrentUser();
   return (
     <html lang="th" className={kanit.variable}>
       <body className="font-sans">
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <main className="flex-1 min-w-0">{children}</main>
-        </div>
+        {user ? (
+          <div className="flex min-h-screen">
+            <Sidebar role={user.role} />
+            <div className="flex-1 min-w-0 flex flex-col">
+              <Topbar user={user} />
+              <main className="flex-1 min-w-0">{children}</main>
+            </div>
+          </div>
+        ) : (
+          <main>{children}</main>
+        )}
       </body>
     </html>
   );

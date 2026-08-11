@@ -1,9 +1,24 @@
 // ข้อมูลตัวอย่างเริ่มต้น — รัน: npm run db:seed
 import { PrismaClient } from "@prisma/client";
+import crypto from "crypto";
 
 const prisma = new PrismaClient();
 
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
+
 async function main() {
+  // ผู้ดูแลระบบเริ่มต้น (สำหรับ dev) — username: admin / password: admin123
+  if ((await prisma.user.count()) === 0) {
+    await prisma.user.create({
+      data: { name: "ผู้ดูแลระบบ", username: "admin", passwordHash: hashPassword("admin123"), role: "ADMIN" },
+    });
+    console.log("สร้างผู้ดูแลเริ่มต้น: admin / admin123");
+  }
+
   const count = await prisma.company.count();
   if (count > 0) {
     console.log(`มีบริษัทอยู่แล้ว ${count} รายการ — ข้ามการ seed`);

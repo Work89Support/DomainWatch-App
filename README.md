@@ -118,12 +118,13 @@ git push -u origin main
 1. เข้า vercel.com → New Project → เลือก repo นี้
 2. ต้องมี PostgreSQL: ใช้ **Vercel Postgres**, **Neon** หรือ **Supabase** (ฟรี)
    แล้วเอา connection string มาใส่เป็น Environment Variable ชื่อ `DATABASE_URL`
-3. ใส่ env อื่น ๆ: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID`,
-   `TELEGRAM_IT_CHAT_ID`, `CRON_SECRET`, `APP_BASE_URL` (= โดเมนที่ deploy)
+3. ใส่ env อื่น ๆ: `AUTH_SECRET` (สุ่มยาว ๆ — จำเป็น), `CRON_SECRET`,
+   `APP_BASE_URL` (= โดเมนที่ deploy) และ (ถ้าใช้ Telegram) `TELEGRAM_BOT_TOKEN`,
+   `TELEGRAM_ADMIN_CHAT_ID`, `TELEGRAM_IT_CHAT_ID`
 4. ตารางฐานข้อมูลจะถูกสร้างให้อัตโนมัติตอน deploy (build จะรัน `prisma db push` ให้เอง)
    ไม่ต้องใช้ Terminal
-5. ใส่ข้อมูลตัวอย่าง (ครั้งเดียว): เปิดเบราว์เซอร์ไปที่
-   `https://<โดเมนของคุณ>/api/seed?token=<CRON_SECRET>` แล้วรีเฟรชหน้าแรก
+5. เปิดเว็บครั้งแรก → ไปที่ `https://<โดเมนของคุณ>/setup` สร้างบัญชีผู้ดูแลคนแรก
+   (ถ้าต้องการข้อมูลตัวอย่างด้วย เปิด `https://<โดเมนของคุณ>/api/seed?token=<CRON_SECRET>` หนึ่งครั้ง)
 6. ไฟล์ `vercel.json` ตั้ง **Cron ทุก 5 นาที** ให้เรียก `/api/check` อยู่แล้ว
    (Vercel จะแนบ `Authorization: Bearer <CRON_SECRET>` ให้อัตโนมัติเมื่อมี env `CRON_SECRET`)
 
@@ -161,6 +162,13 @@ domainwatch/
 ├─ vercel.json             # ตั้ง cron เช็คทุก 5 นาที
 └─ .env.example
 ```
+
+## ระบบล็อกอิน + KPI รายคน (เวอร์ชัน 2)
+- ต้องตั้ง env `AUTH_SECRET` (สุ่มยาว ๆ) เพื่อความปลอดภัยของ session
+- เปิดเว็บครั้งแรกไปที่ `/setup` เพื่อสร้าง **บัญชีผู้ดูแลคนแรก** (ถ้ายังไม่มีผู้ใช้ ระบบจะพาไปเอง)
+- เพิ่มทีมงานที่เมนู **จัดการผู้ใช้** (กำหนดบทบาทแอดมิน/ไอที)
+- ทุกครั้งที่มีคนกดจัดการเคส ระบบจะผูกกับผู้ใช้ที่ล็อกอิน → หน้า **KPI รายคน** สรุปว่าใครแก้กี่เคส/ใช้เวลาเท่าไหร่ พร้อมกราฟแนวโน้ม
+- รัน seed ในเครื่องจะได้บัญชีเริ่มต้น **admin / admin123** (เปลี่ยนรหัสทันทีในโปรดักชัน)
 
 ## เริ่มใช้งาน: สร้างบริษัทก่อน
 ไปที่เมนู **บริษัท / ห้อง LINE** → เพิ่มบริษัท และเพิ่มห้อง LINE ของบริษัทนั้น

@@ -3,15 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const nav = [
+const baseNav = [
   { href: "/", label: "แดชบอร์ด", icon: "📊" },
   { href: "/companies", label: "บริษัท / ห้อง LINE", icon: "🏢" },
   { href: "/links", label: "Master Data ลิงก์", icon: "🔗" },
-  { href: "/incidents", label: "เหตุการณ์ / KPI", icon: "🚨" },
+  { href: "/incidents", label: "เหตุการณ์", icon: "🚨" },
+  { href: "/kpi", label: "KPI รายคน", icon: "🏆" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ role }: { role?: "ADMIN" | "IT" }) {
   const pathname = usePathname();
+  const nav = [...baseNav];
+  if (role === "ADMIN") nav.push({ href: "/users", label: "จัดการผู้ใช้", icon: "👥" });
+
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col bg-brand-800 text-white">
       <div className="flex items-center gap-3 px-6 py-6 border-b border-brand-700">
@@ -46,7 +50,7 @@ export default function Sidebar() {
         })}
       </nav>
       <div className="px-6 py-4 text-xs text-brand-300 border-t border-brand-700">
-        เวอร์ชัน 1.0
+        เวอร์ชัน 2.0
       </div>
     </aside>
   );

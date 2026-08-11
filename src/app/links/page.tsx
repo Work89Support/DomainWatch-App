@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import LinksClient from "./LinksClient";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,7 @@ export default async function LinksPage({
 }: {
   searchParams: { company?: string };
 }) {
+  await requireUser();
   const companyId = searchParams.company || undefined;
   const [links, companies] = await Promise.all([
     prisma.link.findMany({

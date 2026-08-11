@@ -32,3 +32,5 @@ prisma/*.db
 
 # vercel
 .vercel
+
+_v2.zip

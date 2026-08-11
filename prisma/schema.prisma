@@ -115,6 +115,8 @@ model Incident {
   backupUrl   String? // ลิงก์สำรองที่ IT เตรียม
   adminUserId String?
   itUserId    String?
+  adminUser   User?   @relation("AdminIncidents", fields: [adminUserId], references: [id])
+  itUser      User?   @relation("ITIncidents", fields: [itUserId], references: [id])
 
   // ---- KPI ที่คำนวณไว้ (นาที) เพื่อ query เร็ว ----
   adminResponseMin Int? // detected/notified -> adminUpdated
@@ -134,12 +136,18 @@ enum IncidentStatus {
   CLOSED // ปิดเคส (ลิงก์กลับมาใช้ได้)
 }
 
-/// ผู้ใช้อย่างง่าย (แอดมิน/ไอที) - เผื่อขยายระบบ auth ภายหลัง
+/// ผู้ใช้ระบบ (แอดมิน/ไอที) — ใช้ล็อกอินและผูก KPI รายคน
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  role      Role     @default(ADMIN)
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  name         String
+  username     String   @unique
+  passwordHash String
+  role         Role     @default(ADMIN)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  adminIncidents Incident[] @relation("AdminIncidents")
+  itIncidents    Incident[] @relation("ITIncidents")
 }
 
 enum Role {

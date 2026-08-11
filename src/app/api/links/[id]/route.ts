@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
+
+async function guard() {
+  return (await getCurrentUser()) ? null : NextResponse.json({ error: "unauthorized" }, { status: 401 });
+}
 
 // PATCH /api/links/[id] — แก้ไขลิงก์
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const g = await guard(); if (g) return g;
   const body = await req.json();
   const data: Record<string, unknown> = {};
   for (const key of [
@@ -46,6 +52,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const g = await guard(); if (g) return g;
   try {
     await prisma.link.delete({ where: { id: params.id } });
     return NextResponse.json({ ok: true });
