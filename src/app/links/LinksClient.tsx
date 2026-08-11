@@ -73,6 +73,8 @@ export default function LinksClient({
 
   const [modal, setModal] = useState<Form | null>(null);
   const [customCat, setCustomCat] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState("");
+  const [newRoomName, setNewRoomName] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -166,9 +168,13 @@ export default function LinksClient({
 
   function openAdd() {
     setCustomCat(false);
+    setNewCompanyName("");
+    setNewRoomName("");
     setModal(emptyForm(defaultCompany));
   }
   function openEdit(l: LinkRow) {
+    setNewCompanyName("");
+    setNewRoomName("");
     const cat = l.category || "";
     setCustomCat(!!cat && !categoryOptions.includes(cat));
     setModal({
@@ -217,22 +223,45 @@ export default function LinksClient({
 
   async function save() {
     if (!modal) return;
-    if (!modal.companyId) return alert("กรุณาเลือกบริษัท");
     if (!modal.name.trim() || !modal.url.trim()) return alert("กรุณากรอกชื่อและลิงก์");
     setSaving(true);
-    const isEdit = !!modal.id;
-    const res = await fetch(isEdit ? `/api/links/${modal.id}` : "/api/links", {
-      method: isEdit ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...modal, lineGroupId: modal.lineGroupId || null }),
-    });
-    setSaving(false);
-    if (res.ok) {
-      setModal(null);
-      router.refresh();
-    } else {
-      const e = await res.json();
-      alert(e.error || "บันทึกไม่สำเร็จ");
+    try {
+      let companyId = modal.companyId;
+      let lineGroupId: string | null = modal.lineGroupId;
+
+      // สร้างบริษัทใหม่ (ถ้าเลือก "เพิ่มบริษัทใหม่")
+      if (companyId === "__new__") {
+        if (!newCompanyName.trim()) { alert("กรุณากรอกชื่อบริษัทใหม่"); return; }
+        const r = await fetch("/api/companies", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: newCompanyName.trim() }),
+        });
+        if (!r.ok) { alert("เพิ่มบริษัทไม่สำเร็จ"); return; }
+        companyId = (await r.json()).id;
+      }
+      if (!companyId) { alert("กรุณาเลือกบริษัท"); return; }
+
+      // สร้างห้อง LINE ใหม่ (ถ้าเลือก "เพิ่มห้องใหม่")
+      if (lineGroupId === "__new__") {
+        if (!newRoomName.trim()) { alert("กรุณากรอกชื่อห้อง LINE ใหม่"); return; }
+        const r = await fetch("/api/linegroups", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ companyId, name: newRoomName.trim() }),
+        });
+        if (!r.ok) { alert("เพิ่มห้อง LINE ไม่สำเร็จ"); return; }
+        lineGroupId = (await r.json()).id;
+      }
+
+      const isEdit = !!modal.id;
+      const res = await fetch(isEdit ? `/api/links/${modal.id}` : "/api/links", {
+        method: isEdit ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...modal, companyId, lineGroupId: lineGroupId || null }),
+      });
+      if (res.ok) { setModal(null); router.refresh(); }
+      else { const e = await res.json(); alert(e.error || "บันทึกไม่สำเร็จ"); }
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -380,7 +409,11 @@ export default function LinksClient({
                   onChange={(e) => setModal({ ...modal, companyId: e.target.value, lineGroupId: "" })}
                 >
                   {companies.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                  <option value="__new__">+ เพิ่มบริษัทใหม่...</option>
                 </select>
+                {modal.companyId === "__new__" && (
+                  <input className="input mt-2" value={newCompanyName} onChange={(e) => setNewCompanyName(e.target.value)} placeholder="ชื่อบริษัทใหม่" />
+                )}
               </Field>
               <Field label="ห้อง LINE">
                 <select
@@ -390,7 +423,11 @@ export default function LinksClient({
                 >
                   <option value="">— ไม่ระบุ —</option>
                   {modalGroups.map((g) => (<option key={g.id} value={g.id}>{g.name}</option>))}
+                  <option value="__new__">+ เพิ่มห้องใหม่...</option>
                 </select>
+                {modal.lineGroupId === "__new__" && (
+                  <input className="input mt-2" value={newRoomName} onChange={(e) => setNewRoomName(e.target.value)} placeholder="ชื่อห้อง LINE ใหม่" />
+                )}
               </Field>
             </div>
             <Field label="ชื่อลิงก์ *">
