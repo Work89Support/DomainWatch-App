@@ -6,7 +6,7 @@
   "scripts": {
     "go": "bash start.sh",
     "dev": "next dev",
-    "build": "prisma generate && prisma db push --skip-generate && next build",
+    "build": "prisma generate && prisma db push --skip-generate --accept-data-loss && next build",
     "start": "next start",
     "lint": "next lint",
     "check": "tsx scripts/check.ts",
