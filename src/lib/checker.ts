@@ -6,7 +6,11 @@ import {
 } from "@/lib/telegram";
 import type { LinkStatus } from "@prisma/client";
 
-const TIMEOUT_MS = Number(process.env.CHECK_TIMEOUT_MS || 10000);
+const TIMEOUT_MS = Number(process.env.CHECK_TIMEOUT_MS || 15000);
+// ลองซ้ำกี่ครั้งก่อนจะตัดสินว่า "ล่มจริง" (กันเว็บตอบช้า/หลุดชั่วคราว)
+const RETRIES = Number(process.env.CHECK_RETRIES || 2);
+// เช็คพร้อมกันกี่ลิงก์ (network-bound จึงขนานได้ ปลอดภัยกับ DB เพราะเขียนทีหลังแบบเรียงลำดับ)
+const CONCURRENCY = Number(process.env.CHECK_CONCURRENCY || 8);
 const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
 
 export type ProbeResult = {
@@ -16,8 +20,8 @@ export type ProbeResult = {
   error: string | null;
 };
 
-// ยิงเช็ค URL 1 อัน — ถือว่า "ใช้ได้" เมื่อ HTTP < 400
-export async function probe(url: string): Promise<ProbeResult> {
+// ยิงเช็ค URL 1 ครั้ง — ถือว่า "ใช้ได้" เมื่อ HTTP < 400
+async function probeOnce(url: string): Promise<ProbeResult> {
   const start = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -63,7 +67,20 @@ export async function probe(url: string): Promise<ProbeResult> {
         ? `หมดเวลา (timeout ${TIMEOUT_MS}ms)`
         : err?.message || "เชื่อมต่อไม่ได้";
     return { ok: false, httpCode: null, responseMs, error: message };
+  } finally {
+    clearTimeout(timer);
   }
+}
+
+// เช็ค URL พร้อมลองซ้ำ — คืน "ล่ม" ต่อเมื่อพยายามครบทุกครั้งแล้วยังไม่ผ่าน
+export async function probe(url: string): Promise<ProbeResult> {
+  let last: ProbeResult = await probeOnce(url);
+  for (let attempt = 1; attempt <= RETRIES && !last.ok; attempt++) {
+    // เว้นสั้นๆ ก่อนลองใหม่ เผื่อเว็บสะดุดชั่วขณะ
+    await new Promise((r) => setTimeout(r, 800));
+    last = await probeOnce(url);
+  }
+  return last;
 }
 
 export type CheckSummary = {
@@ -87,8 +104,24 @@ export async function runCheck(): Promise<CheckSummary> {
     ranAt: new Date().toISOString(),
   };
 
-  for (const link of links) {
-    const result = await probe(link.url);
+  // 1) ยิงเช็คทุกลิงก์แบบขนาน (เป็นงาน network จึงเร็วและปลอดภัย)
+  const results: ProbeResult[] = new Array(links.length);
+  let cursor = 0;
+  async function worker() {
+    while (true) {
+      const i = cursor++;
+      if (i >= links.length) return;
+      results[i] = await probe(links[i].url);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, links.length) }, worker)
+  );
+
+  // 2) บันทึกผล + จัดการ incident/แจ้งเตือน แบบเรียงลำดับ (กันโหลด DB พุ่ง)
+  for (let i = 0; i < links.length; i++) {
+    const link = links[i];
+    const result = results[i];
     const status: LinkStatus = result.ok ? "UP" : "DOWN";
     const prev = link.lastStatus;
     summary.checked++;
