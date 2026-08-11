@@ -7,10 +7,11 @@ export const dynamic = "force-dynamic";
 export default async function LinksPage({
   searchParams,
 }: {
-  searchParams: { company?: string };
+  searchParams: { company?: string; edit?: string };
 }) {
   await requireUser();
   const currentCompany = searchParams.company || undefined;
+  const focusId = searchParams.edit || undefined;
   // โหลดลิงก์ทั้งหมด แล้วค่อยกรอง/ฟิลเตอร์ฝั่งหน้าเว็บ (ลื่นกว่า)
   const [links, companies] = await Promise.all([
     prisma.link.findMany({
@@ -27,6 +28,7 @@ export default async function LinksPage({
       initialLinks={JSON.parse(JSON.stringify(links))}
       companies={JSON.parse(JSON.stringify(companies))}
       currentCompany={currentCompany}
+      focusId={focusId}
     />
   );
 }

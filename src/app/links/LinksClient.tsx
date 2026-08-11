@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, Fragment } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { fmtDateTime } from "@/lib/format";
@@ -54,10 +54,12 @@ export default function LinksClient({
   initialLinks,
   companies,
   currentCompany,
+  focusId,
 }: {
   initialLinks: LinkRow[];
   companies: Company[];
   currentCompany?: string;
+  focusId?: string;
 }) {
   const router = useRouter();
 
@@ -73,6 +75,17 @@ export default function LinksClient({
   const [customCat, setCustomCat] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // เปิดฟอร์มแก้ไขอัตโนมัติ เมื่อถูกลิงก์มาจากหน้าบริษัท (?edit=<id>)
+  useEffect(() => {
+    if (!focusId) return;
+    const l = initialLinks.find((x) => x.id === focusId);
+    if (l) {
+      setFCompany(l.companyId);
+      openEdit(l);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId]);
 
   const noCompany = companies.length === 0;
   const defaultCompany = fCompany || currentCompany || companies[0]?.id || "";

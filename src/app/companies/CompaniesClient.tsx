@@ -26,10 +26,12 @@ type Company = {
   links: LinkLite[];
 };
 
+type ModalData = { link: LinkLite; companyId: string; company: string; room: string };
+
 function statusMeta(status: string) {
-  if (status === "UP") return { dot: "bg-emerald-500", text: "ใช้งานได้", cls: "text-emerald-600" };
-  if (status === "DOWN") return { dot: "bg-red-500", text: "ใช้ไม่ได้", cls: "text-red-600" };
-  return { dot: "bg-slate-300", text: "ยังไม่เช็ค / ไม่เฝ้าดู", cls: "text-slate-400" };
+  if (status === "UP") return { dot: "bg-emerald-500", text: "ใช้งานได้", cls: "text-emerald-600", pill: "bg-emerald-50 text-emerald-700" };
+  if (status === "DOWN") return { dot: "bg-red-500", text: "ใช้ไม่ได้", cls: "text-red-600", pill: "bg-red-50 text-red-600" };
+  return { dot: "bg-slate-300", text: "ยังไม่เช็ค / ไม่เฝ้าดู", cls: "text-slate-400", pill: "bg-slate-100 text-slate-500" };
 }
 
 export default function CompaniesClient({ initial }: { initial: Company[] }) {
@@ -37,24 +39,26 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
   const [busy, setBusy] = useState(false);
   const [newCompany, setNewCompany] = useState("");
   const [groupInput, setGroupInput] = useState<Record<string, string>>({});
-  const [open, setOpen] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(initial.map((c) => [c.id, true]))
-  );
-  const [linkModal, setLinkModal] = useState<{ link: LinkLite; company: string; room: string } | null>(null);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [linkModal, setLinkModal] = useState<ModalData | null>(null);
 
   function toggle(id: string) {
-    setOpen((o) => ({ ...o, [id]: !o[id] }));
+    setOpen((o) => ({ ...o, [id]: !(o[id] ?? false) }));
   }
 
   async function addCompany() {
     if (!newCompany.trim()) return;
     setBusy(true);
-    await fetch("/api/companies", {
+    const res = await fetch("/api/companies", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newCompany }),
     });
     setBusy(false);
+    if (!res.ok) {
+      alert("เพิ่มบริษัทไม่สำเร็จ");
+      return;
+    }
     setNewCompany("");
     router.refresh();
   }
@@ -122,11 +126,9 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
           <span className="badge bg-white text-brand-700 border border-brand-100">🔗 ลิงก์</span>
         </div>
         <p className="text-xs text-slate-500 mt-2">
-          แต่ละบริษัทมีได้หลายห้อง LINE และแต่ละห้องมีได้หลายลิงก์ · กดที่ลิงก์เพื่อดูรายละเอียด/เปิดลิงก์ ·
+          กดที่บริษัทเพื่อกาง/พับดูห้องและลิงก์ · กดที่ลิงก์เพื่อดูรายละเอียดและเปิดลิงก์ ·
           เพิ่ม/แก้ไขลิงก์ทำที่หน้า{" "}
-          <Link href="/links" className="text-brand-600 hover:underline font-medium">
-            Master Data ลิงก์
-          </Link>
+          <Link href="/links" className="text-brand-600 hover:underline font-medium">Master Data ลิงก์</Link>
         </p>
       </div>
 
@@ -141,29 +143,27 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
             onChange={(e) => setNewCompany(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addCompany()}
           />
-          <button className="btn-primary whitespace-nowrap disabled:opacity-60" disabled={busy} onClick={addCompany}>
-            + เพิ่มบริษัท
+          <button className="btn-primary whitespace-nowrap disabled:opacity-60" disabled={busy || !newCompany.trim()} onClick={addCompany}>
+            {busy ? "กำลังเพิ่ม..." : "+ เพิ่มบริษัท"}
           </button>
         </div>
       </div>
 
       {initial.length === 0 && (
-        <div className="card p-10 text-center text-slate-400">
-          ยังไม่มีบริษัท — เพิ่มบริษัทแรกด้านบน
-        </div>
+        <div className="card p-10 text-center text-slate-400">ยังไม่มีบริษัท — เพิ่มบริษัทแรกด้านบน</div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {initial.map((c) => {
-          const isOpen = open[c.id];
+          const isOpen = open[c.id] ?? false;
           const linksByGroup = (gid: string) => c.links.filter((l) => l.lineGroupId === gid);
           const unassigned = c.links.filter((l) => !l.lineGroupId);
           const downCount = c.links.filter((l) => l.lastStatus === "DOWN").length;
 
           return (
             <div key={c.id} className="card overflow-hidden">
-              {/* หัวบริษัท */}
-              <div className="flex items-center justify-between gap-3 p-4 border-b border-slate-100">
+              {/* หัวบริษัท (กดเพื่อกาง/พับ) */}
+              <div className="flex items-center justify-between gap-3 p-4">
                 <button className="flex items-center gap-3 min-w-0 text-left flex-1" onClick={() => toggle(c.id)}>
                   <span className={`text-slate-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700 text-lg">🏢</div>
@@ -182,7 +182,7 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
               </div>
 
               {isOpen && (
-                <div className="p-4 space-y-3">
+                <div className="p-4 pt-0 space-y-3">
                   {c.lineGroups.length === 0 && unassigned.length === 0 && (
                     <div className="rounded-xl border border-dashed border-slate-200 p-4 text-center text-sm text-slate-400">
                       ยังไม่มีห้อง LINE ในบริษัทนี้ — เพิ่มห้องแรกด้านล่าง 👇
@@ -210,7 +210,7 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
                         ) : (
                           <div className="divide-y divide-slate-50">
                             {gl.map((l) => (
-                              <LinkItem key={l.id} link={l} onClick={() => setLinkModal({ link: l, company: c.name, room: g.name })} />
+                              <LinkItem key={l.id} link={l} onClick={() => setLinkModal({ link: l, companyId: c.id, company: c.name, room: g.name })} />
                             ))}
                           </div>
                         )}
@@ -228,7 +228,7 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
                       </div>
                       <div className="divide-y divide-slate-50">
                         {unassigned.map((l) => (
-                          <LinkItem key={l.id} link={l} onClick={() => setLinkModal({ link: l, company: c.name, room: "ไม่ระบุห้อง" })} />
+                          <LinkItem key={l.id} link={l} onClick={() => setLinkModal({ link: l, companyId: c.id, company: c.name, room: "ไม่ระบุห้อง" })} />
                         ))}
                       </div>
                     </div>
@@ -254,13 +254,7 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
         })}
       </div>
 
-      {/* ป็อปอัพรายละเอียดลิงก์ */}
-      {linkModal && (
-        <LinkDetailModal
-          data={linkModal}
-          onClose={() => setLinkModal(null)}
-        />
-      )}
+      {linkModal && <LinkDetailModal data={linkModal} onClose={() => setLinkModal(null)} />}
     </div>
   );
 }
@@ -268,70 +262,61 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
 function LinkItem({ link, onClick }: { link: LinkLite; onClick: () => void }) {
   const s = statusMeta(link.lastStatus);
   return (
-    <button
-      onClick={onClick}
-      className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-brand-50/50 transition-colors group"
-    >
+    <button onClick={onClick} className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-brand-50/50 transition-colors group">
       <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${s.dot}`} title={s.text} />
       <span className="text-sm text-slate-700 truncate flex-1">{link.name}</span>
-      {link.category && (
-        <span className="badge bg-slate-100 text-slate-400 text-[10px] hidden sm:inline">{link.category}</span>
-      )}
+      {link.category && <span className="badge bg-slate-100 text-slate-400 text-[10px] hidden sm:inline">{link.category}</span>}
       {!link.isActive && <span className="badge bg-slate-100 text-slate-400 text-[10px]">ไม่เฝ้าดู</span>}
       <span className="text-slate-300 group-hover:text-brand-500 text-xs shrink-0">รายละเอียด ›</span>
     </button>
   );
 }
 
-function LinkDetailModal({
-  data,
-  onClose,
-}: {
-  data: { link: LinkLite; company: string; room: string };
-  onClose: () => void;
-}) {
-  const { link, company, room } = data;
+function LinkDetailModal({ data, onClose }: { data: ModalData; onClose: () => void }) {
+  const { link, companyId, company, room } = data;
   const s = statusMeta(link.lastStatus);
+  const editHref = `/links?company=${companyId}&edit=${link.id}`;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
-      <div className="card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3 mb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
+      <div className="card w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        {/* หัวป็อปอัพ */}
+        <div className="flex items-start justify-between gap-3 p-5 border-b border-slate-100">
           <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`badge ${s.pill} text-[11px]`}>● {s.text}</span>
+              {link.category && <span className="badge bg-slate-100 text-slate-500 text-[11px]">{link.category}</span>}
+              {!link.isActive && <span className="badge bg-slate-100 text-slate-400 text-[11px]">ไม่เฝ้าดู</span>}
+            </div>
             <h3 className="text-lg font-semibold text-slate-800 break-words">{link.name}</h3>
             <div className="text-xs text-slate-400 mt-0.5">🏢 {company} · 💬 {room}</div>
           </div>
-          <button className="text-slate-400 hover:text-slate-600 text-xl leading-none" onClick={onClose}>×</button>
+          <button className="text-slate-400 hover:text-slate-600 text-2xl leading-none" onClick={onClose}>×</button>
         </div>
 
-        <div className="flex items-center gap-2 mb-3">
-          <span className={`inline-block h-2.5 w-2.5 rounded-full ${s.dot}`} />
-          <span className={`text-sm font-medium ${s.cls}`}>{s.text}</span>
-          {link.category && <span className="badge bg-slate-100 text-slate-500 text-[11px] ml-1">{link.category}</span>}
-          {!link.isActive && <span className="badge bg-slate-100 text-slate-400 text-[11px]">ไม่เฝ้าดู</span>}
-        </div>
-
-        <div className="space-y-2.5 text-sm">
+        {/* เนื้อหา */}
+        <div className="p-5 space-y-3 text-sm">
           <div>
-            <div className="text-xs text-slate-400 mb-0.5">ลิงก์</div>
+            <div className="text-xs text-slate-400 mb-1">ลิงก์ (URL)</div>
             <a href={link.url} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline break-all">{link.url}</a>
           </div>
           {link.backupUrl && (
             <div>
-              <div className="text-xs text-slate-400 mb-0.5">ลิงก์สำรอง</div>
+              <div className="text-xs text-slate-400 mb-1">ลิงก์สำรอง</div>
               <a href={link.backupUrl} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline break-all">{link.backupUrl}</a>
             </div>
           )}
           {link.note && (
             <div>
-              <div className="text-xs text-slate-400 mb-0.5">หมายเหตุ</div>
+              <div className="text-xs text-slate-400 mb-1">หมายเหตุ</div>
               <div className="text-slate-600">{link.note}</div>
             </div>
           )}
         </div>
 
-        <div className="flex flex-wrap gap-2 mt-5">
-          <a href={link.url} target="_blank" rel="noreferrer" className="btn-primary text-sm">เปิดลิงก์ ↗</a>
-          <Link href="/links" className="btn-ghost text-sm">ไปแก้ที่ Master Data →</Link>
+        {/* ปุ่ม */}
+        <div className="flex flex-wrap gap-2 px-5 pb-5">
+          <a href={link.url} target="_blank" rel="noreferrer" className="btn-primary text-sm flex-1 text-center">เปิดลิงก์ ↗</a>
+          <Link href={editHref} className="btn-ghost text-sm flex-1 text-center">แก้ไขลิงก์นี้ →</Link>
         </div>
       </div>
     </div>
