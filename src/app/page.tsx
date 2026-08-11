@@ -24,6 +24,7 @@ export default async function DashboardPage({
     prisma.company.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true } }),
   ]);
   const telegramOn = !!process.env.TELEGRAM_BOT_TOKEN;
+  const notMonitored = d.totalLinks - d.activeLinks; // ลิงก์ LINE ที่ไม่เอาไปเช็คสถานะ
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
@@ -40,20 +41,20 @@ export default async function DashboardPage({
 
       {/* สถานะรวม */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="ลิงก์ทั้งหมด" value={d.totalLinks} hint={`เฝ้าดูอยู่ ${d.activeLinks}`} tone="slate" />
-        <StatCard label="ใช้งานได้" value={d.upCount} tone="green" />
+        <StatCard label="ลิงก์ทั้งหมด" value={d.totalLinks} hint={`เว็บที่เฝ้าดู ${d.activeLinks} · ลิงก์ LINE ${notMonitored}`} tone="slate" />
+        <StatCard label="ใช้งานได้" value={d.upCount} hint={`จาก ${d.activeLinks} ที่เฝ้าดู`} tone="green" />
         <StatCard label="ใช้ไม่ได้" value={d.downCount} tone="red" />
         <StatCard
           label="มีลิงก์สำรองแล้ว"
-          value={`${d.linksWithBackup} / ${d.totalLinks}`}
-          hint="มิติไอที"
-          tone={d.linksWithBackup < d.totalLinks ? "amber" : "green"}
+          value={`${d.linksWithBackup} / ${d.activeLinks}`}
+          hint="มิติไอที (เฉพาะเว็บที่เฝ้าดู)"
+          tone={d.linksWithBackup < d.activeLinks ? "amber" : "green"}
         />
       </div>
 
       {/* มุมมองไอที + แอดมิน */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <ItBackupCard items={d.linksWithoutBackup} withBackup={d.linksWithBackup} total={d.totalLinks} />
+        <ItBackupCard items={d.linksWithoutBackup} withBackup={d.linksWithBackup} total={d.activeLinks} />
         <AdminQueueCard queue={d.updateQueue} />
       </div>
 

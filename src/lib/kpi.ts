@@ -71,10 +71,13 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
       }),
     ]);
 
-  // มิติไอที: ลิงก์สำรอง
+  // นับเฉพาะลิงก์ที่ "เฝ้าดูอยู่" (isActive) — ลิงก์ LINE ที่ตั้งไม่เฝ้าดูจะไม่ถูกนับสถานะ/สำรอง
+  const activeArr = links.filter((l) => l.isActive);
+
+  // มิติไอที: ลิงก์สำรอง (เฉพาะลิงก์ที่เฝ้าดู)
   const hasBk = (l: (typeof links)[number]) => !!(l.backupUrl && l.backupUrl.trim());
-  const linksWithBackup = links.filter(hasBk).length;
-  const linksWithoutBackup = links
+  const linksWithBackup = activeArr.filter(hasBk).length;
+  const linksWithoutBackup = activeArr
     .filter((l) => !hasBk(l))
     .map((l) => ({ id: l.id, name: l.name, company: l.company.name }));
 
@@ -93,10 +96,10 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
     detectedAt: i.detectedAt.toISOString(),
   }));
 
-  const upCount = links.filter((l) => l.lastStatus === "UP").length;
-  const downCount = links.filter((l) => l.lastStatus === "DOWN").length;
-  const unknownCount = links.filter((l) => l.lastStatus === "UNKNOWN").length;
-  const activeLinks = links.filter((l) => l.isActive).length;
+  const upCount = activeArr.filter((l) => l.lastStatus === "UP").length;
+  const downCount = activeArr.filter((l) => l.lastStatus === "DOWN").length;
+  const unknownCount = activeArr.filter((l) => l.lastStatus === "UNKNOWN").length;
+  const activeLinks = activeArr.length;
 
   const adminVals = closedWithKpi
     .map((i) => i.adminResponseMin)
@@ -107,9 +110,9 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
   const avg = (arr: number[]) =>
     arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
 
-  // แยกตามหมวด
+  // แยกตามหมวด (เฉพาะลิงก์ที่เฝ้าดู)
   const catMap = new Map<string, { up: number; down: number; total: number }>();
-  for (const l of links) {
+  for (const l of activeArr) {
     const c = l.category || "ทั่วไป";
     const cur = catMap.get(c) || { up: 0, down: 0, total: 0 };
     cur.total++;
@@ -134,7 +137,7 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
   }
   const companyBreakdown = companies
     .map((co) => {
-      const cl = links.filter((l) => l.companyId === co.id);
+      const cl = activeArr.filter((l) => l.companyId === co.id);
       return {
         companyId: co.id,
         company: co.name,
