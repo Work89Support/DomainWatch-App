@@ -79,12 +79,12 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
     .map((l) => ({ id: l.id, name: l.name, company: l.company.name }));
 
   // มิติแอดมิน: คิวลิงก์ที่ล่ม (เคสที่ยังไม่ปิด)
-  const openList = await prisma.incident.findMany({
+  const openQueueList = await prisma.incident.findMany({
     where: { ...incWhere, status: { not: "CLOSED" } },
     orderBy: { detectedAt: "desc" },
     include: { link: { include: { company: true } } },
   });
-  const updateQueue = openList.map((i) => ({
+  const updateQueue = openQueueList.map((i) => ({
     incidentId: i.id,
     linkName: i.link.name,
     company: i.link.company.name,
