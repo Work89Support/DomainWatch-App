@@ -10,10 +10,10 @@ export default async function LinksPage({
   searchParams: { company?: string };
 }) {
   await requireUser();
-  const companyId = searchParams.company || undefined;
+  const currentCompany = searchParams.company || undefined;
+  // โหลดลิงก์ทั้งหมด แล้วค่อยกรอง/ฟิลเตอร์ฝั่งหน้าเว็บ (ลื่นกว่า)
   const [links, companies] = await Promise.all([
     prisma.link.findMany({
-      where: companyId ? { companyId } : {},
       orderBy: { createdAt: "desc" },
       include: { company: true, lineGroup: true },
     }),
@@ -26,7 +26,7 @@ export default async function LinksPage({
     <LinksClient
       initialLinks={JSON.parse(JSON.stringify(links))}
       companies={JSON.parse(JSON.stringify(companies))}
-      currentCompany={companyId}
+      currentCompany={currentCompany}
     />
   );
 }
