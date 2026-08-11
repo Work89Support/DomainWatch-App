@@ -10,7 +10,16 @@ export default async function CompaniesPage() {
     orderBy: { createdAt: "asc" },
     include: {
       lineGroups: { orderBy: { createdAt: "asc" } },
-      _count: { select: { links: true } },
+      links: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          name: true,
+          url: true,
+          lineGroupId: true,
+          lastStatus: true,
+        },
+      },
     },
   });
   return <CompaniesClient initial={JSON.parse(JSON.stringify(companies))} />;
