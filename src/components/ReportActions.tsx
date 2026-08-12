@@ -4,9 +4,8 @@ import { useState } from "react";
 
 declare global {
   interface Window {
-    htmlToImage?: {
-      toPng: (node: HTMLElement, opts?: Record<string, unknown>) => Promise<string>;
-    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    html2canvas?: (node: HTMLElement, opts?: Record<string, unknown>) => Promise<any>;
   }
 }
 
@@ -34,21 +33,33 @@ export default function ReportActions({ date }: { date: string }) {
     try {
       const node = document.getElementById("report-capture");
       if (!node) return;
-      if (!window.htmlToImage) {
+      // โหลด html2canvas จาก CDN ครั้งแรก
+      if (!window.html2canvas) {
         await new Promise<void>((resolve, reject) => {
           const s = document.createElement("script");
-          s.src = "https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js";
+          s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
           s.onload = () => resolve();
           s.onerror = () => reject(new Error("load_failed"));
           document.head.appendChild(s);
         });
       }
-      if (!window.htmlToImage) throw new Error("no_lib");
-      const dataUrl = await window.htmlToImage.toPng(node, {
-        pixelRatio: 2,
+      if (!window.html2canvas) throw new Error("no_lib");
+      // รอฟอนต์โหลดให้ครบก่อน กันข้อความเบี้ยว
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+      }
+      const canvas = await window.html2canvas(node, {
+        scale: 2,
         backgroundColor: "#f1f5f9",
-        filter: (n: HTMLElement) => !(n.classList && n.classList.contains("no-capture")),
+        useCORS: true,
+        logging: false,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: node.scrollWidth,
+        windowHeight: node.scrollHeight,
+        ignoreElements: (el: HTMLElement) => !!(el.classList && el.classList.contains("no-capture")),
       });
+      const dataUrl = canvas.toDataURL("image/png");
       const a = document.createElement("a");
       a.download = `รายงานรอบวัน-${date}.png`;
       a.href = dataUrl;

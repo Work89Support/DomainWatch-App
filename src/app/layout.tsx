@@ -3,6 +3,7 @@ import { Kanit } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
+import HelpGuide from "@/components/HelpGuide";
 import { getCurrentUser } from "@/lib/auth";
 
 const kanit = Kanit({
@@ -27,13 +28,16 @@ export default async function RootLayout({
     <html lang="th" className={kanit.variable}>
       <body className="font-sans">
         {user ? (
-          <div className="flex min-h-screen">
-            <Sidebar role={user.role} />
-            <div className="flex-1 min-w-0 flex flex-col">
-              <Topbar user={user} />
-              <main className="flex-1 min-w-0">{children}</main>
+          <>
+            <div className="flex min-h-screen">
+              <Sidebar role={user.role} />
+              <div className="flex-1 min-w-0 flex flex-col">
+                <Topbar user={user} />
+                <main className="flex-1 min-w-0">{children}</main>
+              </div>
             </div>
-          </div>
+            <HelpGuide />
+          </>
         ) : (
           <main>{children}</main>
         )}
