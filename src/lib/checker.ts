@@ -13,6 +13,30 @@ const RETRIES = Number(process.env.CHECK_RETRIES || 2);
 const CONCURRENCY = Number(process.env.CHECK_CONCURRENCY || 8);
 const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
 
+// UA แบบเบราว์เซอร์มือถือ (เหมือนที่ระบบเก่าใช้) — ลด 403 หลอกจากเว็บที่กันบอท
+const BROWSER_UA =
+  "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36 Line/13.7.1";
+
+// เลือก header ตามโดเมน — LINE/Telegram ต้องมี Referer ที่ถูกต้อง
+function headersFor(url: string): Record<string, string> {
+  const h: Record<string, string> = {
+    "User-Agent": BROWSER_UA,
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "th-TH,th;q=0.9,en-US;q=0.8,en;q=0.7",
+  };
+  try {
+    const host = new URL(url).host.toLowerCase();
+    if (host.endsWith("lin.ee") || host.endsWith("line.me") || host.endsWith("liff.line.me")) {
+      h["Referer"] = "https://line.me/";
+    } else if (host.endsWith("t.me") || host.endsWith("telegram.me")) {
+      h["Referer"] = "https://t.me/";
+    }
+  } catch {
+    /* ignore url ที่ parse ไม่ได้ */
+  }
+  return h;
+}
+
 export type ProbeResult = {
   ok: boolean;
   httpCode: number | null;
@@ -29,7 +53,7 @@ async function fetchWithTimeout(url: string, method: "HEAD" | "GET"): Promise<Re
       method,
       redirect: "follow",
       signal: controller.signal,
-      headers: { "User-Agent": "DomainWatch/1.0 (+monitoring)" },
+      headers: headersFor(url),
     });
   } finally {
     clearTimeout(timer);
