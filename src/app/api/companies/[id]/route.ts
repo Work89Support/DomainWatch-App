@@ -19,6 +19,8 @@ export async function PATCH(
   if ("name" in body) data.name = String(body.name).trim();
   if ("note" in body) data.note = body.note?.trim() || null;
   if ("isActive" in body) data.isActive = !!body.isActive;
+  if ("tgBotToken" in body) data.tgBotToken = body.tgBotToken?.trim() || null;
+  if ("tgChatId" in body) data.tgChatId = body.tgChatId?.trim() || null;
   const company = await prisma.company.update({
     where: { id: params.id },
     data,

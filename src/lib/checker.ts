@@ -1,9 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import {
   sendTelegram,
+  sendTelegramTo,
   downAlertMessage,
   recoveredMessage,
+  oaAlertMessage,
+  oaRecoveredMessage,
 } from "@/lib/telegram";
+import { checkOa } from "@/lib/line";
 import type { LinkStatus } from "@prisma/client";
 
 const TIMEOUT_MS = Number(process.env.CHECK_TIMEOUT_MS || 15000);
@@ -120,9 +124,40 @@ export type CheckSummary = {
   ranAt: string;
 };
 
+// แผนที่ route Telegram ต่อบริษัท (ถ้าตั้งไว้)
+type TgRoute = { botToken: string; chatId: string };
+
+// ส่งแจ้งเตือน: ถ้าบริษัทมี route ของตัวเอง ส่งเข้ากลุ่มนั้น ไม่งั้นใช้กลุ่มกลาง
+async function notifyCompany(
+  routes: Map<string, TgRoute>,
+  companyId: string | null | undefined,
+  msg: string
+): Promise<{ ok: boolean }> {
+  const r = companyId ? routes.get(companyId) : undefined;
+  if (r) return sendTelegramTo(r.botToken, r.chatId, msg);
+  return sendTelegram(msg, "all");
+}
+
+async function loadRoutes(): Promise<Map<string, TgRoute>> {
+  const companies = await prisma.company.findMany({
+    select: { id: true, tgBotToken: true, tgChatId: true },
+  });
+  const map = new Map<string, TgRoute>();
+  for (const c of companies) {
+    if (c.tgBotToken && c.tgBotToken.trim() && c.tgChatId && c.tgChatId.trim()) {
+      map.set(c.id, { botToken: c.tgBotToken.trim(), chatId: c.tgChatId.trim() });
+    }
+  }
+  return map;
+}
+
 // เช็คลิงก์ทั้งหมดที่เปิดใช้งาน + จัดการ incident + แจ้งเตือน
 export async function runCheck(): Promise<CheckSummary> {
-  const links = await prisma.link.findMany({ where: { isActive: true } });
+  const links = await prisma.link.findMany({
+    where: { isActive: true },
+    include: { company: { select: { id: true } } },
+  });
+  const routes = await loadRoutes();
   const summary: CheckSummary = {
     checked: 0,
     up: 0,
@@ -198,7 +233,7 @@ export async function runCheck(): Promise<CheckSummary> {
           detectedAt: now,
           appBaseUrl: APP_BASE_URL,
         });
-        const sent = await sendTelegram(msg, "all");
+        const sent = await notifyCompany(routes, link.companyId, msg);
         if (sent.ok) {
           await prisma.incident.update({
             where: { id: incident.id },
@@ -226,19 +261,69 @@ export async function runCheck(): Promise<CheckSummary> {
         summary.recovered++;
         // แจ้ง Telegram เฉพาะตอนเพิ่งกลับมาปกติจริง (prev = DOWN) กันสแปมตอนเก็บกวาดเคสค้าง
         if (prev === "DOWN") {
-          await sendTelegram(
+          await notifyCompany(
+            routes,
+            link.companyId,
             recoveredMessage({
               name: link.name,
               url: link.url,
               downMinutes,
               appBaseUrl: APP_BASE_URL,
-            }),
-            "all"
+            })
           );
         }
       }
     }
   }
 
+  // 3) ตรวจ LINE OA (เฉพาะห้องที่ใส่ token)
+  await runOaChecks(routes);
+
   return summary;
+}
+
+// ตรวจ LINE OA ทุกห้องที่มี Channel Access Token — เก็บสถานะ + แจ้งเตือนตอนเปลี่ยนสถานะ
+export async function runOaChecks(routes?: Map<string, TgRoute>): Promise<void> {
+  const r = routes || (await loadRoutes());
+  const groups = await prisma.lineGroup.findMany({
+    where: { isActive: true, NOT: { channelAccessToken: null } },
+    include: { company: { select: { id: true, name: true } } },
+  });
+  for (const g of groups) {
+    const token = (g.channelAccessToken || "").trim();
+    if (!token) continue;
+    const prevStatus = g.oaStatus;
+    const res = await checkOa(token, g.expectedOaName);
+    await prisma.lineGroup.update({
+      where: { id: g.id },
+      data: {
+        oaStatus: res.status,
+        oaDisplayName: res.displayName,
+        oaHasPicture: res.hasPicture,
+        oaError: res.error,
+        oaLastCheckedAt: new Date(),
+      },
+    });
+    // แจ้งเตือนเฉพาะตอน "เปลี่ยนสถานะ" (กันสแปมทุกนาที)
+    if (res.status !== "OK" && prevStatus === "OK") {
+      await notifyCompany(
+        r,
+        g.companyId,
+        oaAlertMessage({
+          room: g.name,
+          company: g.company.name,
+          status: res.status,
+          displayName: res.displayName,
+          expectedName: g.expectedOaName,
+          appBaseUrl: APP_BASE_URL,
+        })
+      );
+    } else if (res.status === "OK" && prevStatus !== "OK" && prevStatus !== "UNKNOWN") {
+      await notifyCompany(
+        r,
+        g.companyId,
+        oaRecoveredMessage({ room: g.name, company: g.company.name })
+      );
+    }
+  }
 }

@@ -19,6 +19,8 @@ export async function PATCH(
   if ("name" in body) data.name = String(body.name).trim();
   if ("note" in body) data.note = body.note?.trim() || null;
   if ("isActive" in body) data.isActive = !!body.isActive;
+  if ("channelAccessToken" in body) data.channelAccessToken = body.channelAccessToken?.trim() || null;
+  if ("expectedOaName" in body) data.expectedOaName = body.expectedOaName?.trim() || null;
   const group = await prisma.lineGroup.update({
     where: { id: params.id },
     data,

@@ -15,6 +15,9 @@ model Company {
   name      String
   note      String?
   isActive  Boolean  @default(true)
+  // แจ้งเตือน Telegram แยกต่อบริษัท (ถ้าไม่ตั้ง = ใช้กลุ่มกลางจาก env)
+  tgBotToken String?
+  tgChatId   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -32,6 +35,16 @@ model LineGroup {
   name      String // ชื่อห้อง เช่น "ห้องแอดมิน A"
   note      String?
   isActive  Boolean  @default(true)
+
+  // ---- ตรวจ LINE OA ด้วย Channel Access Token ----
+  channelAccessToken String? // token ของ OA (ข้อมูลลับ)
+  expectedOaName     String? // ชื่อ OA ที่คาดหวัง (ไว้เทียบว่าถูกเปลี่ยนไหม)
+  oaStatus           String   @default("UNKNOWN") // OK | MISMATCH | NO_PICTURE | TOKEN_INVALID | ERROR | UNKNOWN
+  oaDisplayName      String? // ชื่อจริงที่อ่านได้จาก LINE
+  oaHasPicture       Boolean?
+  oaLastCheckedAt    DateTime?
+  oaError            String?
+
   createdAt DateTime @default(now())
 
   links Link[]

@@ -16,12 +16,26 @@ type LinkLite = {
   note: string | null;
   isActive: boolean;
 };
-type LineGroup = { id: string; name: string; note: string | null; isActive: boolean };
+type LineGroup = {
+  id: string;
+  name: string;
+  note: string | null;
+  isActive: boolean;
+  expectedOaName: string | null;
+  hasToken: boolean;
+  oaStatus: string;
+  oaDisplayName: string | null;
+  oaHasPicture: boolean | null;
+  oaLastCheckedAt: string | null;
+  oaError: string | null;
+};
 type Company = {
   id: string;
   name: string;
   note: string | null;
   isActive: boolean;
+  tgChatId: string | null;
+  hasTelegram: boolean;
   lineGroups: LineGroup[];
   links: LinkLite[];
 };
@@ -34,6 +48,17 @@ function statusMeta(status: string) {
   return { dot: "bg-slate-300", text: "ยังไม่เช็ค / ไม่เฝ้าดู", cls: "text-slate-400", pill: "bg-slate-100 text-slate-500" };
 }
 
+function oaMeta(status: string) {
+  switch (status) {
+    case "OK": return { text: "OA ปกติ", cls: "bg-emerald-50 text-emerald-700" };
+    case "MISMATCH": return { text: "ชื่อ OA ไม่ตรง", cls: "bg-red-50 text-red-600" };
+    case "NO_PICTURE": return { text: "รูปโปรไฟล์หาย", cls: "bg-amber-50 text-amber-700" };
+    case "TOKEN_INVALID": return { text: "token ใช้ไม่ได้", cls: "bg-red-50 text-red-600" };
+    case "ERROR": return { text: "ตรวจ OA ไม่ได้", cls: "bg-amber-50 text-amber-700" };
+    default: return { text: "ยังไม่ตรวจ OA", cls: "bg-slate-100 text-slate-500" };
+  }
+}
+
 export default function CompaniesClient({ initial }: { initial: Company[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -41,6 +66,8 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
   const [groupInput, setGroupInput] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [linkModal, setLinkModal] = useState<ModalData | null>(null);
+  const [tgModal, setTgModal] = useState<Company | null>(null);
+  const [oaModal, setOaModal] = useState<{ group: LineGroup; company: string } | null>(null);
 
   function toggle(id: string) {
     setOpen((o) => ({ ...o, [id]: !(o[id] ?? false) }));
@@ -55,10 +82,7 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
       body: JSON.stringify({ name: newCompany }),
     });
     setBusy(false);
-    if (!res.ok) {
-      alert("เพิ่มบริษัทไม่สำเร็จ");
-      return;
-    }
+    if (!res.ok) { alert("เพิ่มบริษัทไม่สำเร็จ"); return; }
     setNewCompany("");
     router.refresh();
   }
@@ -67,8 +91,7 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
     const name = prompt("ชื่อบริษัทใหม่", c.name);
     if (!name || name === c.name) return;
     await fetch(`/api/companies/${c.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     });
     router.refresh();
@@ -84,8 +107,7 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
     const name = (groupInput[companyId] || "").trim();
     if (!name) return;
     await fetch("/api/linegroups", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ companyId, name }),
     });
     setGroupInput({ ...groupInput, [companyId]: "" });
@@ -96,8 +118,7 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
     const name = prompt("ชื่อห้อง LINE ใหม่", g.name);
     if (!name || name === g.name) return;
     await fetch(`/api/linegroups/${g.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     });
     router.refresh();
@@ -116,7 +137,6 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
         subtitle="โครงสร้างข้อมูลของระบบ — จัดกลุ่มลิงก์ตามบริษัทและห้อง LINE ให้ทีมรู้ว่าลิงก์ไหนของใคร"
       />
 
-      {/* คำอธิบายโครงสร้าง 3 ชั้น */}
       <div className="card p-4 mb-6 bg-brand-50/40 border-brand-100">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="badge bg-white text-brand-700 border border-brand-100">🏢 บริษัท</span>
@@ -126,13 +146,12 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
           <span className="badge bg-white text-brand-700 border border-brand-100">🔗 ลิงก์</span>
         </div>
         <p className="text-xs text-slate-500 mt-2">
-          กดที่บริษัทเพื่อกาง/พับดูห้องและลิงก์ · กดที่ลิงก์เพื่อดูรายละเอียดและเปิดลิงก์ ·
-          เพิ่ม/แก้ไขลิงก์ทำที่หน้า{" "}
+          กดที่บริษัทเพื่อกาง/พับ · กดที่ลิงก์เพื่อดูรายละเอียด/เปิดลิงก์ · ปุ่ม 🔔 ตั้งกลุ่ม Telegram ต่อบริษัท ·
+          ปุ่ม ⚙️ ที่ห้องเพื่อใส่ token ตรวจ LINE OA / ดึงลิงก์จาก Rich Menu · เพิ่ม/แก้ลิงก์ทำที่หน้า{" "}
           <Link href="/links" className="text-brand-600 hover:underline font-medium">Master Data ลิงก์</Link>
         </p>
       </div>
 
-      {/* เพิ่มบริษัท */}
       <div className="card p-4 mb-6">
         <div className="text-xs font-medium text-slate-500 mb-2">เพิ่มบริษัทใหม่</div>
         <div className="flex gap-2">
@@ -162,7 +181,6 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
 
           return (
             <div key={c.id} className="card overflow-hidden">
-              {/* หัวบริษัท (กดเพื่อกาง/พับ) */}
               <div className="flex items-center justify-between gap-3 p-4">
                 <button className="flex items-center gap-3 min-w-0 text-left flex-1" onClick={() => toggle(c.id)}>
                   <span className={`text-slate-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
@@ -175,7 +193,14 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
                     </div>
                   </div>
                 </button>
-                <div className="flex gap-3 shrink-0">
+                <div className="flex items-center gap-3 shrink-0">
+                  <button
+                    className={`text-xs hover:underline ${c.hasTelegram ? "text-emerald-600" : "text-slate-400"}`}
+                    title="ตั้งกลุ่ม Telegram ของบริษัทนี้"
+                    onClick={() => setTgModal(c)}
+                  >
+                    🔔 {c.hasTelegram ? "Telegram ✓" : "Telegram"}
+                  </button>
                   <button className="text-xs text-brand-600 hover:underline" onClick={() => renameCompany(c)}>เปลี่ยนชื่อ</button>
                   <button className="text-xs text-red-500 hover:underline" onClick={() => deleteCompany(c)}>ลบ</button>
                 </div>
@@ -189,24 +214,26 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
                     </div>
                   )}
 
-                  {/* ห้อง LINE แต่ละห้อง */}
                   {c.lineGroups.map((g) => {
                     const gl = linksByGroup(g.id);
+                    const oa = oaMeta(g.oaStatus);
                     return (
                       <div key={g.id} className="rounded-xl border border-slate-100 overflow-hidden">
                         <div className="flex items-center justify-between gap-2 bg-slate-50 px-3 py-2">
-                          <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0 flex-wrap">
                             <span className="text-base">💬</span>
                             <span className="font-medium text-slate-700 truncate">{g.name}</span>
                             <span className="badge bg-white text-slate-500 border border-slate-200 text-[11px]">{gl.length} ลิงก์</span>
+                            {g.hasToken && <span className={`badge text-[11px] ${oa.cls}`}>{oa.text}</span>}
                           </div>
                           <div className="flex gap-3 shrink-0">
+                            <button className="text-xs text-slate-400 hover:text-brand-600" title="ตั้งค่า LINE OA / Rich Menu" onClick={() => setOaModal({ group: g, company: c.name })}>⚙️ OA</button>
                             <button className="text-xs text-slate-400 hover:text-brand-600" onClick={() => renameGroup(g)}>เปลี่ยนชื่อ</button>
                             <button className="text-xs text-slate-400 hover:text-red-500" onClick={() => deleteGroup(g.id, g.name)}>ลบห้อง</button>
                           </div>
                         </div>
                         {gl.length === 0 ? (
-                          <div className="text-xs text-slate-400 px-3 py-2.5">ยังไม่มีลิงก์ในห้องนี้ — เพิ่มได้ที่หน้า Master Data</div>
+                          <div className="text-xs text-slate-400 px-3 py-2.5">ยังไม่มีลิงก์ในห้องนี้ — เพิ่มที่ Master Data หรือดึงจาก Rich Menu (⚙️ OA)</div>
                         ) : (
                           <div className="divide-y divide-slate-50">
                             {gl.map((l) => (
@@ -218,7 +245,6 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
                     );
                   })}
 
-                  {/* ลิงก์ที่ยังไม่ระบุห้อง */}
                   {unassigned.length > 0 && (
                     <div className="rounded-xl border border-dashed border-slate-200 overflow-hidden">
                       <div className="flex items-center gap-2 bg-slate-50/60 px-3 py-2">
@@ -234,7 +260,6 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
                     </div>
                   )}
 
-                  {/* เพิ่มห้อง — แสดงเสมอ */}
                   <div className="flex gap-2 pt-1">
                     <input
                       className="input py-1.5 text-sm"
@@ -243,9 +268,7 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
                       onChange={(e) => setGroupInput({ ...groupInput, [c.id]: e.target.value })}
                       onKeyDown={(e) => e.key === "Enter" && addGroup(c.id)}
                     />
-                    <button className="btn-primary text-sm whitespace-nowrap" onClick={() => addGroup(c.id)}>
-                      + เพิ่มห้อง LINE
-                    </button>
+                    <button className="btn-primary text-sm whitespace-nowrap" onClick={() => addGroup(c.id)}>+ เพิ่มห้อง LINE</button>
                   </div>
                 </div>
               )}
@@ -255,6 +278,8 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
       </div>
 
       {linkModal && <LinkDetailModal data={linkModal} onClose={() => setLinkModal(null)} />}
+      {tgModal && <CompanyTgModal company={tgModal} onClose={() => setTgModal(null)} onSaved={() => { setTgModal(null); router.refresh(); }} />}
+      {oaModal && <RoomOaModal group={oaModal.group} company={oaModal.company} onClose={() => setOaModal(null)} onSaved={() => { setOaModal(null); router.refresh(); }} />}
     </div>
   );
 }
@@ -272,6 +297,20 @@ function LinkItem({ link, onClick }: { link: LinkLite; onClick: () => void }) {
   );
 }
 
+function ModalShell({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
+      <div className="card w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 p-5 border-b border-slate-100">
+          <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
+          <button className="text-slate-400 hover:text-slate-600 text-2xl leading-none" onClick={onClose}>×</button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 function LinkDetailModal({ data, onClose }: { data: ModalData; onClose: () => void }) {
   const { link, companyId, company, room } = data;
   const s = statusMeta(link.lastStatus);
@@ -279,10 +318,9 @@ function LinkDetailModal({ data, onClose }: { data: ModalData; onClose: () => vo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
       <div className="card w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        {/* หัวป็อปอัพ */}
         <div className="flex items-start justify-between gap-3 p-5 border-b border-slate-100">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className={`badge ${s.pill} text-[11px]`}>● {s.text}</span>
               {link.category && <span className="badge bg-slate-100 text-slate-500 text-[11px]">{link.category}</span>}
               {!link.isActive && <span className="badge bg-slate-100 text-slate-400 text-[11px]">ไม่เฝ้าดู</span>}
@@ -292,8 +330,6 @@ function LinkDetailModal({ data, onClose }: { data: ModalData; onClose: () => vo
           </div>
           <button className="text-slate-400 hover:text-slate-600 text-2xl leading-none" onClick={onClose}>×</button>
         </div>
-
-        {/* เนื้อหา */}
         <div className="p-5 space-y-3 text-sm">
           <div>
             <div className="text-xs text-slate-400 mb-1">ลิงก์ (URL)</div>
@@ -312,13 +348,121 @@ function LinkDetailModal({ data, onClose }: { data: ModalData; onClose: () => vo
             </div>
           )}
         </div>
-
-        {/* ปุ่ม */}
         <div className="flex flex-wrap gap-2 px-5 pb-5">
           <a href={link.url} target="_blank" rel="noreferrer" className="btn-primary text-sm flex-1 text-center">เปิดลิงก์ ↗</a>
           <Link href={editHref} className="btn-ghost text-sm flex-1 text-center">แก้ไขลิงก์นี้ →</Link>
         </div>
       </div>
     </div>
+  );
+}
+
+function CompanyTgModal({ company, onClose, onSaved }: { company: Company; onClose: () => void; onSaved: () => void }) {
+  const [botToken, setBotToken] = useState("");
+  const [chatId, setChatId] = useState(company.tgChatId || "");
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    const body: Record<string, string> = { tgChatId: chatId };
+    if (botToken.trim()) body.tgBotToken = botToken.trim(); // ไม่กรอก = คงเดิม
+    const res = await fetch(`/api/companies/${company.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setBusy(false);
+    if (res.ok) onSaved(); else alert("บันทึกไม่สำเร็จ");
+  }
+
+  async function clearTg() {
+    if (!confirm("ปิดการแจ้งเตือนแยกของบริษัทนี้? (กลับไปใช้กลุ่มกลาง)")) return;
+    setBusy(true);
+    await fetch(`/api/companies/${company.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tgBotToken: "", tgChatId: "" }),
+    });
+    setBusy(false);
+    onSaved();
+  }
+
+  return (
+    <ModalShell title={`🔔 Telegram — ${company.name}`} onClose={onClose}>
+      <p className="text-xs text-slate-500 mb-3">
+        ตั้ง bot กับกลุ่ม Telegram เฉพาะบริษัทนี้ เวลาลิงก์ในบริษัทนี้ล่ม/OA ผิดปกติ จะแจ้งเข้ากลุ่มนี้ (ไม่ตั้ง = ใช้กลุ่มกลาง)
+      </p>
+      <label className="label">Bot Token</label>
+      <input type="password" className="input mb-2" value={botToken} onChange={(e) => setBotToken(e.target.value)} placeholder={company.hasTelegram ? "•••••• (ไม่กรอก = คงเดิม)" : "123456:ABC-DEF..."} autoComplete="off" />
+      <label className="label">Chat ID (คั่นด้วย , ได้)</label>
+      <input className="input mb-1" value={chatId} onChange={(e) => setChatId(e.target.value)} placeholder="-1001234567890" />
+      <div className="flex justify-between gap-2 mt-4">
+        {company.hasTelegram ? <button className="btn-ghost text-xs" disabled={busy} onClick={clearTg}>ปิดการแจ้งเตือนแยก</button> : <span />}
+        <div className="flex gap-2">
+          <button className="btn-ghost text-sm" onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary text-sm disabled:opacity-60" disabled={busy} onClick={save}>{busy ? "กำลังบันทึก..." : "บันทึก"}</button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; company: string; onClose: () => void; onSaved: () => void }) {
+  const [token, setToken] = useState("");
+  const [expectedName, setExpectedName] = useState(group.expectedOaName || "");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const oa = oaMeta(group.oaStatus);
+
+  async function save() {
+    setBusy(true); setMsg(null);
+    const body: Record<string, string> = { expectedOaName: expectedName };
+    if (token.trim()) body.channelAccessToken = token.trim();
+    const res = await fetch(`/api/linegroups/${group.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setBusy(false);
+    if (res.ok) onSaved(); else setMsg("บันทึกไม่สำเร็จ");
+  }
+
+  async function checkNow() {
+    setBusy(true); setMsg(null);
+    const res = await fetch(`/api/linegroups/${group.id}/check-oa`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (res.ok) { setMsg(`ผลตรวจ: ${oaMeta(data.result?.status).text}${data.result?.displayName ? ` (${data.result.displayName})` : ""}`); onSaved(); }
+    else setMsg(data.error || "ตรวจไม่สำเร็จ");
+  }
+
+  async function importMenu() {
+    setBusy(true); setMsg(null);
+    const res = await fetch(`/api/linegroups/${group.id}/import-richmenu`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (res.ok) { setMsg(`ดึงลิงก์แล้ว: เพิ่มใหม่ ${data.added} · มีอยู่แล้ว ${data.skipped}`); onSaved(); }
+    else setMsg(data.error || "ดึงไม่สำเร็จ");
+  }
+
+  return (
+    <ModalShell title={`⚙️ LINE OA — ${group.name}`} onClose={onClose}>
+      <div className="text-xs text-slate-400 mb-3">🏢 {company}</div>
+      {group.hasToken && (
+        <div className="mb-3 text-sm">
+          <span className={`badge text-[11px] ${oa.cls}`}>{oa.text}</span>
+          {group.oaDisplayName && <span className="text-slate-500 ml-2">ชื่อจริง: {group.oaDisplayName}</span>}
+          {group.oaError && <div className="text-xs text-red-500 mt-1">{group.oaError}</div>}
+        </div>
+      )}
+      <label className="label">Channel Access Token</label>
+      <input type="password" className="input mb-2" value={token} onChange={(e) => setToken(e.target.value)} placeholder={group.hasToken ? "•••••• (ไม่กรอก = คงเดิม)" : "วาง token ของ OA นี้"} autoComplete="off" />
+      <label className="label">ชื่อ OA ที่คาดหวัง (ไว้เทียบว่าถูกเปลี่ยนไหม)</label>
+      <input className="input mb-1" value={expectedName} onChange={(e) => setExpectedName(e.target.value)} placeholder="เช่น AD3 free" />
+      {msg && <div className="text-xs text-slate-600 bg-slate-50 rounded-lg p-2 mt-2">{msg}</div>}
+      <div className="flex flex-wrap gap-2 mt-4">
+        <button className="btn-primary text-sm disabled:opacity-60" disabled={busy} onClick={save}>{busy ? "..." : "บันทึก"}</button>
+        <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy || !group.hasToken} onClick={checkNow} title={group.hasToken ? "" : "ใส่ token ก่อน"}>ตรวจ OA ตอนนี้</button>
+        <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy || !group.hasToken} onClick={importMenu} title={group.hasToken ? "" : "ใส่ token ก่อน"}>ดึงลิงก์จาก Rich Menu</button>
+      </div>
+      <div className="text-[11px] text-slate-400 mt-3">บันทึก token ก่อน แล้วค่อยกด &quot;ตรวจ&quot; / &quot;ดึงลิงก์&quot;</div>
+    </ModalShell>
   );
 }

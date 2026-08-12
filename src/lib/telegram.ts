@@ -59,6 +59,75 @@ export async function sendTelegram(
   return { ok: sent > 0, sent };
 }
 
+// ส่งเข้าบอท/กลุ่มที่ระบุเอง (ใช้ตอนแยกกลุ่มต่อบริษัท)
+export async function sendTelegramTo(
+  botToken: string,
+  chatIdCsv: string,
+  text: string
+): Promise<{ ok: boolean; sent: number }> {
+  const token = (botToken || "").trim();
+  const ids = (chatIdCsv || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!token || ids.length === 0) return { ok: false, sent: 0 };
+  let sent = 0;
+  for (const chatId of ids) {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+        }),
+      });
+      if (res.ok) sent++;
+      else console.error("[telegram] route ส่งไม่สำเร็จ", await res.text());
+    } catch (e) {
+      console.error("[telegram] route error", e);
+    }
+  }
+  return { ok: sent > 0, sent };
+}
+
+// ข้อความแจ้งเตือน LINE OA ผิดปกติ
+export function oaAlertMessage(opts: {
+  room: string;
+  company: string;
+  status: string;
+  displayName?: string | null;
+  expectedName?: string | null;
+  appBaseUrl: string;
+}): string {
+  const reasonMap: Record<string, string> = {
+    MISMATCH: `ชื่อ OA ไม่ตรง (พบ "${opts.displayName || "-"}" คาดหวัง "${opts.expectedName || "-"}")`,
+    NO_PICTURE: "รูปโปรไฟล์ OA หาย/ไม่มี",
+    TOKEN_INVALID: "token ใช้ไม่ได้ — OA อาจถูกปิด/แบน",
+    ERROR: "ตรวจ OA ไม่สำเร็จ",
+  };
+  return [
+    `🚨 <b>LINE OA ผิดปกติ</b>`,
+    ``,
+    `💬 <b>${escapeHtml(opts.room)}</b>`,
+    `🏢 บริษัท: ${escapeHtml(opts.company)}`,
+    `⚠️ ปัญหา: ${escapeHtml(reasonMap[opts.status] || opts.status)}`,
+    ``,
+    `${opts.appBaseUrl}/companies`,
+  ].join("\n");
+}
+
+export function oaRecoveredMessage(opts: { room: string; company: string }): string {
+  return [
+    `🟢 <b>LINE OA กลับมาปกติ</b>`,
+    ``,
+    `💬 <b>${escapeHtml(opts.room)}</b>`,
+    `🏢 บริษัท: ${escapeHtml(opts.company)}`,
+  ].join("\n");
+}
+
 // ข้อความแจ้งเตือนเมื่อพบลิงก์ล่ม
 export function downAlertMessage(opts: {
   name: string;
