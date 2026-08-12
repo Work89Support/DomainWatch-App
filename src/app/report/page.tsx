@@ -19,7 +19,7 @@ export default async function ReportPage({ searchParams }: { searchParams: { dat
   const isToday = date === todayBangkok();
 
   return (
-    <div className="p-6 md:p-8 max-w-5xl mx-auto">
+    <div id="report-capture" className="p-6 md:p-8 max-w-5xl mx-auto bg-slate-50">
       <PageHeader
         title="รายงานสรุปรอบวัน"
         subtitle="สรุปปัญหา/การแก้ไข แบ่ง 3 รอบ (เช้า · เย็น · กลางคืน) สำหรับผู้บริหารและทีม"
