@@ -81,7 +81,15 @@ export default function IncidentsClient({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="font-semibold text-slate-800">{i.link.name}</div>
-                <div className="text-xs text-brand-600 break-all">{i.link.url}</div>
+                <a
+                  href={i.link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-xs text-brand-600 hover:underline break-all inline-flex items-center gap-1"
+                >
+                  {i.link.url} <span className="text-brand-400">↗</span>
+                </a>
                 <div className="text-xs text-slate-400 mt-1">
                   🏢 {i.link.company.name} · 🏷️ {i.link.category || "ทั่วไป"} · ตรวจพบ {fmtDateTime(i.detectedAt)}
                 </div>
@@ -172,7 +180,9 @@ function IncidentPanel({
           <div>
             <h3 className="text-lg font-semibold text-slate-800">{incident.link.name}</h3>
             <div className="text-xs text-slate-400">🏢 {incident.link.company.name}</div>
-            <div className="text-xs text-brand-600 break-all">{incident.link.url}</div>
+            <a href={incident.link.url} target="_blank" rel="noreferrer" className="text-xs text-brand-600 hover:underline break-all inline-flex items-center gap-1">
+              {incident.link.url} <span className="text-brand-400">↗</span>
+            </a>
           </div>
           <IncidentStatusBadge status={incident.status} />
         </div>

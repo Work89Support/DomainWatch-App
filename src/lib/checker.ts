@@ -20,37 +20,31 @@ export type ProbeResult = {
   error: string | null;
 };
 
-// ยิงเช็ค URL 1 ครั้ง — ถือว่า "ใช้ได้" เมื่อ HTTP < 400
-async function probeOnce(url: string): Promise<ProbeResult> {
-  const start = Date.now();
+// ยิง fetch 1 ครั้งพร้อม timeout ของตัวเอง (แต่ละ method ได้เวลาเต็ม ไม่โดน abort ต่อกัน)
+async function fetchWithTimeout(url: string, method: "HEAD" | "GET"): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    let res: Response;
-    try {
-      // ลอง HEAD ก่อน (เบากว่า)
-      res = await fetch(url, {
-        method: "HEAD",
-        redirect: "follow",
-        signal: controller.signal,
-        headers: { "User-Agent": "DomainWatch/1.0 (+monitoring)" },
-      });
-      // บางเว็บไม่รองรับ HEAD -> ลอง GET
-      if (res.status === 405 || res.status === 501) {
-        res = await fetch(url, {
-          method: "GET",
-          redirect: "follow",
-          signal: controller.signal,
-          headers: { "User-Agent": "DomainWatch/1.0 (+monitoring)" },
-        });
-      }
-    } catch {
-      res = await fetch(url, {
-        method: "GET",
-        redirect: "follow",
-        signal: controller.signal,
-        headers: { "User-Agent": "DomainWatch/1.0 (+monitoring)" },
-      });
+    return await fetch(url, {
+      method,
+      redirect: "follow",
+      signal: controller.signal,
+      headers: { "User-Agent": "DomainWatch/1.0 (+monitoring)" },
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ยิงเช็ค URL 1 ครั้ง — ถือว่า "ใช้ได้" เมื่อ HTTP < 400
+async function probeOnce(url: string): Promise<ProbeResult> {
+  const start = Date.now();
+  try {
+    // ลอง HEAD ก่อน (เบากว่า)
+    let res = await fetchWithTimeout(url, "HEAD");
+    // บางเว็บไม่รองรับ HEAD -> ลอง GET (ด้วย timeout ใหม่)
+    if (res.status === 405 || res.status === 501) {
+      res = await fetchWithTimeout(url, "GET");
     }
     const responseMs = Date.now() - start;
     return {
@@ -59,16 +53,26 @@ async function probeOnce(url: string): Promise<ProbeResult> {
       responseMs,
       error: res.status < 400 ? null : `HTTP ${res.status}`,
     };
-  } catch (e: unknown) {
-    const responseMs = Date.now() - start;
-    const err = e as { name?: string; message?: string };
-    const message =
-      err?.name === "AbortError"
-        ? `หมดเวลา (timeout ${TIMEOUT_MS}ms)`
-        : err?.message || "เชื่อมต่อไม่ได้";
-    return { ok: false, httpCode: null, responseMs, error: message };
-  } finally {
-    clearTimeout(timer);
+  } catch {
+    // HEAD ล้มเหลว (timeout/บล็อก) — ลอง GET ด้วย timeout ใหม่ก่อนตัดสินว่าล่ม
+    try {
+      const res = await fetchWithTimeout(url, "GET");
+      const responseMs = Date.now() - start;
+      return {
+        ok: res.status < 400,
+        httpCode: res.status,
+        responseMs,
+        error: res.status < 400 ? null : `HTTP ${res.status}`,
+      };
+    } catch (e2: unknown) {
+      const responseMs = Date.now() - start;
+      const err = e2 as { name?: string; message?: string };
+      const message =
+        err?.name === "AbortError"
+          ? `หมดเวลา (timeout ${TIMEOUT_MS}ms)`
+          : err?.message || "เชื่อมต่อไม่ได้";
+      return { ok: false, httpCode: null, responseMs, error: message };
+    }
   }
 }
 
@@ -180,8 +184,8 @@ export async function runCheck(): Promise<CheckSummary> {
       }
     }
 
-    // เปลี่ยนจากล่ม -> ใช้ได้ : ปิด incident + แจ้งกลับมาปกติ
-    if (status === "UP" && prev === "DOWN") {
+    // ลิงก์ใช้ได้ : ปิดเคสที่ยังเปิดค้างของลิงก์นี้ทั้งหมด (self-heal เคสที่ค้างจากรอบก่อน)
+    if (status === "UP") {
       const open = await prisma.incident.findFirst({
         where: { linkId: link.id, status: { not: "CLOSED" } },
         orderBy: { detectedAt: "desc" },
@@ -196,15 +200,18 @@ export async function runCheck(): Promise<CheckSummary> {
           data: { status: "CLOSED", resolvedAt: now },
         });
         summary.recovered++;
-        await sendTelegram(
-          recoveredMessage({
-            name: link.name,
-            url: link.url,
-            downMinutes,
-            appBaseUrl: APP_BASE_URL,
-          }),
-          "all"
-        );
+        // แจ้ง Telegram เฉพาะตอนเพิ่งกลับมาปกติจริง (prev = DOWN) กันสแปมตอนเก็บกวาดเคสค้าง
+        if (prev === "DOWN") {
+          await sendTelegram(
+            recoveredMessage({
+              name: link.name,
+              url: link.url,
+              downMinutes,
+              appBaseUrl: APP_BASE_URL,
+            }),
+            "all"
+          );
+        }
       }
     }
   }
