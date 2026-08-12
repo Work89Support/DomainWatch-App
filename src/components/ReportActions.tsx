@@ -4,8 +4,7 @@ import { useState } from "react";
 
 declare global {
   interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    html2canvas?: (node: HTMLElement, opts?: Record<string, unknown>) => Promise<any>;
+    html2canvas?: (node: HTMLElement, opts?: Record<string, unknown>) => Promise<HTMLCanvasElement>;
   }
 }
 
