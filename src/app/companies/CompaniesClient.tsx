@@ -143,7 +143,7 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
             onChange={(e) => setNewCompany(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addCompany()}
           />
-          <button className="btn-primary whitespace-nowrap disabled:opacity-60" disabled={busy || !newCompany.trim()} onClick={addCompany}>
+          <button className="btn-primary whitespace-nowrap disabled:opacity-60" disabled={busy} onClick={addCompany}>
             {busy ? "กำลังเพิ่ม..." : "+ เพิ่มบริษัท"}
           </button>
         </div>
@@ -243,7 +243,7 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
                       onChange={(e) => setGroupInput({ ...groupInput, [c.id]: e.target.value })}
                       onKeyDown={(e) => e.key === "Enter" && addGroup(c.id)}
                     />
-                    <button className="btn-primary text-sm whitespace-nowrap disabled:opacity-40" disabled={!(groupInput[c.id] || "").trim()} onClick={() => addGroup(c.id)}>
+                    <button className="btn-primary text-sm whitespace-nowrap" onClick={() => addGroup(c.id)}>
                       + เพิ่มห้อง LINE
                     </button>
                   </div>
