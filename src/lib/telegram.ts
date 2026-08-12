@@ -1,6 +1,9 @@
 // ส่งข้อความแจ้งเตือนผ่าน Telegram Bot API
 // ตั้งค่า TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_IT_CHAT_ID ใน .env
 
+import { fmtMinutes } from "@/lib/format";
+import type { DailyReport } from "@/lib/report";
+
 type Audience = "admin" | "it" | "all";
 
 function chatIdsFor(audience: Audience): string[] {
@@ -169,6 +172,30 @@ export function recoveredMessage(opts: {
     `🔗 ${escapeHtml(opts.url)}`,
     `⏱️ ล่มไปประมาณ ${opts.downMinutes} นาที`,
   ].join("\n");
+}
+
+// สรุปรายงานรอบวัน สำหรับส่งผู้บริหาร/ทีม
+export function dailyReportMessage(r: DailyReport, appBaseUrl: string): string {
+  const icon: Record<string, string> = { morning: "🌅", evening: "🌆", night: "🌙" };
+  const shiftLines = r.shifts.map((s) => {
+    const badge = s.incidents === 0 ? "🟢 ไม่มีปัญหา" : s.allFixed ? "✅ แก้ครบ" : `⚠️ ค้าง ${s.open}`;
+    return `${icon[s.key] || "•"} <b>${escapeHtml(s.label)}</b> (${s.time}): ปัญหา ${s.incidents} · แก้แล้ว ${s.resolved} · ${badge}`;
+  });
+  const summary = r.totalOpen === 0
+    ? (r.totalIncidents === 0 ? "✅ ทั้งวันไม่มีปัญหา" : "✅ ปิดครบทุกเคสแล้ว")
+    : `⚠️ ยังมี ${r.totalOpen} เคสค้าง`;
+  const lines: string[] = [
+    `📊 <b>รายงานสรุปรอบวัน</b>`,
+    `🗓️ ${escapeHtml(r.dateLabel)}`,
+    ``,
+    `เฝ้าดู ${r.activeLinks} ลิงก์ · ตอนนี้ใช้ได้ ${r.upNow} · ล่ม ${r.downNow}`,
+    `เคสทั้งวัน ${r.totalIncidents} · แก้แล้ว ${r.totalResolved} · ค้าง ${r.totalOpen}`,
+  ];
+  if (r.oaIssues > 0) lines.push(`LINE OA ผิดปกติ ${r.oaIssues} ห้อง`);
+  lines.push("", ...shiftLines, "");
+  lines.push(`KPI เฉลี่ย — แอดมิน ${fmtMinutes(r.avgAdminMin)} · ไอที ${fmtMinutes(r.avgItMin)}`);
+  lines.push(`สรุป: <b>${summary}</b>`, "", `${appBaseUrl}/report?date=${r.date}`);
+  return lines.join("\n");
 }
 
 function escapeHtml(s: string): string {

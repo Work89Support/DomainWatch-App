@@ -8,6 +8,7 @@ const baseNav = [
   { href: "/companies", label: "บริษัท / ห้อง LINE", icon: "🏢" },
   { href: "/links", label: "Master Data ลิงก์", icon: "🔗" },
   { href: "/incidents", label: "เหตุการณ์", icon: "🚨" },
+  { href: "/report", label: "รายงานรอบวัน", icon: "📅" },
   { href: "/kpi", label: "KPI รายคน", icon: "🏆" },
 ];
 
