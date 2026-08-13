@@ -6,10 +6,32 @@ export const dynamic = "force-dynamic";
 
 // GET /api/companies — บริษัททั้งหมด (พร้อมห้อง LINE และจำนวนลิงก์)
 export async function GET() {
+  if (!(await getCurrentUser())) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const companies = await prisma.company.findMany({
     orderBy: { createdAt: "asc" },
-    include: {
-      lineGroups: { orderBy: { createdAt: "asc" } },
+    select: {
+      id: true,
+      name: true,
+      note: true,
+      isActive: true,
+      createdAt: true,
+      tgChatId: true,
+      lineGroups: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          companyId: true,
+          name: true,
+          note: true,
+          isActive: true,
+          expectedOaName: true,
+          oaStatus: true,
+          oaDisplayName: true,
+          oaHasPicture: true,
+          oaLastCheckedAt: true,
+          oaError: true,
+        },
+      },
       _count: { select: { links: true } },
     },
   });

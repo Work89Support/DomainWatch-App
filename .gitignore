@@ -34,3 +34,5 @@ prisma/*.db
 .vercel
 
 _v2.zip
+
+_to_delete/

@@ -6,12 +6,27 @@ export const dynamic = "force-dynamic";
 
 // GET /api/links?companyId=... — รายการลิงก์ (กรองตามบริษัทได้)
 export async function GET(req: NextRequest) {
+  if (!(await getCurrentUser())) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const url = new URL(req.url);
   const companyId = url.searchParams.get("companyId") || undefined;
   const links = await prisma.link.findMany({
     where: companyId ? { companyId } : {},
     orderBy: { createdAt: "desc" },
-    include: { company: true, lineGroup: true },
+    select: {
+      id: true,
+      companyId: true,
+      lineGroupId: true,
+      name: true,
+      url: true,
+      category: true,
+      backupUrl: true,
+      note: true,
+      isActive: true,
+      lastStatus: true,
+      lastCheckedAt: true,
+      company: { select: { id: true, name: true } },
+      lineGroup: { select: { id: true, name: true } },
+    },
   });
   return NextResponse.json(links);
 }

@@ -6,11 +6,25 @@ export const dynamic = "force-dynamic";
 
 // GET /api/linegroups?companyId=... — ห้อง LINE ของบริษัท
 export async function GET(req: NextRequest) {
+  if (!(await getCurrentUser())) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const url = new URL(req.url);
   const companyId = url.searchParams.get("companyId") || undefined;
   const groups = await prisma.lineGroup.findMany({
     where: companyId ? { companyId } : {},
     orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      companyId: true,
+      name: true,
+      note: true,
+      isActive: true,
+      expectedOaName: true,
+      oaStatus: true,
+      oaDisplayName: true,
+      oaHasPicture: true,
+      oaLastCheckedAt: true,
+      oaError: true,
+    },
   });
   return NextResponse.json(groups);
 }

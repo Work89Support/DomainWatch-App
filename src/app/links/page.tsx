@@ -16,11 +16,32 @@ export default async function LinksPage({
   const [links, companies] = await Promise.all([
     prisma.link.findMany({
       orderBy: { createdAt: "desc" },
-      include: { company: true, lineGroup: true },
+      select: {
+        id: true,
+        companyId: true,
+        lineGroupId: true,
+        name: true,
+        url: true,
+        category: true,
+        backupUrl: true,
+        note: true,
+        isActive: true,
+        lastStatus: true,
+        lastCheckedAt: true,
+        company: { select: { id: true, name: true } },
+        lineGroup: { select: { id: true, name: true } },
+      },
     }),
     prisma.company.findMany({
       orderBy: { createdAt: "asc" },
-      include: { lineGroups: { orderBy: { createdAt: "asc" } } },
+      select: {
+        id: true,
+        name: true,
+        lineGroups: {
+          orderBy: { createdAt: "asc" },
+          select: { id: true, name: true },
+        },
+      },
     }),
   ]);
   return (
