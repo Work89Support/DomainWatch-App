@@ -53,6 +53,8 @@ export type ProbeResult = {
   httpCode: number | null;
   responseMs: number;
   error: string | null;
+  // GET กับ HEAD ให้ผลขัดกัน: เว็บยังตอบอยู่ แต่อาจช้าหรือมี WAF กัน server monitor
+  degraded?: boolean;
 };
 
 // ยิง fetch 1 ครั้งพร้อม timeout ของตัวเอง (แต่ละ method ได้เวลาเต็ม ไม่โดน abort ต่อกัน)
@@ -83,6 +85,10 @@ function statusOk(status: number): boolean {
   return status < 400 || ALIVE_BLOCKED.has(status);
 }
 
+export function isDegradedAvailability(getStatus: number, headStatus: number): boolean {
+  return getStatus >= 500 && statusOk(headStatus);
+}
+
 // ยิงเช็ค URL 1 ครั้ง
 async function probeOnce(url: string): Promise<ProbeResult> {
   const start = Date.now();
@@ -92,6 +98,24 @@ async function probeOnce(url: string): Promise<ProbeResult> {
     // บาง endpoint ไม่รับ GET แต่ยังใช้ HEAD สำหรับตรวจ availability ได้
     if (res.status === 405 || res.status === 501) {
       res = await fetchWithTimeout(url, "HEAD", HEAD_TIMEOUT_MS);
+    }
+    // WAF บางเว็บตอบ 5xx ให้ IP ของ Vercel แต่ผู้ใช้เปิดหน้าเว็บได้จริง
+    // ถ้า HEAD ยังตอบสำเร็จ ให้จัดเป็น SLOW/ไม่แน่นอนแทนการเปิดเคสล่มผิด
+    if (res.status >= 500) {
+      try {
+        const head = await fetchWithTimeout(url, "HEAD", HEAD_TIMEOUT_MS);
+        if (isDegradedAvailability(res.status, head.status)) {
+          return {
+            ok: true,
+            httpCode: res.status,
+            responseMs: Date.now() - start,
+            error: `GET ${res.status}; HEAD ${head.status}`,
+            degraded: true,
+          };
+        }
+      } catch {
+        // HEAD ก็เชื่อมต่อไม่ได้: ใช้ผล GET เดิมตัดสินต่อ
+      }
     }
     const responseMs = Date.now() - start;
     const ok = statusOk(res.status);
@@ -112,6 +136,7 @@ async function probeOnce(url: string): Promise<ProbeResult> {
         httpCode: res.status,
         responseMs,
         error: ok ? null : `HTTP ${res.status}`,
+        degraded: ok,
       };
     } catch (e2: unknown) {
       const responseMs = Date.now() - start;
@@ -232,7 +257,7 @@ export async function runCheck(): Promise<CheckSummary> {
     // probeStatus = ผลดิบของรอบนี้, status = สถานะยืนยันที่แสดงในระบบ
     const probeStatus: LinkStatus = !result.ok
       ? "DOWN"
-      : result.responseMs >= SLOW_RESPONSE_MS
+      : result.degraded || result.responseMs >= SLOW_RESPONSE_MS
         ? "SLOW"
         : "UP";
     const groupKey = `${link.companyId}\u0000${urlKey(link.url)}`;
