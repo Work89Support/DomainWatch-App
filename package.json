@@ -9,6 +9,7 @@
     "build": "prisma generate && prisma db push --skip-generate --accept-data-loss && next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "node --import tsx --test tests/*.test.ts",
     "check": "tsx scripts/check.ts",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",

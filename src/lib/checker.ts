@@ -8,6 +8,7 @@ import {
   oaRecoveredMessage,
 } from "@/lib/telegram";
 import { checkOa } from "@/lib/line";
+import { confirmCheckState } from "@/lib/checkState";
 import type { LinkStatus } from "@prisma/client";
 
 const TIMEOUT_MS = Number(process.env.CHECK_TIMEOUT_MS || 25000);
@@ -21,20 +22,22 @@ const RECOVERY_CONFIRMATIONS = Math.max(1, Number(process.env.RECOVERY_CONFIRMAT
 const CONCURRENCY = Number(process.env.CHECK_CONCURRENCY || 8);
 const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
 
-// UA แบบเบราว์เซอร์มือถือ (เหมือนที่ระบบเก่าใช้) — ลด 403 หลอกจากเว็บที่กันบอท
-const BROWSER_UA =
-  "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36 Line/13.7.1";
+// เว็บทั่วไปต้องใช้ Chrome UA ปกติ เพราะบาง Cloudflare ตอบ 503 เมื่อเห็น Line UA
+const CHROME_UA =
+  "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
+const LINE_UA = `${CHROME_UA} Line/13.7.1`;
 
 // เลือก header ตามโดเมน — LINE/Telegram ต้องมี Referer ที่ถูกต้อง
 function headersFor(url: string): Record<string, string> {
   const h: Record<string, string> = {
-    "User-Agent": BROWSER_UA,
+    "User-Agent": CHROME_UA,
     Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "th-TH,th;q=0.9,en-US;q=0.8,en;q=0.7",
   };
   try {
     const host = new URL(url).host.toLowerCase();
     if (host.endsWith("lin.ee") || host.endsWith("line.me") || host.endsWith("liff.line.me")) {
+      h["User-Agent"] = LINE_UA;
       h["Referer"] = "https://line.me/";
     } else if (host.endsWith("t.me") || host.endsWith("telegram.me")) {
       h["Referer"] = "https://t.me/";
@@ -84,12 +87,11 @@ function statusOk(status: number): boolean {
 async function probeOnce(url: string): Promise<ProbeResult> {
   const start = Date.now();
   try {
-    // ลอง HEAD ก่อน (เบากว่า)
-    let res = await fetchWithTimeout(url, "HEAD", HEAD_TIMEOUT_MS);
-    // หลายเว็บ (โดยเฉพาะที่กันบอท) ปฏิเสธ HEAD ด้วย 403/405/501 ฯลฯ แต่ตอบ GET ปกติ
-    // -> ถ้า HEAD ไม่ผ่าน (>=400) ลอง GET ซ้ำก่อนตัดสินว่าล่ม กัน 403 หลอก
-    if (res.status >= 400) {
-      res = await fetchWithTimeout(url, "GET");
+    // GET สะท้อนสิ่งที่ผู้ใช้เปิดจริงกว่า HEAD และช่วยจับเว็บที่หน้าเว็บโหลดช้า
+    let res = await fetchWithTimeout(url, "GET");
+    // บาง endpoint ไม่รับ GET แต่ยังใช้ HEAD สำหรับตรวจ availability ได้
+    if (res.status === 405 || res.status === 501) {
+      res = await fetchWithTimeout(url, "HEAD", HEAD_TIMEOUT_MS);
     }
     const responseMs = Date.now() - start;
     const ok = statusOk(res.status);
@@ -100,9 +102,9 @@ async function probeOnce(url: string): Promise<ProbeResult> {
       error: ok ? null : `HTTP ${res.status}`,
     };
   } catch {
-    // HEAD ล้มเหลว (timeout/บล็อก) — ลอง GET ด้วย timeout ใหม่ก่อนตัดสินว่าล่ม
+    // GET ล้มเหลว — ใช้ HEAD ยืนยันว่า origin ยังตอบหรือไม่
     try {
-      const res = await fetchWithTimeout(url, "GET");
+      const res = await fetchWithTimeout(url, "HEAD", HEAD_TIMEOUT_MS);
       const responseMs = Date.now() - start;
       const ok = statusOk(res.status);
       return {
@@ -123,6 +125,16 @@ async function probeOnce(url: string): Promise<ProbeResult> {
   }
 }
 
+function urlKey(url: string): string {
+  try {
+    const parsed = new URL(url.trim());
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return url.trim();
+  }
+}
+
 // เช็ค URL พร้อมลองซ้ำ — คืน "ล่ม" ต่อเมื่อพยายามครบทุกครั้งแล้วยังไม่ผ่าน
 export async function probe(url: string): Promise<ProbeResult> {
   let last: ProbeResult = await probeOnce(url);
@@ -139,6 +151,7 @@ export type CheckSummary = {
   up: number;
   slow: number;
   down: number;
+  pending: number;
   newIncidents: number;
   recovered: number;
   ranAt: string;
@@ -183,54 +196,64 @@ export async function runCheck(): Promise<CheckSummary> {
     up: 0,
     slow: 0,
     down: 0,
+    pending: 0,
     newIncidents: 0,
     recovered: 0,
     ranAt: new Date().toISOString(),
   };
 
   // 1) ยิงเช็คทุกลิงก์แบบขนาน (เป็นงาน network จึงเร็วและปลอดภัย)
-  const results: ProbeResult[] = new Array(links.length);
+  // URL เดียวอาจอยู่หลายห้อง LINE: ยิงจริงครั้งเดียวแล้วใช้ผลร่วมกัน ลดผลสลับและโหลดปลายทาง
+  const uniqueUrls = Array.from(new Set(links.map((link) => urlKey(link.url))));
+  const results = new Map<string, ProbeResult>();
   let cursor = 0;
   async function worker() {
     while (true) {
       const i = cursor++;
-      if (i >= links.length) return;
-      results[i] = await probe(links[i].url);
+      if (i >= uniqueUrls.length) return;
+      results.set(uniqueUrls[i], await probe(uniqueUrls[i]));
     }
   }
   await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, links.length) }, worker)
+    Array.from({ length: Math.min(CONCURRENCY, uniqueUrls.length) }, worker)
   );
+
+  const equivalentLinkIds = new Map<string, string[]>();
+  for (const link of links) {
+    const key = `${link.companyId}\u0000${urlKey(link.url)}`;
+    equivalentLinkIds.set(key, [...(equivalentLinkIds.get(key) || []), link.id]);
+  }
 
   // 2) บันทึกผล + จัดการ incident/แจ้งเตือน แบบเรียงลำดับ (กันโหลด DB พุ่ง)
   for (let i = 0; i < links.length; i++) {
     const link = links[i];
-    const result = results[i];
+    const result = results.get(urlKey(link.url));
+    if (!result) continue;
     // probeStatus = ผลดิบของรอบนี้, status = สถานะยืนยันที่แสดงในระบบ
     const probeStatus: LinkStatus = !result.ok
       ? "DOWN"
       : result.responseMs >= SLOW_RESPONSE_MS
         ? "SLOW"
         : "UP";
-    const prev = link.lastStatus;
-    const openIncident = await prisma.incident.findFirst({
-      where: { linkId: link.id, status: { not: "CLOSED" } },
+    const groupKey = `${link.companyId}\u0000${urlKey(link.url)}`;
+    const siblingLinkIds = equivalentLinkIds.get(groupKey) || [link.id];
+    const openIncidents = await prisma.incident.findMany({
+      where: { linkId: { in: siblingLinkIds }, status: { not: "CLOSED" } },
       orderBy: { detectedAt: "desc" },
     });
-    const failureStreak = probeStatus === "DOWN" ? link.failureStreak + 1 : 0;
-    const recoveryStreak = probeStatus === "UP" ? link.recoveryStreak + 1 : 0;
-    let status: LinkStatus = probeStatus;
-
-    // รอบแรกที่ยิงไม่ผ่านให้ขึ้น SLOW ก่อน ยังไม่เปิด Incident จนกว่าจะยืนยันครบ
-    if (probeStatus === "DOWN" && failureStreak < DOWN_CONFIRMATIONS) {
-      status = prev === "DOWN" ? "DOWN" : "SLOW";
-    }
-    // หลังเคย DOWN ต้องตอบเร็วปกติครบจำนวนรอบก่อนปิดเคส
-    if (probeStatus === "UP" && openIncident && recoveryStreak < RECOVERY_CONFIRMATIONS) {
-      status = "SLOW";
-    }
+    const state = confirmCheckState({
+      probeStatus,
+      currentStatus: link.lastStatus,
+      hasOpenIncident: openIncidents.length > 0,
+      failureStreak: link.failureStreak,
+      recoveryStreak: link.recoveryStreak,
+      downConfirmations: DOWN_CONFIRMATIONS,
+      recoveryConfirmations: RECOVERY_CONFIRMATIONS,
+    });
+    const { status, failureStreak, recoveryStreak } = state;
     summary.checked++;
-    if (status === "UP") summary.up++;
+    if (state.pendingVerification) summary.pending++;
+    else if (status === "UP") summary.up++;
     else if (status === "SLOW") summary.slow++;
     else summary.down++;
 
@@ -259,44 +282,43 @@ export async function runCheck(): Promise<CheckSummary> {
     });
 
     // ลิงก์ล่ม : เปิด incident ถ้ายังไม่มีเคสค้าง (ครอบคลุมกรณีเคสถูกปิดมือทั้งที่ยังล่มอยู่ -> เปิดใหม่ให้)
-    if (status === "DOWN") {
-      if (!openIncident) {
-        const incident = await prisma.incident.create({
-          data: { linkId: link.id, detectedAt: now, status: "OPEN" },
-        });
-        summary.newIncidents++;
+    if (state.shouldOpenIncident) {
+      const incident = await prisma.incident.create({
+        data: { linkId: link.id, detectedAt: now, status: "OPEN" },
+      });
+      summary.newIncidents++;
 
-        const msg = downAlertMessage({
-          name: link.name,
-          url: link.url,
-          category: link.category,
-          httpCode: result.httpCode,
-          error: result.error,
-          detectedAt: now,
-          appBaseUrl: APP_BASE_URL,
+      const msg = downAlertMessage({
+        name: link.name,
+        url: link.url,
+        category: link.category,
+        httpCode: result.httpCode,
+        error: result.error,
+        detectedAt: now,
+        appBaseUrl: APP_BASE_URL,
+      });
+      const sent = await notifyCompany(routes, link.companyId, msg);
+      if (sent.ok) {
+        await prisma.incident.update({
+          where: { id: incident.id },
+          data: { notifiedAt: new Date() },
         });
-        const sent = await notifyCompany(routes, link.companyId, msg);
-        if (sent.ok) {
-          await prisma.incident.update({
-            where: { id: incident.id },
-            data: { notifiedAt: new Date() },
-          });
-        }
       }
     }
 
     // ลิงก์ใช้ได้ : ปิดเคสที่ยังเปิดค้างของลิงก์นี้ทั้งหมด (self-heal เคสที่ค้างจากรอบก่อน)
-    if (status === "UP") {
-      if (openIncident) {
+    if (state.shouldCloseIncident) {
+      const newestOpen = openIncidents[0];
+      if (newestOpen) {
         const downMinutes = Math.max(
           1,
-          Math.round((now.getTime() - openIncident.detectedAt.getTime()) / 60000)
+          Math.round((now.getTime() - newestOpen.detectedAt.getTime()) / 60000)
         );
-        await prisma.incident.update({
-          where: { id: openIncident.id },
+        await prisma.incident.updateMany({
+          where: { id: { in: openIncidents.map((incident) => incident.id) } },
           data: { status: "CLOSED", resolvedAt: now },
         });
-        summary.recovered++;
+        summary.recovered += openIncidents.length;
         await notifyCompany(
           routes,
           link.companyId,

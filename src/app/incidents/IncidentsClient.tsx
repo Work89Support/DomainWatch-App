@@ -45,7 +45,18 @@ export default function IncidentsClient({
   const [filter, setFilter] = useState<"open" | "all">("open");
   const [selected, setSelected] = useState<Incident | null>(null);
 
-  const list = initial.filter((i) => (filter === "open" ? i.status !== "CLOSED" : true));
+  const list = filter === "open"
+    ? initial.filter(
+        (incident, index, all) =>
+          incident.status !== "CLOSED" &&
+          index === all.findIndex(
+            (candidate) =>
+              candidate.status !== "CLOSED" &&
+              candidate.link.company.id === incident.link.company.id &&
+              candidate.link.url === incident.link.url
+          )
+      )
+    : initial;
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">

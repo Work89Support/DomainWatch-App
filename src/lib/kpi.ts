@@ -55,11 +55,10 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
     ? { link: { companyId } }
     : {};
 
-  const [links, companies, openIncidents, incidents30d, closedWithKpi, recent] =
+  const [links, companies, incidents30d, closedWithKpi, recent] =
     await Promise.all([
       prisma.link.findMany({ where: linkWhere, include: { company: true } }),
       prisma.company.findMany({ orderBy: { createdAt: "asc" } }),
-      prisma.incident.count({ where: { ...incWhere, status: { not: "CLOSED" } } }),
       prisma.incident.count({ where: { ...incWhere, detectedAt: { gte: since30 } } }),
       prisma.incident.findMany({
         where: { ...incWhere, detectedAt: { gte: since30 } },
@@ -89,7 +88,16 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
     orderBy: { detectedAt: "desc" },
     include: { link: { include: { company: true } } },
   });
-  const updateQueue = openQueueList.map((i) => ({
+  // URL เดียวในหลายห้องคือปัญหาเดียวกัน: แสดงเป็นเคสเดียวบน Dashboard
+  const uniqueOpenQueue = openQueueList.filter(
+    (incident, index, all) =>
+      index === all.findIndex(
+        (candidate) =>
+          candidate.link.companyId === incident.link.companyId &&
+          candidate.link.url === incident.link.url
+      )
+  );
+  const updateQueue = uniqueOpenQueue.map((i) => ({
     incidentId: i.id,
     linkName: i.link.name,
     company: i.link.company.name,
@@ -97,6 +105,7 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
     hasBackup: !!(i.link.backupUrl && i.link.backupUrl.trim()),
     detectedAt: i.detectedAt.toISOString(),
   }));
+  const openIncidents = updateQueue.length;
 
   const upCount = activeArr.filter((l) => l.lastStatus === "UP").length;
   const slowCount = activeArr.filter((l) => l.lastStatus === "SLOW").length;
@@ -133,10 +142,14 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
   const openByCompany = new Map<string, number>();
   const openList = await prisma.incident.findMany({
     where: { status: { not: "CLOSED" } },
-    select: { link: { select: { companyId: true } } },
+    select: { link: { select: { companyId: true, url: true } } },
   });
+  const seenOpenUrls = new Set<string>();
   for (const o of openList) {
     const cid = o.link.companyId;
+    const key = `${cid}\u0000${o.link.url}`;
+    if (seenOpenUrls.has(key)) continue;
+    seenOpenUrls.add(key);
     openByCompany.set(cid, (openByCompany.get(cid) || 0) + 1);
   }
   const companyBreakdown = companies

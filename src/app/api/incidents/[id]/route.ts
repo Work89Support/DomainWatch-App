@@ -54,7 +54,7 @@ export async function PATCH(
       if (body.newUrl) {
         await prisma.link.update({
           where: { id: incident.linkId },
-          data: { url: String(body.newUrl).trim(), lastStatus: "UNKNOWN" },
+          data: { url: String(body.newUrl).trim(), lastStatus: "UNKNOWN", failureStreak: 0, recoveryStreak: 0 },
         });
       }
       break;
@@ -75,7 +75,7 @@ export async function PATCH(
       if (!incident.adminAckAt) data.adminAckAt = now;
       await prisma.link.update({
         where: { id: incident.linkId },
-        data: { url: incident.link.backupUrl, lastStatus: "UNKNOWN" },
+        data: { url: incident.link.backupUrl, lastStatus: "UNKNOWN", failureStreak: 0, recoveryStreak: 0 },
       });
       break;
     }
