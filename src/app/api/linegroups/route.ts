@@ -39,12 +39,24 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  const group = await prisma.lineGroup.create({
-    data: {
-      companyId: String(body.companyId),
-      name: String(body.name).trim(),
-      note: body.note?.trim() || null,
-    },
-  });
-  return NextResponse.json(group, { status: 201 });
+  // ตรวจว่าบริษัทมีอยู่จริง ก่อนสร้าง (กัน error 500 จาก foreign key)
+  const company = await prisma.company.findUnique({ where: { id: String(body.companyId) } });
+  if (!company) {
+    return NextResponse.json({ error: "ไม่พบบริษัทที่ระบุ" }, { status: 400 });
+  }
+  try {
+    const group = await prisma.lineGroup.create({
+      data: {
+        companyId: String(body.companyId),
+        name: String(body.name).trim(),
+        note: body.note?.trim() || null,
+      },
+    });
+    return NextResponse.json(group, { status: 201 });
+  } catch (e) {
+    return NextResponse.json(
+      { error: "เพิ่มห้องไม่สำเร็จ", detail: String(e) },
+      { status: 500 }
+    );
+  }
 }

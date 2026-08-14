@@ -16,7 +16,11 @@ export async function PATCH(
   const g = await guard(); if (g) return g;
   const body = await req.json();
   const data: Record<string, unknown> = {};
-  if ("name" in body) data.name = String(body.name).trim();
+  if ("name" in body) {
+    const name = String(body.name).trim();
+    if (!name) return NextResponse.json({ error: "ชื่อห้องห้ามว่าง" }, { status: 400 });
+    data.name = name;
+  }
   if ("note" in body) data.note = body.note?.trim() || null;
   if ("isActive" in body) data.isActive = !!body.isActive;
   if ("channelAccessToken" in body) data.channelAccessToken = body.channelAccessToken?.trim() || null;

@@ -20,6 +20,7 @@ export type ShiftReport = {
 export type DailyReport = {
   date: string; // YYYY-MM-DD
   dateLabel: string;
+  isToday: boolean; // true = ตัวเลขสถานะสด (ล่มตอนนี้/OA) ใช้ได้จริง; false = ดูย้อนหลัง อย่าโชว์สถานะสด
   activeLinks: number;
   upNow: number;
   downNow: number;
@@ -119,9 +120,12 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
     day: "numeric",
   });
 
+  const isToday = dateStr === todayBangkok();
+
   return {
     date: dateStr,
     dateLabel,
+    isToday,
     activeLinks,
     upNow,
     downNow,
@@ -131,7 +135,8 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
     totalOpen,
     avgAdminMin: avg(adminVals),
     avgItMin: avg(itVals),
-    allClear: totalOpen === 0 && downNow === 0,
+    // ดูย้อนหลัง: ตัดสินจากเคสในวันนั้นเท่านั้น (ไม่เอาสถานะ "ล่มตอนนี้" มาปน)
+    allClear: isToday ? totalOpen === 0 && downNow === 0 : totalOpen === 0,
     shifts,
     incidents: incs.map((i) => ({
       name: i.link.name,

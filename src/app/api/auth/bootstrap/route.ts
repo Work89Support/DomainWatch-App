@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     },
   });
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(COOKIE_NAME, createSessionToken(user.id), {
+  res.cookies.set(COOKIE_NAME, createSessionToken(user.id, user.passwordHash), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

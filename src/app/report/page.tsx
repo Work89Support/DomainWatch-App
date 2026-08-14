@@ -40,13 +40,14 @@ export default async function ReportPage({ searchParams }: { searchParams: { dat
       {/* สรุปทั้งวัน */}
       <div className={`card p-4 mb-6 ${r.allClear ? "bg-emerald-50 border-emerald-100" : "bg-amber-50 border-amber-100"}`}>
         <div className={`text-base font-semibold ${r.allClear ? "text-emerald-700" : "text-amber-700"}`}>
-          {r.allClear ? "✅ วันนี้เรียบร้อย — ปิดครบทุกเคส และทุกลิงก์ปกติ"
-            : `⚠️ ยังมี ${r.totalOpen} เคสค้าง / ล่มอยู่ ${r.downNow} ลิงก์`}
+          {r.allClear
+            ? (r.isToday ? "✅ วันนี้เรียบร้อย — ปิดครบทุกเคส และทุกลิงก์ปกติ" : "✅ วันนั้นเรียบร้อย — ปิดครบทุกเคส")
+            : (r.isToday ? `⚠️ ยังมี ${r.totalOpen} เคสค้าง / ล่มอยู่ ${r.downNow} ลิงก์` : `⚠️ วันนั้นมี ${r.totalOpen} เคสที่ปิดไม่ครบ`)}
         </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="ลิงก์ที่เฝ้าดู" value={r.activeLinks} hint={`ใช้ได้ ${r.upNow} · ล่ม ${r.downNow}`} tone="slate" />
+        <StatCard label="ลิงก์ที่เฝ้าดู" value={r.activeLinks} hint={r.isToday ? `ใช้ได้ ${r.upNow} · ล่ม ${r.downNow} (สถานะสด)` : "จำนวนที่เฝ้าดูปัจจุบัน"} tone="slate" />
         <StatCard label="เคสทั้งวัน" value={r.totalIncidents} tone="brand" />
         <StatCard label="แก้ไขแล้ว" value={r.totalResolved} tone="green" />
         <StatCard label="ยังค้าง" value={r.totalOpen} tone={r.totalOpen > 0 ? "red" : "green"} />
@@ -91,9 +92,9 @@ export default async function ReportPage({ searchParams }: { searchParams: { dat
 
       {/* รายการเคสของวัน */}
       <div className="card p-5">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4">รายการเคสของวันนี้ ({r.incidents.length})</h2>
+        <h2 className="text-lg font-semibold text-slate-800 mb-4">รายการเคสของรอบวัน ({r.incidents.length})</h2>
         {r.incidents.length === 0 ? (
-          <p className="text-sm text-slate-400 py-6 text-center">ไม่มีเคสในวันนี้ 🎉</p>
+          <p className="text-sm text-slate-400 py-6 text-center">ไม่มีเคสในรอบวันนี้ 🎉</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

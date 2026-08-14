@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   if (!user || !user.isActive || !verifyPassword(String(password), user.passwordHash)) {
     return NextResponse.json({ error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" }, { status: 401 });
   }
-  const token = createSessionToken(user.id);
+  const token = createSessionToken(user.id, user.passwordHash);
   const res = NextResponse.json({
     ok: true,
     user: { id: user.id, name: user.name, role: user.role },

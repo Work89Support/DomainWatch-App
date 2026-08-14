@@ -70,8 +70,9 @@ async function probeOnce(url: string): Promise<ProbeResult> {
   try {
     // ลอง HEAD ก่อน (เบากว่า)
     let res = await fetchWithTimeout(url, "HEAD");
-    // บางเว็บไม่รองรับ HEAD -> ลอง GET (ด้วย timeout ใหม่)
-    if (res.status === 405 || res.status === 501) {
+    // หลายเว็บ (โดยเฉพาะที่กันบอท) ปฏิเสธ HEAD ด้วย 403/405/501 ฯลฯ แต่ตอบ GET ปกติ
+    // -> ถ้า HEAD ไม่ผ่าน (>=400) ลอง GET ซ้ำก่อนตัดสินว่าล่ม กัน 403 หลอก
+    if (res.status >= 400) {
       res = await fetchWithTimeout(url, "GET");
     }
     const responseMs = Date.now() - start;
@@ -213,8 +214,8 @@ export async function runCheck(): Promise<CheckSummary> {
       },
     });
 
-    // เปลี่ยนจากใช้ได้/ไม่รู้ -> ล่ม : เปิด incident + แจ้งเตือน
-    if (status === "DOWN" && prev !== "DOWN") {
+    // ลิงก์ล่ม : เปิด incident ถ้ายังไม่มีเคสค้าง (ครอบคลุมกรณีเคสถูกปิดมือทั้งที่ยังล่มอยู่ -> เปิดใหม่ให้)
+    if (status === "DOWN") {
       const existingOpen = await prisma.incident.findFirst({
         where: { linkId: link.id, status: { not: "CLOSED" } },
       });
@@ -304,8 +305,9 @@ export async function runOaChecks(routes?: Map<string, TgRoute>): Promise<void> 
         oaLastCheckedAt: new Date(),
       },
     });
-    // แจ้งเตือนเฉพาะตอน "เปลี่ยนสถานะ" (กันสแปมทุกนาที)
-    if (res.status !== "OK" && prevStatus === "OK") {
+    // แจ้งเตือนเมื่อ "เปลี่ยนเข้าสู่สถานะผิดปกติ" — รวมถึงพังตั้งแต่ตรวจครั้งแรก (UNKNOWN->ผิดปกติ)
+    // และเปลี่ยนจากผิดปกติแบบหนึ่งไปอีกแบบ (เช่น MISMATCH->TOKEN_INVALID) แต่ไม่สแปมสถานะเดิมซ้ำ
+    if (res.status !== "OK" && res.status !== prevStatus) {
       await notifyCompany(
         r,
         g.companyId,

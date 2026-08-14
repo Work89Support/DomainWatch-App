@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import { runCheck } from "@/lib/checker";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+// เทียบสตริงแบบคงเวลา (constant-time) กันการเดา secret จากเวลาตอบสนอง
+function safeEqual(a: string, b: string): boolean {
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
 
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -12,8 +21,9 @@ function authorized(req: NextRequest): boolean {
   const token =
     url.searchParams.get("token") ||
     req.headers.get("x-cron-token") ||
-    req.headers.get("authorization")?.replace("Bearer ", "");
-  return token === secret;
+    req.headers.get("authorization")?.replace("Bearer ", "") ||
+    "";
+  return safeEqual(token, secret);
 }
 
 async function handle(req: NextRequest) {

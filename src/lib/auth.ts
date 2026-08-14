@@ -22,26 +22,33 @@ export function verifyPassword(password: string, stored: string): boolean {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-// ---------- โทเคน session (userId + ลายเซ็น HMAC) ----------
-export function createSessionToken(userId: string): string {
-  const sig = crypto.createHmac("sha256", SECRET).update(userId).digest("hex");
-  return `${userId}.${sig}`;
+// ---------- โทเคน session (userId + เวลาออก + ลายเซ็น HMAC ที่ผูกกับรหัสผ่าน) ----------
+// รูปแบบ: `${userId}.${issuedAtMs}.${sig}` โดย sig = HMAC(SECRET, userId.issuedAt.passwordHash)
+// การผูกกับ passwordHash ทำให้ "เปลี่ยนรหัสผ่าน" ทำให้ cookie เดิมใช้ไม่ได้ทันที
+// และมีวันหมดอายุ (30 วัน) ตรงกับอายุ cookie
+export const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+function signSession(userId: string, issuedAt: number, passwordHash: string): string {
+  return crypto
+    .createHmac("sha256", SECRET)
+    .update(`${userId}.${issuedAt}.${passwordHash}`)
+    .digest("hex");
 }
 
-export function verifySessionToken(token: string | undefined): string | null {
+export function createSessionToken(userId: string, passwordHash: string, issuedAt = Date.now()): string {
+  const sig = signSession(userId, issuedAt, passwordHash);
+  return `${userId}.${issuedAt}.${sig}`;
+}
+
+type ParsedToken = { userId: string; issuedAt: number; sig: string };
+function parseSessionToken(token: string | undefined): ParsedToken | null {
   if (!token) return null;
-  const idx = token.lastIndexOf(".");
-  if (idx < 0) return null;
-  const userId = token.slice(0, idx);
-  const sig = token.slice(idx + 1);
-  const expected = crypto
-    .createHmac("sha256", SECRET)
-    .update(userId)
-    .digest("hex");
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-  return userId;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [userId, iatStr, sig] = parts;
+  const issuedAt = Number(iatStr);
+  if (!userId || !sig || !Number.isFinite(issuedAt)) return null;
+  return { userId, issuedAt, sig };
 }
 
 export type SessionUser = {
@@ -53,11 +60,17 @@ export type SessionUser = {
 
 // อ่านผู้ใช้ปัจจุบันจาก cookie (server component / route handler)
 export async function getCurrentUser(): Promise<SessionUser | null> {
-  const token = cookies().get(COOKIE_NAME)?.value;
-  const userId = verifySessionToken(token);
-  if (!userId) return null;
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const parsed = parseSessionToken(cookies().get(COOKIE_NAME)?.value);
+  if (!parsed) return null;
+  // หมดอายุแล้ว?
+  if (Date.now() - parsed.issuedAt > SESSION_MAX_AGE_MS) return null;
+  const user = await prisma.user.findUnique({ where: { id: parsed.userId } });
   if (!user || !user.isActive) return null;
+  // ตรวจลายเซ็นโดยผูกกับ passwordHash ปัจจุบัน (เปลี่ยนรหัส = โทเคนเก่าใช้ไม่ได้)
+  const expected = signSession(user.id, parsed.issuedAt, user.passwordHash);
+  const a = Buffer.from(parsed.sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   return { id: user.id, name: user.name, username: user.username, role: user.role };
 }
 

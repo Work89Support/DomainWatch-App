@@ -26,7 +26,8 @@ export default function HelpGuide() {
     let x = e.clientX - drag.current.ox;
     let y = e.clientY - drag.current.oy;
     x = Math.max(6, Math.min(x, window.innerWidth - el.offsetWidth - 6));
-    y = Math.max(6, Math.min(y, window.innerHeight - 60));
+    // หนีบแนวตั้งด้วยความสูงจริงของหน้าต่าง กันตัวหน้าต่างหลุดพ้นขอบล่างจอ
+    y = Math.max(6, Math.min(y, window.innerHeight - el.offsetHeight - 6));
     setPos({ x, y });
   }
   function onUp() {
