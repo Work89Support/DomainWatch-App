@@ -64,7 +64,15 @@ async function fetchWithTimeout(url: string, method: "HEAD" | "GET"): Promise<Re
   }
 }
 
-// ยิงเช็ค URL 1 ครั้ง — ถือว่า "ใช้ได้" เมื่อ HTTP < 400
+// สถานะที่แปลว่า "เซิร์ฟเวอร์ยังตอบอยู่ แต่กันบอท/ต้องยืนยันตัวตน" — เว็บไม่ได้ล่ม
+// (Cloudflare/anti-bot มักตอบ 403 กับบอทจาก IP ดาต้าเซ็นเตอร์ แต่คนกดเข้าปกติ)
+const ALIVE_BLOCKED = new Set([401, 403, 429, 451]);
+// ถือว่า "ใช้ได้" เมื่อ HTTP < 400 หรือเป็นรหัสกันบอท/ยืนยันตัวตนข้างบน
+function statusOk(status: number): boolean {
+  return status < 400 || ALIVE_BLOCKED.has(status);
+}
+
+// ยิงเช็ค URL 1 ครั้ง
 async function probeOnce(url: string): Promise<ProbeResult> {
   const start = Date.now();
   try {
@@ -76,22 +84,24 @@ async function probeOnce(url: string): Promise<ProbeResult> {
       res = await fetchWithTimeout(url, "GET");
     }
     const responseMs = Date.now() - start;
+    const ok = statusOk(res.status);
     return {
-      ok: res.status < 400,
+      ok,
       httpCode: res.status,
       responseMs,
-      error: res.status < 400 ? null : `HTTP ${res.status}`,
+      error: ok ? null : `HTTP ${res.status}`,
     };
   } catch {
     // HEAD ล้มเหลว (timeout/บล็อก) — ลอง GET ด้วย timeout ใหม่ก่อนตัดสินว่าล่ม
     try {
       const res = await fetchWithTimeout(url, "GET");
       const responseMs = Date.now() - start;
+      const ok = statusOk(res.status);
       return {
-        ok: res.status < 400,
+        ok,
         httpCode: res.status,
         responseMs,
-        error: res.status < 400 ? null : `HTTP ${res.status}`,
+        error: ok ? null : `HTTP ${res.status}`,
       };
     } catch (e2: unknown) {
       const responseMs = Date.now() - start;
