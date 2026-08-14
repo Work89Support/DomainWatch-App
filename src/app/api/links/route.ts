@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
       isActive: true,
       lastStatus: true,
       lastCheckedAt: true,
+      lastResponseMs: true,
       company: { select: { id: true, name: true } },
       lineGroup: { select: { id: true, name: true } },
     },

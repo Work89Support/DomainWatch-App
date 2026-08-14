@@ -188,7 +188,7 @@ export function dailyReportMessage(r: DailyReport, appBaseUrl: string): string {
     `📊 <b>รายงานสรุปรอบวัน</b>`,
     `🗓️ ${escapeHtml(r.dateLabel)}`,
     ``,
-    `เฝ้าดู ${r.activeLinks} ลิงก์ · ตอนนี้ใช้ได้ ${r.upNow} · ล่ม ${r.downNow}`,
+    `เฝ้าดู ${r.activeLinks} ลิงก์ · ตอนนี้ใช้ได้ ${r.upNow} · ช้า ${r.slowNow} · ล่ม ${r.downNow}`,
     `เคสทั้งวัน ${r.totalIncidents} · แก้แล้ว ${r.totalResolved} · ค้าง ${r.totalOpen}`,
   ];
   if (r.oaIssues > 0) lines.push(`LINE OA ผิดปกติ ${r.oaIssues} ห้อง`);

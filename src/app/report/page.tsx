@@ -47,7 +47,7 @@ export default async function ReportPage({ searchParams }: { searchParams: { dat
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="ลิงก์ที่เฝ้าดู" value={r.activeLinks} hint={r.isToday ? `ใช้ได้ ${r.upNow} · ล่ม ${r.downNow} (สถานะสด)` : "จำนวนที่เฝ้าดูปัจจุบัน"} tone="slate" />
+        <StatCard label="ลิงก์ที่เฝ้าดู" value={r.activeLinks} hint={r.isToday ? `ใช้ได้ ${r.upNow} · ช้า ${r.slowNow} · ล่ม ${r.downNow} (สถานะสด)` : "จำนวนที่เฝ้าดูปัจจุบัน"} tone="slate" />
         <StatCard label="เคสทั้งวัน" value={r.totalIncidents} tone="brand" />
         <StatCard label="แก้ไขแล้ว" value={r.totalResolved} tone="green" />
         <StatCard label="ยังค้าง" value={r.totalOpen} tone={r.totalOpen > 0 ? "red" : "green"} />

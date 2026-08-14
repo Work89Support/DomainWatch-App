@@ -23,6 +23,7 @@ export type DailyReport = {
   isToday: boolean; // true = ตัวเลขสถานะสด (ล่มตอนนี้/OA) ใช้ได้จริง; false = ดูย้อนหลัง อย่าโชว์สถานะสด
   activeLinks: number;
   upNow: number;
+  slowNow: number;
   downNow: number;
   oaIssues: number;
   totalIncidents: number;
@@ -63,7 +64,7 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
   ];
   const dayEnd = new Date(dayStart.getTime() + 24 * H);
 
-  const [incs, activeLinks, upNow, downNow, oaIssues] = await Promise.all([
+  const [incs, activeLinks, upNow, slowNow, downNow, oaIssues] = await Promise.all([
     prisma.incident.findMany({
       where: { detectedAt: { gte: dayStart, lt: dayEnd } },
       include: { link: { include: { company: true } } },
@@ -71,6 +72,7 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
     }),
     prisma.link.count({ where: { isActive: true } }),
     prisma.link.count({ where: { isActive: true, lastStatus: "UP" } }),
+    prisma.link.count({ where: { isActive: true, lastStatus: "SLOW" } }),
     prisma.link.count({ where: { isActive: true, lastStatus: "DOWN" } }),
     prisma.lineGroup.count({
       where: {
@@ -128,6 +130,7 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
     isToday,
     activeLinks,
     upNow,
+    slowNow,
     downNow,
     oaIssues,
     totalIncidents: incs.length,

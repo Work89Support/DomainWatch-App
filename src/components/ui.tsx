@@ -50,6 +50,7 @@ export function StatCard({
 export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { text: string; cls: string }> = {
     UP: { text: "ใช้งานได้", cls: "bg-emerald-50 text-emerald-700" },
+    SLOW: { text: "โหลดช้า", cls: "bg-amber-50 text-amber-700" },
     DOWN: { text: "ใช้ไม่ได้", cls: "bg-red-50 text-red-600" },
     UNKNOWN: { text: "ยังไม่เช็ค", cls: "bg-slate-100 text-slate-500" },
   };

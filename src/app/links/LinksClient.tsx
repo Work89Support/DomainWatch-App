@@ -20,6 +20,7 @@ type LinkRow = {
   isActive: boolean;
   lastStatus: string;
   lastCheckedAt: string | null;
+  lastResponseMs: number | null;
   company: { id: string; name: string };
   lineGroup: { id: string; name: string } | null;
 };
@@ -201,7 +202,10 @@ export default function LinksClient({
       </td>
       <td className="py-3 px-4 text-slate-600">{l.category || "-"}</td>
       <td className="py-3 px-4"><StatusBadge status={l.lastStatus} /></td>
-      <td className="py-3 px-4 text-slate-500 text-xs">{fmtDateTime(l.lastCheckedAt)}</td>
+      <td className="py-3 px-4 text-slate-500 text-xs">
+        <div>{fmtDateTime(l.lastCheckedAt)}</div>
+        {l.lastResponseMs !== null && <div className={l.lastStatus === "SLOW" ? "text-amber-600" : "text-slate-400"}>{(l.lastResponseMs / 1000).toFixed(1)} วินาที</div>}
+      </td>
       <td className="py-3 px-4">
         <button
           onClick={() => toggleActive(l)}
@@ -322,6 +326,7 @@ export default function LinksClient({
           <select className="input" value={fStatus} onChange={(e) => setFStatus(e.target.value)}>
             <option value="">ทุกสถานะ</option>
             <option value="UP">ใช้งานได้</option>
+            <option value="SLOW">โหลดช้า</option>
             <option value="DOWN">ใช้ไม่ได้</option>
             <option value="UNKNOWN">ยังไม่เช็ค</option>
           </select>
@@ -351,6 +356,7 @@ export default function LinksClient({
         {visibleCompanies.map((c) => {
           const cl = filtered.filter((l) => l.companyId === c.id);
           const up = cl.filter((l) => l.lastStatus === "UP").length;
+          const slow = cl.filter((l) => l.lastStatus === "SLOW").length;
           const down = cl.filter((l) => l.lastStatus === "DOWN").length;
           return (
             <div key={c.id} className="card overflow-hidden">
@@ -362,6 +368,7 @@ export default function LinksClient({
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="badge bg-white/20 text-white">ใช้ได้ {up}</span>
+                  {slow > 0 && <span className="badge bg-amber-400 text-amber-950">โหลดช้า {slow}</span>}
                   {down > 0 && <span className="badge bg-red-500 text-white">ใช้ไม่ได้ {down}</span>}
                 </div>
               </div>

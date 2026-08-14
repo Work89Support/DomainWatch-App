@@ -40,9 +40,10 @@ export default async function DashboardPage({
       />
 
       {/* สถานะรวม */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <StatCard label="ลิงก์ทั้งหมด" value={d.totalLinks} hint={`เว็บที่เฝ้าดู ${d.activeLinks} · ลิงก์ LINE ${notMonitored}`} tone="slate" />
         <StatCard label="ใช้งานได้" value={d.upCount} hint={`จาก ${d.activeLinks} ที่เฝ้าดู`} tone="green" />
+        <StatCard label="โหลดช้า" value={d.slowCount} hint="ตอบสำเร็จ แต่เกินเกณฑ์" tone="amber" />
         <StatCard label="ใช้ไม่ได้" value={d.downCount} tone="red" />
         <StatCard
           label="มีลิงก์สำรองแล้ว"
@@ -89,6 +90,7 @@ export default async function DashboardPage({
         incidentsPerDay={d.incidentsPerDay}
         categoryBreakdown={d.categoryBreakdown}
         up={d.upCount}
+        slow={d.slowCount}
         down={d.downCount}
         unknown={d.unknownCount}
       />
@@ -103,6 +105,7 @@ export default async function DashboardPage({
                   <th className="py-2 pr-4 font-medium">บริษัท</th>
                   <th className="py-2 pr-4 font-medium">ลิงก์</th>
                   <th className="py-2 pr-4 font-medium">ใช้ได้</th>
+                  <th className="py-2 pr-4 font-medium">โหลดช้า</th>
                   <th className="py-2 pr-4 font-medium">ใช้ไม่ได้</th>
                   <th className="py-2 pr-4 font-medium">เคสเปิดค้าง</th>
                   <th className="py-2 pr-4 font-medium"></th>
@@ -114,6 +117,7 @@ export default async function DashboardPage({
                     <td className="py-2.5 pr-4 font-medium text-slate-700">{c.company}</td>
                     <td className="py-2.5 pr-4 text-slate-500">{c.total}</td>
                     <td className="py-2.5 pr-4 text-emerald-600">{c.up}</td>
+                    <td className="py-2.5 pr-4 text-amber-600">{c.slow}</td>
                     <td className="py-2.5 pr-4 text-red-600">{c.down}</td>
                     <td className="py-2.5 pr-4"><span className={c.openIncidents > 0 ? "text-amber-600 font-medium" : "text-slate-400"}>{c.openIncidents}</span></td>
                     <td className="py-2.5 pr-4 text-right"><Link href={`/?company=${c.companyId}`} className="text-xs text-brand-600 hover:underline">ดูเฉพาะบริษัทนี้ →</Link></td>

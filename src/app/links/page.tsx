@@ -28,6 +28,7 @@ export default async function LinksPage({
         isActive: true,
         lastStatus: true,
         lastCheckedAt: true,
+        lastResponseMs: true,
         company: { select: { id: true, name: true } },
         lineGroup: { select: { id: true, name: true } },
       },

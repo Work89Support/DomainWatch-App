@@ -16,6 +16,7 @@ import {
 
 const BRAND = "#2563eb";
 const GREEN = "#10b981";
+const AMBER = "#f59e0b";
 const RED = "#ef4444";
 const SLATE = "#cbd5e1";
 
@@ -23,17 +24,20 @@ export default function DashboardCharts({
   incidentsPerDay,
   categoryBreakdown,
   up,
+  slow,
   down,
   unknown,
 }: {
   incidentsPerDay: { date: string; count: number }[];
-  categoryBreakdown: { category: string; up: number; down: number; total: number }[];
+  categoryBreakdown: { category: string; up: number; slow: number; down: number; total: number }[];
   up: number;
+  slow: number;
   down: number;
   unknown: number;
 }) {
   const pieData = [
     { name: "ใช้งานได้", value: up, color: GREEN },
+    { name: "โหลดช้า", value: slow, color: AMBER },
     { name: "ใช้ไม่ได้", value: down, color: RED },
     { name: "ยังไม่เช็ค", value: unknown, color: SLATE },
   ].filter((d) => d.value > 0);
@@ -100,6 +104,7 @@ export default function DashboardCharts({
               <Tooltip contentStyle={{ borderRadius: 12, fontSize: 13 }} />
               <Legend wrapperStyle={{ fontSize: 13 }} />
               <Bar dataKey="up" name="ใช้งานได้" stackId="a" fill={GREEN} radius={[0, 0, 0, 0]} />
+              <Bar dataKey="slow" name="โหลดช้า" stackId="a" fill={AMBER} radius={[0, 0, 0, 0]} />
               <Bar dataKey="down" name="ใช้ไม่ได้" stackId="a" fill={RED} radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

@@ -5,18 +5,20 @@ export type DashboardData = {
   totalLinks: number;
   activeLinks: number;
   upCount: number;
+  slowCount: number;
   downCount: number;
   unknownCount: number;
   openIncidents: number;
   incidents30d: number;
   avgAdminMin: number | null;
   avgItMin: number | null;
-  categoryBreakdown: { category: string; up: number; down: number; total: number }[];
+  categoryBreakdown: { category: string; up: number; slow: number; down: number; total: number }[];
   companyBreakdown: {
     companyId: string;
     company: string;
     total: number;
     up: number;
+    slow: number;
     down: number;
     openIncidents: number;
   }[];
@@ -97,6 +99,7 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
   }));
 
   const upCount = activeArr.filter((l) => l.lastStatus === "UP").length;
+  const slowCount = activeArr.filter((l) => l.lastStatus === "SLOW").length;
   const downCount = activeArr.filter((l) => l.lastStatus === "DOWN").length;
   const unknownCount = activeArr.filter((l) => l.lastStatus === "UNKNOWN").length;
   const activeLinks = activeArr.length;
@@ -111,12 +114,13 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
     arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
 
   // แยกตามหมวด (เฉพาะลิงก์ที่เฝ้าดู)
-  const catMap = new Map<string, { up: number; down: number; total: number }>();
+  const catMap = new Map<string, { up: number; slow: number; down: number; total: number }>();
   for (const l of activeArr) {
     const c = l.category || "ทั่วไป";
-    const cur = catMap.get(c) || { up: 0, down: 0, total: 0 };
+    const cur = catMap.get(c) || { up: 0, slow: 0, down: 0, total: 0 };
     cur.total++;
     if (l.lastStatus === "UP") cur.up++;
+    if (l.lastStatus === "SLOW") cur.slow++;
     if (l.lastStatus === "DOWN") cur.down++;
     catMap.set(c, cur);
   }
@@ -143,6 +147,7 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
         company: co.name,
         total: cl.length,
         up: cl.filter((l) => l.lastStatus === "UP").length,
+        slow: cl.filter((l) => l.lastStatus === "SLOW").length,
         down: cl.filter((l) => l.lastStatus === "DOWN").length,
         openIncidents: openByCompany.get(co.id) || 0,
       };
@@ -173,6 +178,7 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
     totalLinks: links.length,
     activeLinks,
     upCount,
+    slowCount,
     downCount,
     unknownCount,
     openIncidents,

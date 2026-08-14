@@ -44,6 +44,7 @@ type ModalData = { link: LinkLite; companyId: string; company: string; room: str
 
 function statusMeta(status: string) {
   if (status === "UP") return { dot: "bg-emerald-500", text: "ใช้งานได้", cls: "text-emerald-600", pill: "bg-emerald-50 text-emerald-700" };
+  if (status === "SLOW") return { dot: "bg-amber-400", text: "โหลดช้า", cls: "text-amber-600", pill: "bg-amber-50 text-amber-700" };
   if (status === "DOWN") return { dot: "bg-red-500", text: "ใช้ไม่ได้", cls: "text-red-600", pill: "bg-red-50 text-red-600" };
   return { dot: "bg-slate-300", text: "ยังไม่เช็ค / ไม่เฝ้าดู", cls: "text-slate-400", pill: "bg-slate-100 text-slate-500" };
 }
@@ -178,6 +179,7 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
           const linksByGroup = (gid: string) => c.links.filter((l) => l.lineGroupId === gid);
           const unassigned = c.links.filter((l) => !l.lineGroupId);
           const downCount = c.links.filter((l) => l.lastStatus === "DOWN").length;
+          const slowCount = c.links.filter((l) => l.lastStatus === "SLOW").length;
 
           return (
             <div key={c.id} className="card overflow-hidden">
@@ -190,6 +192,7 @@ export default function CompaniesClient({ initial }: { initial: Company[] }) {
                     <div className="text-xs text-slate-400">
                       {c.lineGroups.length} ห้อง LINE · {c.links.length} ลิงก์
                       {downCount > 0 && <span className="text-red-500 font-medium"> · 🔴 {downCount} ใช้ไม่ได้</span>}
+                      {slowCount > 0 && <span className="text-amber-500 font-medium"> · 🟡 {slowCount} โหลดช้า</span>}
                     </div>
                   </div>
                 </button>

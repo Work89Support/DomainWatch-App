@@ -14,7 +14,7 @@ export default function RunCheckButton() {
     startTransition(async () => {
       try {
         const data = await runManualCheck();
-        setMsg(`เช็คแล้ว ${data.checked} ลิงก์ · ใช้ได้ ${data.up} · ล่ม ${data.down}`);
+        setMsg(`เช็คแล้ว ${data.checked} ลิงก์ · ใช้ได้ ${data.up} · ช้า ${data.slow} · ล่ม ${data.down}`);
         router.refresh();
       } catch {
         setMsg("เกิดข้อผิดพลาดในการเช็ค");

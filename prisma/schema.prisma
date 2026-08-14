@@ -72,6 +72,8 @@ model Link {
   lastCheckedAt DateTime?
   lastHttpCode  Int?
   lastResponseMs Int?
+  failureStreak  Int        @default(0) // จำนวนรอบที่ตรวจไม่ผ่านติดต่อกัน
+  recoveryStreak Int        @default(0) // จำนวนรอบที่ตอบเร็วปกติติดต่อกัน
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -87,6 +89,7 @@ model Link {
 
 enum LinkStatus {
   UP // ใช้งานได้
+  SLOW // ใช้งานได้ แต่ตอบสนองช้าหรือกำลังรอยืนยันสถานะ
   DOWN // ใช้งานไม่ได้
   UNKNOWN // ยังไม่เคยเช็ค
 }
