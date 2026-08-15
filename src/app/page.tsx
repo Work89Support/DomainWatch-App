@@ -19,11 +19,20 @@ export default async function DashboardPage({
 }) {
   await requireUser();
   const companyId = searchParams.company || undefined;
-  const [d, companies] = await Promise.all([
+  const [d, companies, companyTelegramRoutes] = await Promise.all([
     getDashboardData(companyId),
     prisma.company.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true } }),
+    prisma.company.count({
+      where: {
+        NOT: [{ tgBotToken: null }, { tgChatId: null }],
+      },
+    }),
   ]);
-  const telegramOn = !!process.env.TELEGRAM_BOT_TOKEN;
+  const globalTelegramOn = !!(
+    process.env.TELEGRAM_BOT_TOKEN &&
+    (process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_IT_CHAT_ID)
+  );
+  const telegramOn = globalTelegramOn || companyTelegramRoutes > 0;
   const notMonitored = d.totalLinks - d.activeLinks; // ลิงก์ LINE ที่ไม่เอาไปเช็คสถานะ
 
   return (
@@ -44,7 +53,12 @@ export default async function DashboardPage({
         <StatCard label="ลิงก์ทั้งหมด" value={d.totalLinks} hint={`เว็บที่เฝ้าดู ${d.activeLinks} · ลิงก์ LINE ${notMonitored}`} tone="slate" />
         <StatCard label="ใช้งานได้" value={d.upCount} hint={`จาก ${d.activeLinks} ที่เฝ้าดู`} tone="green" />
         <StatCard label="โหลดช้า" value={d.slowCount} hint="ตอบสำเร็จ แต่เกินเกณฑ์" tone="amber" />
-        <StatCard label="ใช้ไม่ได้" value={d.downCount} tone="red" />
+        <StatCard
+          label="ใช้ไม่ได้"
+          value={d.downCount}
+          hint={`${d.downUniqueCount} URLจริง · ${d.openIncidents} เคสเปิด`}
+          tone="red"
+        />
         <StatCard
           label="มีลิงก์สำรองแล้ว"
           value={`${d.linksWithBackup} / ${d.activeLinks}`}

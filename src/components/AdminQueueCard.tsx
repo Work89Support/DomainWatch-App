@@ -60,7 +60,16 @@ export default function AdminQueueCard({ queue }: { queue: Q[] }) {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="font-medium text-slate-800">{q.linkName} <span className="text-xs text-slate-400">· {q.company}</span></div>
-                  <div className="text-xs text-red-600">🔴 ใช้ไม่ได้ · ตรวจพบ {fmtDateTime(q.detectedAt)}</div>
+                  <div className="text-[11px] font-medium text-slate-500">เคส #{q.incidentId.slice(-8).toUpperCase()}</div>
+                  <a
+                    href={q.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block text-xs text-brand-600 hover:underline break-all"
+                  >
+                    {q.url} ↗
+                  </a>
+                  <div className="text-xs text-red-600 mt-0.5">🔴 ใช้ไม่ได้ · ตรวจพบ {fmtDateTime(q.detectedAt)}</div>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 mt-2.5">

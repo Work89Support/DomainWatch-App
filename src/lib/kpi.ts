@@ -7,6 +7,7 @@ export type DashboardData = {
   upCount: number;
   slowCount: number;
   downCount: number;
+  downUniqueCount: number;
   unknownCount: number;
   openIncidents: number;
   incidents30d: number;
@@ -110,6 +111,11 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
   const upCount = activeArr.filter((l) => l.lastStatus === "UP").length;
   const slowCount = activeArr.filter((l) => l.lastStatus === "SLOW").length;
   const downCount = activeArr.filter((l) => l.lastStatus === "DOWN").length;
+  const downUniqueCount = new Set(
+    activeArr
+      .filter((l) => l.lastStatus === "DOWN")
+      .map((l) => `${l.companyId}\u0000${normalizeDashboardUrl(l.url)}`)
+  ).size;
   const unknownCount = activeArr.filter((l) => l.lastStatus === "UNKNOWN").length;
   const activeLinks = activeArr.length;
 
@@ -193,6 +199,7 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
     upCount,
     slowCount,
     downCount,
+    downUniqueCount,
     unknownCount,
     openIncidents,
     incidents30d,
@@ -215,4 +222,14 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
     linksWithoutBackup,
     updateQueue,
   };
+}
+
+function normalizeDashboardUrl(url: string): string {
+  try {
+    const parsed = new URL(url.trim());
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return url.trim();
+  }
 }

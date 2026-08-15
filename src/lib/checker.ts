@@ -17,6 +17,12 @@ const SLOW_RESPONSE_MS = Number(process.env.SLOW_RESPONSE_MS || 5000);
 const RETRIES = Number(process.env.CHECK_RETRIES || 0);
 const DOWN_CONFIRMATIONS = Math.max(1, Number(process.env.DOWN_CONFIRMATIONS || 2));
 const RECOVERY_CONFIRMATIONS = Math.max(1, Number(process.env.RECOVERY_CONFIRMATIONS || 2));
+const DEGRADED_HTTP_CODES = new Set(
+  (process.env.CHECK_DEGRADED_HTTP_CODES || "503")
+    .split(",")
+    .map((value) => Number(value.trim()))
+    .filter(Number.isFinite)
+);
 // เช็คพร้อมกันกี่ลิงก์ (network-bound จึงขนานได้ ปลอดภัยกับ DB เพราะเขียนทีหลังแบบเรียงลำดับ)
 const CONCURRENCY = Number(process.env.CHECK_CONCURRENCY || 8);
 const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
@@ -95,6 +101,10 @@ export function isDegradedAvailability(getStatus: number, headStatus: number): b
   return getStatus >= 500 && statusOk(headStatus);
 }
 
+export function isConfiguredDegradedStatus(status: number): boolean {
+  return DEGRADED_HTTP_CODES.has(status);
+}
+
 // ยิงเช็ค URL 1 ครั้ง
 async function probeOnce(url: string): Promise<ProbeResult> {
   const start = Date.now();
@@ -119,6 +129,17 @@ async function probeOnce(url: string): Promise<ProbeResult> {
         }
       } catch {
         // ใช้ผล GET เดิมหาก HEAD ยืนยันไม่ได้
+      }
+      // เว็บหลัง WAF หลายแห่งตอบ 503 เฉพาะ IP ของ server monitor ทั้งที่ผู้ใช้เปิดได้
+      // ค่าเริ่มต้นจึงแสดง SLOW และไม่เปิด Incident; ปรับรหัสได้ผ่าน CHECK_DEGRADED_HTTP_CODES
+      if (isConfiguredDegradedStatus(res.status)) {
+        return {
+          ok: true,
+          httpCode: res.status,
+          responseMs: Date.now() - start,
+          error: `HTTP ${res.status} จาก monitor/WAF`,
+          degraded: true,
+        };
       }
     }
     const responseMs = Date.now() - start;
