@@ -194,16 +194,21 @@ export function dailyReportMessage(r: DailyReport, appBaseUrl: string): string {
     const badge = s.incidents === 0 ? "🟢 ไม่มีปัญหา" : s.allFixed ? "✅ แก้ครบ" : `⚠️ ค้าง ${s.open}`;
     return `${icon[s.key] || "•"} <b>${escapeHtml(s.label)}</b> (${s.time}): ปัญหา ${s.incidents} · แก้แล้ว ${s.resolved} · ${badge}`;
   });
-  const summary = r.totalOpen === 0
-    ? (r.totalIncidents === 0 ? "✅ ทั้งวันไม่มีปัญหา" : "✅ ปิดครบทุกเคสแล้ว")
-    : `⚠️ ยังมี ${r.totalOpen} เคสค้าง`;
+  const summary = r.isToday
+    ? (r.currentOpenIncidents === 0
+      ? "✅ ไม่มีเคสค้างสะสม"
+      : `⚠️ ค้างสะสม ${r.currentOpenIncidents} เคส`)
+    : (r.totalOpen === 0
+      ? (r.totalIncidents === 0 ? "✅ ทั้งวันไม่มีปัญหา" : "✅ ปิดครบทุกเคสแล้ว")
+      : `⚠️ ยังมี ${r.totalOpen} เคสจากวันนั้นที่ปิดไม่ครบ`);
   const lines: string[] = [
     `📊 <b>รายงานสรุปรอบวัน</b>`,
     `🗓️ ${escapeHtml(r.dateLabel)}`,
     ``,
-    `เฝ้าดู ${r.activeLinks} ลิงก์ · ตอนนี้ใช้ได้ ${r.upNow} · ช้า ${r.slowNow} · ล่ม ${r.downNow}`,
-    `เคสทั้งวัน ${r.totalIncidents} · แก้แล้ว ${r.totalResolved} · ค้าง ${r.totalOpen}`,
+    `เฝ้าดู ${r.activeLinks} รายการ · ตอนนี้ใช้ได้ ${r.upNow} · ช้า ${r.slowNow} · ใช้ไม่ได้ ${r.downNowUnique} URLจริง (${r.downNow} รายการ)`,
+    `เคสในรอบวัน ${r.totalIncidents} · แก้แล้ว ${r.totalResolved} · ค้างจากวันนี้ ${r.totalOpen}`,
   ];
+  if (r.isToday) lines.push(`ค้างสะสมทุกวัน ณ ตอนนี้ ${r.currentOpenIncidents} เคส`);
   if (r.oaIssues > 0) lines.push(`LINE OA ผิดปกติ ${r.oaIssues} ห้อง`);
   lines.push("", ...shiftLines, "");
   lines.push(`KPI เฉลี่ย — แอดมิน ${fmtMinutes(r.avgAdminMin)} · ไอที ${fmtMinutes(r.avgItMin)}`);

@@ -25,6 +25,8 @@ export type DailyReport = {
   upNow: number;
   slowNow: number;
   downNow: number;
+  downNowUnique: number;
+  currentOpenIncidents: number;
   oaIssues: number;
   totalIncidents: number;
   totalResolved: number;
@@ -64,7 +66,7 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
   ];
   const dayEnd = new Date(dayStart.getTime() + 24 * H);
 
-  const [incs, activeLinks, upNow, slowNow, downNow, oaIssues] = await Promise.all([
+  const [incs, activeLinks, upNow, slowNow, downLinksNow, openIncidentsNow, oaIssues] = await Promise.all([
     prisma.incident.findMany({
       where: { detectedAt: { gte: dayStart, lt: dayEnd } },
       include: { link: { include: { company: true } } },
@@ -73,7 +75,14 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
     prisma.link.count({ where: { isActive: true } }),
     prisma.link.count({ where: { isActive: true, lastStatus: "UP" } }),
     prisma.link.count({ where: { isActive: true, lastStatus: "SLOW" } }),
-    prisma.link.count({ where: { isActive: true, lastStatus: "DOWN" } }),
+    prisma.link.findMany({
+      where: { isActive: true, lastStatus: "DOWN" },
+      select: { companyId: true, url: true },
+    }),
+    prisma.incident.findMany({
+      where: { status: { not: "CLOSED" } },
+      select: { link: { select: { companyId: true, url: true } } },
+    }),
     prisma.lineGroup.count({
       where: {
         isActive: true,
@@ -82,6 +91,11 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
       },
     }),
   ]);
+  const downNow = downLinksNow.length;
+  const downNowUnique = countUniqueCompanyUrls(downLinksNow);
+  const currentOpenIncidents = countUniqueCompanyUrls(
+    openIncidentsNow.map((incident) => incident.link)
+  );
 
   const shiftOf = (d: Date): string => {
     const t = d.getTime();
@@ -132,6 +146,8 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
     upNow,
     slowNow,
     downNow,
+    downNowUnique,
+    currentOpenIncidents,
     oaIssues,
     totalIncidents: incs.length,
     totalResolved,
@@ -139,7 +155,9 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
     avgAdminMin: avg(adminVals),
     avgItMin: avg(itVals),
     // ดูย้อนหลัง: ตัดสินจากเคสในวันนั้นเท่านั้น (ไม่เอาสถานะ "ล่มตอนนี้" มาปน)
-    allClear: isToday ? totalOpen === 0 && downNow === 0 : totalOpen === 0,
+    allClear: isToday
+      ? currentOpenIncidents === 0 && downNowUnique === 0
+      : totalOpen === 0,
     shifts,
     incidents: incs.map((i) => ({
       name: i.link.name,
@@ -151,4 +169,22 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
       itResponseMin: i.itResponseMin,
     })),
   };
+}
+
+export function countUniqueCompanyUrls(
+  links: Array<{ companyId: string; url: string }>
+): number {
+  return new Set(
+    links.map((link) => `${link.companyId}\u0000${normalizeReportUrl(link.url)}`)
+  ).size;
+}
+
+function normalizeReportUrl(url: string): string {
+  try {
+    const parsed = new URL(url.trim());
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return url.trim();
+  }
 }
