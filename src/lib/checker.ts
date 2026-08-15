@@ -296,10 +296,60 @@ export async function runCheck(): Promise<CheckSummary> {
     }
   }
 
+  // 2.5) ปรับ incident ให้ตรงกับสถานะจริงเสมอ (กันตัวเลข "ใช้ไม่ได้" ไม่ตรงกับ "เคสเปิดค้าง"
+  //      ที่เกิดจากรอบเช็คที่ชนกัน/ลิงก์กระพริบขอบ timeout)
+  await reconcileIncidents();
+
   // 3) ตรวจ LINE OA (เฉพาะห้องที่ใส่ token)
   await runOaChecks(routes);
 
   return summary;
+}
+
+// ทำให้ทุกลิงก์ที่ "ล่มอยู่ตอนนี้" มีเคสเปิดค้างพอดี 1 เคส และปิดเคสของลิงก์ที่กลับมาปกติ/ปิดใช้งาน
+// เพื่อให้ยอดบนแดชบอร์ด (สถานะ) กับรายการเหตุการณ์ตรงกันเสมอ
+export async function reconcileIncidents(): Promise<{ opened: number; closed: number }> {
+  let opened = 0;
+  let closed = 0;
+
+  // ลิงก์ที่ล่มอยู่ แต่ไม่มีเคสเปิดค้าง -> เปิดให้
+  const downLinks = await prisma.link.findMany({
+    where: { isActive: true, lastStatus: "DOWN" },
+    select: { id: true, lastCheckedAt: true },
+  });
+  for (const l of downLinks) {
+    const open = await prisma.incident.findFirst({
+      where: { linkId: l.id, status: { not: "CLOSED" } },
+    });
+    if (!open) {
+      await prisma.incident.create({
+        data: { linkId: l.id, detectedAt: l.lastCheckedAt || new Date(), status: "OPEN" },
+      });
+      opened++;
+    }
+  }
+
+  // เคสที่ยังเปิดค้าง แต่ลิงก์กลับมาปกติแล้ว/ถูกปิดใช้งาน -> ปิดเคส
+  const staleOpen = await prisma.incident.findMany({
+    where: {
+      status: { not: "CLOSED" },
+      OR: [
+        { link: { lastStatus: { not: "DOWN" } } },
+        { link: { isActive: false } },
+      ],
+    },
+    select: { id: true, detectedAt: true },
+  });
+  const now = new Date();
+  for (const inc of staleOpen) {
+    await prisma.incident.update({
+      where: { id: inc.id },
+      data: { status: "CLOSED", resolvedAt: now },
+    });
+    closed++;
+  }
+
+  return { opened, closed };
 }
 
 // ตรวจ LINE OA ทุกห้องที่มี Channel Access Token — เก็บสถานะ + แจ้งเตือนตอนเปลี่ยนสถานะ
