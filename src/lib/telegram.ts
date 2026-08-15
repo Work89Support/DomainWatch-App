@@ -133,6 +133,9 @@ export function oaRecoveredMessage(opts: { room: string; company: string }): str
 
 // ข้อความแจ้งเตือนเมื่อพบลิงก์ล่ม
 export function downAlertMessage(opts: {
+  incidentId: string;
+  company: string;
+  room?: string | null;
   name: string;
   url: string;
   category?: string | null;
@@ -145,32 +148,42 @@ export function downAlertMessage(opts: {
     timeZone: "Asia/Bangkok",
   });
   const reason = opts.error || (opts.httpCode ? `HTTP ${opts.httpCode}` : "ไม่ตอบสนอง");
+  const caseCode = opts.incidentId.slice(-8).toUpperCase();
   return [
     `🔴 <b>ลิงก์ใช้งานไม่ได้</b>`,
     ``,
+    `🆔 เคส: <b>#${caseCode}</b>`,
+    `🏢 บริษัท: ${escapeHtml(opts.company)}`,
+    ...(opts.room ? [`💬 ห้อง: ${escapeHtml(opts.room)}`] : []),
     `📌 <b>${escapeHtml(opts.name)}</b>`,
     `🏷️ หมวด: ${escapeHtml(opts.category || "ทั่วไป")}`,
     `🔗 ${escapeHtml(opts.url)}`,
     `⚠️ สาเหตุเบื้องต้น: ${escapeHtml(reason)}`,
     `🕒 ตรวจพบ: ${t}`,
     ``,
-    `👉 เข้าระบบเพื่อรับเรื่อง/อัพเดตลิงก์:`,
-    `${opts.appBaseUrl}/incidents`,
+    `👉 เปิดเหตุการณ์นี้:`,
+    `${opts.appBaseUrl}/incidents?incident=${encodeURIComponent(opts.incidentId)}`,
   ].join("\n");
 }
 
 export function recoveredMessage(opts: {
+  incidentId: string;
+  company: string;
   name: string;
   url: string;
   downMinutes: number;
   appBaseUrl: string;
 }): string {
+  const caseCode = opts.incidentId.slice(-8).toUpperCase();
   return [
     `🟢 <b>ลิงก์กลับมาใช้งานได้แล้ว</b>`,
     ``,
+    `🆔 เคส: <b>#${caseCode}</b>`,
+    `🏢 บริษัท: ${escapeHtml(opts.company)}`,
     `📌 <b>${escapeHtml(opts.name)}</b>`,
     `🔗 ${escapeHtml(opts.url)}`,
     `⏱️ ล่มไปประมาณ ${opts.downMinutes} นาที`,
+    `${opts.appBaseUrl}/incidents?incident=${encodeURIComponent(opts.incidentId)}`,
   ].join("\n");
 }
 

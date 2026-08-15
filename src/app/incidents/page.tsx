@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function IncidentsPage({
   searchParams,
 }: {
-  searchParams: { company?: string };
+  searchParams: { company?: string; incident?: string };
 }) {
   await requireUser();
   const companyId = searchParams.company || undefined;
@@ -25,6 +25,7 @@ export default async function IncidentsPage({
       initial={JSON.parse(JSON.stringify(incidents))}
       companies={companies}
       currentCompany={companyId}
+      initialIncidentId={searchParams.incident}
     />
   );
 }

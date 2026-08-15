@@ -36,14 +36,18 @@ export default function IncidentsClient({
   initial,
   companies,
   currentCompany,
+  initialIncidentId,
 }: {
   initial: Incident[];
   companies: Company[];
   currentCompany?: string;
+  initialIncidentId?: string;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<"open" | "all">("open");
-  const [selected, setSelected] = useState<Incident | null>(null);
+  const [selected, setSelected] = useState<Incident | null>(
+    initial.find((incident) => incident.id === initialIncidentId) || null
+  );
 
   const list = filter === "open"
     ? initial.filter(
@@ -92,6 +96,9 @@ export default function IncidentsClient({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="font-semibold text-slate-800">{i.link.name}</div>
+                <div className="text-[11px] font-medium text-slate-500">
+                  เคส #{i.id.slice(-8).toUpperCase()}
+                </div>
                 <a
                   href={i.link.url}
                   target="_blank"
