@@ -30,7 +30,7 @@ export default function ReportActions({ date }: { date: string }) {
     setPngBusy(true);
     setMsg(null);
     try {
-      const node = document.getElementById("report-capture");
+      const node = document.getElementById("report-export");
       if (!node) return;
       // โหลด html2canvas จาก CDN ครั้งแรก
       if (!window.html2canvas) {
@@ -47,17 +47,29 @@ export default function ReportActions({ date }: { date: string }) {
       if (document.fonts && document.fonts.ready) {
         await document.fonts.ready;
       }
-      const canvas = await window.html2canvas(node, {
-        scale: 2,
-        backgroundColor: "#f1f5f9",
-        useCORS: true,
-        logging: false,
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: node.scrollWidth,
-        windowHeight: node.scrollHeight,
-        ignoreElements: (el: HTMLElement) => !!(el.classList && el.classList.contains("no-capture")),
-      });
+      // ย้ายสำเนารายงานเข้าพื้นที่ render ชั่วคราว เพื่อให้ html2canvas จับ element ที่ซ่อนไว้นอกจอได้ครบ
+      const previousStyle = node.getAttribute("style");
+      node.style.position = "absolute";
+      node.style.left = "0";
+      node.style.top = "0";
+      node.style.zIndex = "-9999";
+      let canvas: HTMLCanvasElement;
+      try {
+        canvas = await window.html2canvas(node, {
+          scale: 2,
+          backgroundColor: "#ffffff",
+          useCORS: true,
+          logging: false,
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: node.scrollWidth,
+          windowHeight: node.scrollHeight,
+          ignoreElements: (el: HTMLElement) => !!(el.classList && el.classList.contains("no-capture")),
+        });
+      } finally {
+        if (previousStyle === null) node.removeAttribute("style");
+        else node.setAttribute("style", previousStyle);
+      }
       const dataUrl = canvas.toDataURL("image/png");
       const a = document.createElement("a");
       a.download = `รายงานรอบวัน-${date}.png`;

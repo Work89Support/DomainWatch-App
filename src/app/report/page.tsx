@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { getDailyReport, todayBangkok, shiftDate } from "@/lib/report";
+import { getDailyReport, todayBangkok, shiftDate, type DailyReport } from "@/lib/report";
 import { PageHeader, StatCard } from "@/components/ui";
 import { fmtDateTime, fmtMinutes } from "@/lib/format";
 import ReportActions from "@/components/ReportActions";
@@ -19,7 +19,8 @@ export default async function ReportPage({ searchParams }: { searchParams: { dat
   const isToday = date === todayBangkok();
 
   return (
-    <div id="report-capture" className="p-6 md:p-8 max-w-5xl mx-auto bg-slate-50">
+    <>
+    <div id="report-capture" className="p-6 md:p-8 max-w-5xl mx-auto bg-slate-50 print:hidden">
       <PageHeader
         title="รายงานสรุปรอบวัน"
         subtitle="สรุปปัญหา/การแก้ไข แบ่ง 3 รอบ (เช้า · เย็น · กลางคืน) สำหรับผู้บริหารและทีม"
@@ -167,6 +168,121 @@ export default async function ReportPage({ searchParams }: { searchParams: { dat
           </div>
         )}
       </div>
+    </div>
+    <ExportReportView report={r} />
+    </>
+  );
+}
+
+function ExportReportView({ report: r }: { report: DailyReport }) {
+  return (
+    <div
+      id="report-export"
+      className="fixed left-[-100000px] top-0 w-[1120px] bg-white p-10 text-slate-800 print:static print:w-full print:p-6"
+    >
+      <div className="flex items-start justify-between border-b border-slate-200 pb-5">
+        <div>
+          <div className="text-3xl font-bold">รายงานสรุปรอบวัน</div>
+          <div className="mt-1 text-base text-slate-500">DomainWatch · สำหรับผู้บริหารและทีมปฏิบัติการ</div>
+        </div>
+        <div className="text-right">
+          <div className="text-xl font-semibold">{r.dateLabel}</div>
+          <div className="text-sm text-slate-500">รอบ 06:00–06:00 น. วันถัดไป</div>
+        </div>
+      </div>
+
+      <div className={`mt-5 rounded-2xl border p-4 ${r.allClear ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+        <div className={`text-lg font-semibold ${r.allClear ? "text-emerald-700" : "text-amber-800"}`}>
+          {r.allClear
+            ? "✅ สถานะเรียบร้อย ไม่มีเคสค้าง"
+            : `⚠️ ค้างสะสม ${r.currentOpenIncidents} เคส · ใช้ไม่ได้ ${r.downNowUnique} URLจริง (${r.downNow} รายการตามห้อง)`}
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-5 gap-3">
+        <ExportMetric label="ลิงก์ที่เฝ้าดู" value={r.activeLinks} detail={`ใช้ได้ ${r.upNow} · ช้า ${r.slowNow}`} />
+        <ExportMetric label="เคสในรอบวัน" value={r.totalIncidents} detail="เกิดใหม่ในรอบนี้" />
+        <ExportMetric label="แก้ไขแล้ว" value={r.totalResolved} detail="เฉพาะเคสในรอบ" tone="green" />
+        <ExportMetric label="ค้างจากวันนี้" value={r.totalOpen} detail="ยังไม่ปิดจากรอบนี้" tone={r.totalOpen ? "red" : "green"} />
+        <ExportMetric label="ค้างสะสม" value={r.currentOpenIncidents} detail="รวมเคสจากวันก่อน" tone={r.currentOpenIncidents ? "red" : "green"} />
+      </div>
+
+      {r.currentOpenDetails.length > 0 && (
+        <div className="mt-5 rounded-2xl border border-red-100 p-5">
+          <div className="text-lg font-semibold">เคสที่ค้างอยู่ตอนนี้ ({r.currentOpenDetails.length})</div>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            {r.currentOpenDetails.map((incident) => (
+              <div key={incident.id} className="rounded-xl bg-red-50 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-semibold">{incident.name} · {incident.company}</div>
+                  <div className="text-xs font-medium text-red-600">#{incident.id.slice(-8).toUpperCase()}</div>
+                </div>
+                {incident.room && <div className="text-sm text-slate-600">ห้อง LINE: {incident.room}</div>}
+                <div className="mt-1 break-all text-xs text-blue-700">{incident.url}</div>
+                <div className="mt-1 text-sm font-medium text-red-700">
+                  ค้างตั้งแต่ {fmtDateTime(incident.detectedAt)} · {fmtMinutes(incident.openMinutes)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-5 grid grid-cols-3 gap-3">
+        {r.shifts.map((shift) => (
+          <div key={shift.key} className="rounded-2xl border border-slate-200 p-4">
+            <div className="flex items-center justify-between">
+              <div className="text-lg font-semibold">{SHIFT_ICON[shift.key]} {shift.label}</div>
+              <div className="text-xs text-slate-500">{shift.time}</div>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <ExportSmall label="เกิดปัญหา" value={shift.incidents} />
+              <ExportSmall label="แก้แล้ว" value={shift.resolved} tone="green" />
+              <ExportSmall label="ยังค้าง" value={shift.open} tone={shift.open ? "red" : "green"} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <ExportMetric label="KPI แอดมินเฉลี่ย" value={fmtMinutes(r.avgAdminMin)} detail="แจ้งเตือน → อัปเดตลิงก์" />
+        <ExportMetric label="KPI ไอทีเฉลี่ย" value={fmtMinutes(r.avgItMin)} detail="แจ้งเตือน → ชี้แจง/สำรอง" />
+      </div>
+
+      <div className="mt-6 border-t border-slate-200 pt-3 text-center text-xs text-slate-400">
+        รายละเอียดเหตุการณ์ทั้งหมด {r.totalIncidents} เคส ดูได้ในระบบ DomainWatch · เอกสารนี้สรุปเฉพาะข้อมูลสำคัญสำหรับการอ่านและส่งต่อ
+      </div>
+    </div>
+  );
+}
+
+function ExportMetric({
+  label,
+  value,
+  detail,
+  tone = "blue",
+}: {
+  label: string;
+  value: React.ReactNode;
+  detail: string;
+  tone?: "blue" | "green" | "red";
+}) {
+  const color = tone === "green" ? "text-emerald-600" : tone === "red" ? "text-red-600" : "text-blue-700";
+  return (
+    <div className="rounded-2xl border border-slate-200 p-4">
+      <div className="text-xs font-medium text-slate-500">{label}</div>
+      <div className={`mt-1 text-3xl font-bold ${color}`}>{value}</div>
+      <div className="mt-1 text-xs text-slate-400">{detail}</div>
+    </div>
+  );
+}
+
+function ExportSmall({ label, value, tone = "slate" }: { label: string; value: number; tone?: "slate" | "green" | "red" }) {
+  const color = tone === "green" ? "text-emerald-600" : tone === "red" ? "text-red-600" : "text-slate-800";
+  return (
+    <div className="rounded-lg bg-slate-50 px-2 py-3">
+      <div className={`text-xl font-bold ${color}`}>{value}</div>
+      <div className="text-[11px] text-slate-500">{label}</div>
     </div>
   );
 }
