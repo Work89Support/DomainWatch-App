@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { minutesBetween } from "@/lib/format";
 import { getCurrentUser } from "@/lib/auth";
+import { classifyProbeStatus, probe } from "@/lib/checker";
+import { normalizeReplacementUrl } from "@/lib/replacementLink";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -45,18 +47,28 @@ export async function PATCH(
       break;
 
     case "admin_update": {
+      const newUrl = normalizeReplacementUrl(body.newUrl);
+      if (!newUrl) {
+        return NextResponse.json(
+          { error: "กรุณาใส่ URL เต็มที่ขึ้นต้นด้วย http:// หรือ https://" },
+          { status: 400 }
+        );
+      }
+      const verification = await verifyReplacementLink(newUrl);
+      if (!verification.ok) {
+        return NextResponse.json(
+          { error: `ลิงก์ใหม่ยังเปิดไม่ได้: ${verification.error}` },
+          { status: 422 }
+        );
+      }
       data.adminUpdatedAt = now;
-      data.status = "ADMIN_UPDATED";
+      data.status = "CLOSED";
+      data.resolvedAt = new Date();
       data.adminResponseMin = minutesBetween(baseTime, now);
       data.adminUserId = me.id;
       if (!incident.adminAckAt) data.adminAckAt = now;
-      if (body.newUrl) data.newUrl = String(body.newUrl).trim();
-      if (body.newUrl) {
-        await prisma.link.update({
-          where: { id: incident.linkId },
-          data: { url: String(body.newUrl).trim(), lastStatus: "UNKNOWN", failureStreak: 0, recoveryStreak: 0 },
-        });
-      }
+      data.newUrl = newUrl;
+      await applyVerifiedLink(incident.linkId, newUrl, verification);
       break;
     }
 
@@ -67,16 +79,28 @@ export async function PATCH(
           { status: 400 }
         );
       }
+      const backupUrl = normalizeReplacementUrl(incident.link.backupUrl);
+      if (!backupUrl) {
+        return NextResponse.json(
+          { error: "ลิงก์สำรองไม่ถูกต้อง ต้องขึ้นต้นด้วย http:// หรือ https://" },
+          { status: 400 }
+        );
+      }
+      const verification = await verifyReplacementLink(backupUrl);
+      if (!verification.ok) {
+        return NextResponse.json(
+          { error: `ลิงก์สำรองยังเปิดไม่ได้: ${verification.error}` },
+          { status: 422 }
+        );
+      }
       data.adminUpdatedAt = now;
-      data.status = "ADMIN_UPDATED";
+      data.status = "CLOSED";
+      data.resolvedAt = new Date();
       data.adminResponseMin = minutesBetween(baseTime, now);
       data.adminUserId = me.id;
-      data.newUrl = incident.link.backupUrl;
+      data.newUrl = backupUrl;
       if (!incident.adminAckAt) data.adminAckAt = now;
-      await prisma.link.update({
-        where: { id: incident.linkId },
-        data: { url: incident.link.backupUrl, lastStatus: "UNKNOWN", failureStreak: 0, recoveryStreak: 0 },
-      });
+      await applyVerifiedLink(incident.linkId, backupUrl, verification);
       break;
     }
 
@@ -117,4 +141,43 @@ export async function PATCH(
     include: { link: { include: { company: true } }, adminUser: true, itUser: true },
   });
   return NextResponse.json(updated);
+}
+
+async function verifyReplacementLink(url: string) {
+  const result = await probe(url);
+  return {
+    ...result,
+    status: classifyProbeStatus(result),
+  };
+}
+
+async function applyVerifiedLink(
+  linkId: string,
+  url: string,
+  verification: Awaited<ReturnType<typeof verifyReplacementLink>>
+) {
+  const checkedAt = new Date();
+  await prisma.$transaction([
+    prisma.link.update({
+      where: { id: linkId },
+      data: {
+        url,
+        lastStatus: verification.status,
+        lastCheckedAt: checkedAt,
+        lastHttpCode: verification.httpCode,
+        lastResponseMs: verification.responseMs,
+        failureStreak: 0,
+        recoveryStreak: 0,
+      },
+    }),
+    prisma.checkLog.create({
+      data: {
+        linkId,
+        status: verification.status,
+        httpCode: verification.httpCode,
+        responseMs: verification.responseMs,
+        error: verification.error,
+      },
+    }),
+  ]);
 }

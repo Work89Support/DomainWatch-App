@@ -222,10 +222,10 @@ function IncidentPanel({
           <input className="input mb-2" value={newUrl} onChange={(e) => setNewUrl(e.target.value)} placeholder="https://ลิงก์ใหม่..." />
           <button
             className="btn-primary text-xs w-full disabled:opacity-60"
-            disabled={busy}
+            disabled={busy || !newUrl.trim()}
             onClick={() => act("admin_update", { newUrl: newUrl || undefined })}
           >
-            บันทึกลิงก์ใหม่ + จบหน้าที่แอดมิน
+            {busy ? "กำลังตรวจลิงก์..." : "ตรวจและบันทึกลิงก์ใหม่"}
           </button>
         </div>
 

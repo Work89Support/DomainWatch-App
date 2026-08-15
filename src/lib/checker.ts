@@ -207,6 +207,11 @@ export type CheckSummary = {
   ranAt: string;
 };
 
+export function classifyProbeStatus(result: ProbeResult): LinkStatus {
+  if (!result.ok) return "DOWN";
+  return result.degraded || result.responseMs >= SLOW_RESPONSE_MS ? "SLOW" : "UP";
+}
+
 // แผนที่ route Telegram ต่อบริษัท (ถ้าตั้งไว้)
 type TgRoute = { botToken: string; chatId: string };
 
@@ -275,11 +280,7 @@ export async function runCheck(): Promise<CheckSummary> {
     const link = links[i];
     const result = results.get(urlKey(link.url));
     if (!result) continue;
-    const probeStatus: LinkStatus = !result.ok
-      ? "DOWN"
-      : result.degraded || result.responseMs >= SLOW_RESPONSE_MS
-        ? "SLOW"
-        : "UP";
+    const probeStatus = classifyProbeStatus(result);
     const openIncidents = await prisma.incident.findMany({
       // URL เดียวกันแต่คนละห้อง LINE คือคนละงาน ต้องมี Incident/แจ้งเตือนแยกกัน
       where: { linkId: link.id, status: { not: "CLOSED" } },

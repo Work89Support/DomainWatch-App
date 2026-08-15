@@ -34,7 +34,7 @@ export default function AdminQueueCard({ queue }: { queue: Q[] }) {
   }
 
   function promptNewUrl(id: string) {
-    const url = prompt("ใส่ลิงก์ใหม่ (บอทจะอ่านลิงก์นี้แทน)");
+    const url = prompt("ใส่ URL เต็มที่ขึ้นต้นด้วย https:// (ระบบจะทดสอบก่อนบันทึก)");
     if (!url) return;
     act(id, "admin_update", { newUrl: url.trim() });
   }
@@ -84,7 +84,7 @@ export default function AdminQueueCard({ queue }: { queue: Q[] }) {
                   ↔ สลับเป็นลิงก์สำรอง
                 </button>
                 <button className="btn-ghost text-xs py-1.5" disabled={busy === q.incidentId} onClick={() => promptNewUrl(q.incidentId)}>
-                  ✎ ใส่ลิงก์ใหม่
+                  {busy === q.incidentId ? "กำลังตรวจลิงก์..." : "✎ ใส่ลิงก์ใหม่"}
                 </button>
               </div>
             </div>
