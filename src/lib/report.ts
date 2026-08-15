@@ -27,6 +27,16 @@ export type DailyReport = {
   downNow: number;
   downNowUnique: number;
   currentOpenIncidents: number;
+  currentOpenDetails: {
+    id: string;
+    name: string;
+    company: string;
+    room: string | null;
+    url: string;
+    detectedAt: string;
+    openMinutes: number;
+    carriedOver: boolean;
+  }[];
   oaIssues: number;
   totalIncidents: number;
   totalResolved: number;
@@ -81,7 +91,10 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
     }),
     prisma.incident.findMany({
       where: { status: { not: "CLOSED" } },
-      select: { link: { select: { companyId: true, url: true } } },
+      orderBy: { detectedAt: "asc" },
+      include: {
+        link: { include: { company: true, lineGroup: true } },
+      },
     }),
     prisma.lineGroup.count({
       where: {
@@ -93,9 +106,21 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
   ]);
   const downNow = downLinksNow.length;
   const downNowUnique = countUniqueCompanyUrls(downLinksNow);
-  const currentOpenIncidents = countUniqueCompanyUrls(
-    openIncidentsNow.map((incident) => incident.link)
-  );
+  const currentOpenIncidents = openIncidentsNow.length;
+  const reportNow = new Date();
+  const currentOpenDetails = openIncidentsNow.map((incident) => ({
+    id: incident.id,
+    name: incident.link.name,
+    company: incident.link.company.name,
+    room: incident.link.lineGroup?.name || null,
+    url: incident.link.url,
+    detectedAt: incident.detectedAt.toISOString(),
+    openMinutes: Math.max(
+      1,
+      Math.round((reportNow.getTime() - incident.detectedAt.getTime()) / 60000)
+    ),
+    carriedOver: incident.detectedAt < dayStart,
+  }));
 
   const shiftOf = (d: Date): string => {
     const t = d.getTime();
@@ -148,6 +173,7 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
     downNow,
     downNowUnique,
     currentOpenIncidents,
+    currentOpenDetails,
     oaIssues,
     totalIncidents: incs.length,
     totalResolved,

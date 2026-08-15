@@ -60,6 +60,35 @@ export default async function ReportPage({ searchParams }: { searchParams: { dat
         />
       </div>
 
+      {r.isToday && r.currentOpenDetails.length > 0 && (
+        <div className="card p-5 mb-6 border-red-100">
+          <h2 className="text-lg font-semibold text-slate-800">เคสที่ค้างอยู่ตอนนี้ ({r.currentOpenDetails.length})</h2>
+          <p className="text-xs text-slate-400 mt-1 mb-4">แสดงแยกตามห้อง LINE แม้ใช้ URL เดียวกัน</p>
+          <div className="space-y-3">
+            {r.currentOpenDetails.map((incident) => (
+              <div key={incident.id} className="rounded-xl border border-red-100 bg-red-50/40 p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="font-medium text-slate-800">
+                      {incident.name} · {incident.company}
+                    </div>
+                    {incident.room && <div className="text-xs text-slate-600">💬 ห้อง LINE: {incident.room}</div>}
+                    <div className="text-[11px] text-slate-500">เคส #{incident.id.slice(-8).toUpperCase()}</div>
+                  </div>
+                  {incident.carriedOver && <span className="badge bg-amber-50 text-amber-700">ค้างจากวันก่อน</span>}
+                </div>
+                <a href={incident.url} target="_blank" rel="noreferrer" className="block text-xs text-brand-600 hover:underline break-all mt-1">
+                  {incident.url} ↗
+                </a>
+                <div className="text-xs text-red-600 mt-1">
+                  ค้างตั้งแต่ {fmtDateTime(incident.detectedAt)} · นาน {fmtMinutes(incident.openMinutes)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 3 รอบ */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {r.shifts.map((s) => {

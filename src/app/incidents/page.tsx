@@ -16,7 +16,7 @@ export default async function IncidentsPage({
       where: companyId ? { link: { companyId } } : {},
       orderBy: { detectedAt: "desc" },
       take: 200,
-      include: { link: { include: { company: true } } },
+      include: { link: { include: { company: true, lineGroup: true } } },
     }),
     prisma.company.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true } }),
   ]);

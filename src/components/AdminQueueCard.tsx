@@ -8,6 +8,7 @@ type Q = {
   incidentId: string;
   linkName: string;
   company: string;
+  room: string | null;
   url: string;
   hasBackup: boolean;
   detectedAt: string;
@@ -60,6 +61,7 @@ export default function AdminQueueCard({ queue }: { queue: Q[] }) {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="font-medium text-slate-800">{q.linkName} <span className="text-xs text-slate-400">· {q.company}</span></div>
+                  {q.room && <div className="text-xs text-slate-500">💬 ห้อง LINE: {q.room}</div>}
                   <div className="text-[11px] font-medium text-slate-500">เคส #{q.incidentId.slice(-8).toUpperCase()}</div>
                   <a
                     href={q.url}

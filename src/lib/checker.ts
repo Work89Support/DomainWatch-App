@@ -270,12 +270,6 @@ export async function runCheck(): Promise<CheckSummary> {
     Array.from({ length: Math.min(CONCURRENCY, uniqueUrls.length) }, worker)
   );
 
-  const equivalentLinkIds = new Map<string, string[]>();
-  for (const link of links) {
-    const key = `${link.companyId}\u0000${urlKey(link.url)}`;
-    equivalentLinkIds.set(key, [...(equivalentLinkIds.get(key) || []), link.id]);
-  }
-
   // 2) บันทึกผล + จัดการ incident/แจ้งเตือน แบบเรียงลำดับ (กันโหลด DB พุ่ง)
   for (let i = 0; i < links.length; i++) {
     const link = links[i];
@@ -286,10 +280,9 @@ export async function runCheck(): Promise<CheckSummary> {
       : result.degraded || result.responseMs >= SLOW_RESPONSE_MS
         ? "SLOW"
         : "UP";
-    const groupKey = `${link.companyId}\u0000${urlKey(link.url)}`;
-    const siblingLinkIds = equivalentLinkIds.get(groupKey) || [link.id];
     const openIncidents = await prisma.incident.findMany({
-      where: { linkId: { in: siblingLinkIds }, status: { not: "CLOSED" } },
+      // URL เดียวกันแต่คนละห้อง LINE คือคนละงาน ต้องมี Incident/แจ้งเตือนแยกกัน
+      where: { linkId: link.id, status: { not: "CLOSED" } },
       orderBy: { detectedAt: "desc" },
     });
     const state = confirmCheckState({

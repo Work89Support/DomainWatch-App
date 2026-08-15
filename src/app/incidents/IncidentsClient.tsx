@@ -27,6 +27,7 @@ type Incident = {
     url: string;
     category: string | null;
     company: { id: string; name: string };
+    lineGroup: { id: string; name: string } | null;
   };
 };
 
@@ -50,16 +51,7 @@ export default function IncidentsClient({
   );
 
   const list = filter === "open"
-    ? initial.filter(
-        (incident, index, all) =>
-          incident.status !== "CLOSED" &&
-          index === all.findIndex(
-            (candidate) =>
-              candidate.status !== "CLOSED" &&
-              candidate.link.company.id === incident.link.company.id &&
-              candidate.link.url === incident.link.url
-          )
-      )
+    ? initial.filter((incident) => incident.status !== "CLOSED")
     : initial;
 
   return (
@@ -109,7 +101,9 @@ export default function IncidentsClient({
                   {i.link.url} <span className="text-brand-400">↗</span>
                 </a>
                 <div className="text-xs text-slate-400 mt-1">
-                  🏢 {i.link.company.name} · 🏷️ {i.link.category || "ทั่วไป"} · ตรวจพบ {fmtDateTime(i.detectedAt)}
+                  🏢 {i.link.company.name}
+                  {i.link.lineGroup ? ` · 💬 ${i.link.lineGroup.name}` : ""}
+                  {` · 🏷️ ${i.link.category || "ทั่วไป"} · ตรวจพบ ${fmtDateTime(i.detectedAt)}`}
                 </div>
               </div>
               <IncidentStatusBadge status={i.status} />

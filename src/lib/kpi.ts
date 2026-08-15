@@ -42,6 +42,7 @@ export type DashboardData = {
     incidentId: string;
     linkName: string;
     company: string;
+    room: string | null;
     url: string;
     hasBackup: boolean;
     detectedAt: string;
@@ -87,26 +88,19 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
   const openQueueList = await prisma.incident.findMany({
     where: { ...incWhere, status: { not: "CLOSED" } },
     orderBy: { detectedAt: "desc" },
-    include: { link: { include: { company: true } } },
+    include: { link: { include: { company: true, lineGroup: true } } },
   });
-  // URL เดียวในหลายห้องคือปัญหาเดียวกัน: แสดงเป็นเคสเดียวบน Dashboard
-  const uniqueOpenQueue = openQueueList.filter(
-    (incident, index, all) =>
-      index === all.findIndex(
-        (candidate) =>
-          candidate.link.companyId === incident.link.companyId &&
-          candidate.link.url === incident.link.url
-      )
-  );
-  const updateQueue = uniqueOpenQueue.map((i) => ({
+  // URL เดียวกันแต่คนละห้อง LINE ต้องเป็นคนละงานของแอดมิน
+  const updateQueue = openQueueList.map((i) => ({
     incidentId: i.id,
     linkName: i.link.name,
     company: i.link.company.name,
+    room: i.link.lineGroup?.name || null,
     url: i.link.url,
     hasBackup: !!(i.link.backupUrl && i.link.backupUrl.trim()),
     detectedAt: i.detectedAt.toISOString(),
   }));
-  const openIncidents = updateQueue.length;
+  const openIncidents = openQueueList.length;
 
   const upCount = activeArr.filter((l) => l.lastStatus === "UP").length;
   const slowCount = activeArr.filter((l) => l.lastStatus === "SLOW").length;
@@ -150,12 +144,8 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
     where: { status: { not: "CLOSED" } },
     select: { link: { select: { companyId: true, url: true } } },
   });
-  const seenOpenUrls = new Set<string>();
   for (const o of openList) {
     const cid = o.link.companyId;
-    const key = `${cid}\u0000${o.link.url}`;
-    if (seenOpenUrls.has(key)) continue;
-    seenOpenUrls.add(key);
     openByCompany.set(cid, (openByCompany.get(cid) || 0) + 1);
   }
   const companyBreakdown = companies

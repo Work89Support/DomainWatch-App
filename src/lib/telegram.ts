@@ -210,6 +210,22 @@ export function dailyReportMessage(r: DailyReport, appBaseUrl: string): string {
   ];
   if (r.isToday) lines.push(`ค้างสะสมทุกวัน ณ ตอนนี้ ${r.currentOpenIncidents} เคส`);
   if (r.oaIssues > 0) lines.push(`LINE OA ผิดปกติ ${r.oaIssues} ห้อง`);
+  if (r.isToday && r.currentOpenDetails.length > 0) {
+    lines.push("", `<b>เคสที่ค้างอยู่ตอนนี้ (${r.currentOpenDetails.length})</b>`);
+    for (const incident of r.currentOpenDetails.slice(0, 10)) {
+      const since = new Date(incident.detectedAt).toLocaleString("th-TH", {
+        timeZone: "Asia/Bangkok",
+      });
+      const room = incident.room ? ` · ห้อง ${escapeHtml(incident.room)}` : "";
+      lines.push(
+        `• #${incident.id.slice(-8).toUpperCase()} ${escapeHtml(incident.name)} · ${escapeHtml(incident.company)}${room}`,
+        `  ค้างตั้งแต่ ${since} (${fmtMinutes(incident.openMinutes)})`
+      );
+    }
+    if (r.currentOpenDetails.length > 10) {
+      lines.push(`…และอีก ${r.currentOpenDetails.length - 10} เคส ดูต่อในระบบ`);
+    }
+  }
   lines.push("", ...shiftLines, "");
   lines.push(`KPI เฉลี่ย — แอดมิน ${fmtMinutes(r.avgAdminMin)} · ไอที ${fmtMinutes(r.avgItMin)}`);
   lines.push(`สรุป: <b>${summary}</b>`, "", `${appBaseUrl}/report?date=${r.date}`);
