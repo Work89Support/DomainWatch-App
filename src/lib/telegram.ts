@@ -6,6 +6,11 @@ import type { DailyReport } from "@/lib/report";
 
 type Audience = "admin" | "it" | "all";
 
+// ปุ่มกดใต้ข้อความ (Inline Keyboard) — ใช้ปุ่มแบบเปิดลิงก์เท่านั้น (ไม่ต้องมี webhook)
+export type InlineButton = { text: string; url: string };
+// ข้อความ Telegram แบบมีปุ่ม — ตัวสร้างข้อความคืนค่าเป็นชนิดนี้
+export type TgMessage = { text: string; buttons?: InlineButton[][] };
+
 function chatIdsFor(audience: Audience): string[] {
   const admin = (process.env.TELEGRAM_ADMIN_CHAT_ID || "")
     .split(",")
@@ -21,8 +26,38 @@ function chatIdsFor(audience: Audience): string[] {
   return Array.from(new Set([...admin, ...it]));
 }
 
+// URL ปุ่มต้องเป็น http(s) จริง และไม่ใช่ localhost (กัน Telegram ปฏิเสธทั้งข้อความ)
+function validButtonUrl(u: string): boolean {
+  if (!u || /\s/.test(u)) return false;
+  if (!/^https?:\/\//i.test(u)) return false;
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)/i.test(u)) return false;
+  return true;
+}
+
+// สร้าง reply_markup จากปุ่ม (คัดเฉพาะปุ่มที่ URL ใช้ได้จริง) — ถ้าไม่มีปุ่มที่ใช้ได้คืน undefined
+function buildReplyMarkup(buttons?: InlineButton[][]) {
+  if (!buttons || buttons.length === 0) return undefined;
+  const rows = buttons
+    .map((row) => row.filter((b) => b && validButtonUrl(b.url)))
+    .filter((row) => row.length > 0);
+  return rows.length ? { inline_keyboard: rows } : undefined;
+}
+
+// แปลง string | TgMessage -> body สำหรับ sendMessage
+function buildBody(chatId: string, msg: string | TgMessage) {
+  const m: TgMessage = typeof msg === "string" ? { text: msg } : msg;
+  const markup = buildReplyMarkup(m.buttons);
+  return {
+    chat_id: chatId,
+    text: m.text,
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+    ...(markup ? { reply_markup: markup } : {}),
+  };
+}
+
 export async function sendTelegram(
-  text: string,
+  msg: string | TgMessage,
   audience: Audience = "all"
 ): Promise<{ ok: boolean; sent: number; skipped?: string }> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -45,12 +80,7 @@ export async function sendTelegram(
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text,
-            parse_mode: "HTML",
-            disable_web_page_preview: true,
-          }),
+          body: JSON.stringify(buildBody(chatId, msg)),
         }
       );
       if (res.ok) sent++;
@@ -66,7 +96,7 @@ export async function sendTelegram(
 export async function sendTelegramTo(
   botToken: string,
   chatIdCsv: string,
-  text: string
+  msg: string | TgMessage
 ): Promise<{ ok: boolean; sent: number }> {
   const token = (botToken || "").trim();
   const ids = (chatIdCsv || "")
@@ -80,12 +110,7 @@ export async function sendTelegramTo(
       const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text,
-          parse_mode: "HTML",
-          disable_web_page_preview: true,
-        }),
+        body: JSON.stringify(buildBody(chatId, msg)),
       });
       if (res.ok) sent++;
       else console.error("[telegram] route ส่งไม่สำเร็จ", await res.text());
@@ -96,6 +121,11 @@ export async function sendTelegramTo(
   return { ok: sent > 0, sent };
 }
 
+// ปุ่ม "เปิดในระบบ" ของเคส
+function incidentUrl(appBaseUrl: string, incidentId: string): string {
+  return `${appBaseUrl}/incidents?incident=${encodeURIComponent(incidentId)}`;
+}
+
 // ข้อความแจ้งเตือน LINE OA ผิดปกติ
 export function oaAlertMessage(opts: {
   room: string;
@@ -104,31 +134,43 @@ export function oaAlertMessage(opts: {
   displayName?: string | null;
   expectedName?: string | null;
   appBaseUrl: string;
-}): string {
+}): TgMessage {
   const reasonMap: Record<string, string> = {
     MISMATCH: `ชื่อ OA ไม่ตรง (พบ "${opts.displayName || "-"}" คาดหวัง "${opts.expectedName || "-"}")`,
     NO_PICTURE: "รูปโปรไฟล์ OA หาย/ไม่มี",
     TOKEN_INVALID: "token ใช้ไม่ได้ — OA อาจถูกปิด/แบน",
     ERROR: "ตรวจ OA ไม่สำเร็จ",
   };
-  return [
+  const text = [
     `🚨 <b>LINE OA ผิดปกติ</b>`,
-    ``,
+    `━━━━━━━━━━━━━━━`,
     `💬 <b>${escapeHtml(opts.room)}</b>`,
     `🏢 บริษัท: ${escapeHtml(opts.company)}`,
     `⚠️ ปัญหา: ${escapeHtml(reasonMap[opts.status] || opts.status)}`,
-    ``,
-    `${opts.appBaseUrl}/companies`,
   ].join("\n");
+  return {
+    text,
+    buttons: [[{ text: "🛠️ จัดการ OA", url: `${opts.appBaseUrl}/companies` }]],
+  };
 }
 
-export function oaRecoveredMessage(opts: { room: string; company: string }): string {
-  return [
+export function oaRecoveredMessage(opts: {
+  room: string;
+  company: string;
+  appBaseUrl?: string;
+}): TgMessage {
+  const text = [
     `🟢 <b>LINE OA กลับมาปกติ</b>`,
-    ``,
+    `━━━━━━━━━━━━━━━`,
     `💬 <b>${escapeHtml(opts.room)}</b>`,
     `🏢 บริษัท: ${escapeHtml(opts.company)}`,
   ].join("\n");
+  return {
+    text,
+    buttons: opts.appBaseUrl
+      ? [[{ text: "ดูในระบบ", url: `${opts.appBaseUrl}/companies` }]]
+      : undefined,
+  };
 }
 
 // ข้อความแจ้งเตือนเมื่อพบลิงก์ล่ม
@@ -141,29 +183,38 @@ export function downAlertMessage(opts: {
   category?: string | null;
   httpCode?: number | null;
   error?: string | null;
+  backupUrl?: string | null;
   detectedAt: Date;
   appBaseUrl: string;
-}): string {
+}): TgMessage {
   const t = opts.detectedAt.toLocaleString("th-TH", {
     timeZone: "Asia/Bangkok",
   });
   const reason = opts.error || (opts.httpCode ? `HTTP ${opts.httpCode}` : "ไม่ตอบสนอง");
   const caseCode = opts.incidentId.slice(-8).toUpperCase();
-  return [
-    `🔴 <b>ลิงก์ใช้งานไม่ได้</b>`,
-    ``,
+  const text = [
+    `🔴 <b>ลิงก์ใช้งานไม่ได้ — ต้องดำเนินการ</b>`,
+    `━━━━━━━━━━━━━━━`,
     `🆔 เคส: <b>#${caseCode}</b>`,
     `🏢 บริษัท: ${escapeHtml(opts.company)}`,
     ...(opts.room ? [`💬 ห้อง: ${escapeHtml(opts.room)}`] : []),
-    `📌 <b>${escapeHtml(opts.name)}</b>`,
+    `📄 <b>${escapeHtml(opts.name)}</b>`,
     `🏷️ หมวด: ${escapeHtml(opts.category || "ทั่วไป")}`,
     `🔗 ${escapeHtml(opts.url)}`,
-    `⚠️ สาเหตุเบื้องต้น: ${escapeHtml(reason)}`,
+    `⚠️ สาเหตุ: ${escapeHtml(reason)}`,
     `🕒 ตรวจพบ: ${t}`,
-    ``,
-    `👉 เปิดเหตุการณ์นี้:`,
-    `${opts.appBaseUrl}/incidents?incident=${encodeURIComponent(opts.incidentId)}`,
   ].join("\n");
+  const backupBtn: InlineButton[] =
+    opts.backupUrl && opts.backupUrl.trim()
+      ? [{ text: "♻️ ลิงก์สำรอง", url: opts.backupUrl.trim() }]
+      : [];
+  return {
+    text,
+    buttons: [
+      [{ text: "🔗 เปิดลิงก์", url: opts.url }, ...backupBtn],
+      [{ text: "🛠️ รับเรื่อง/อัพเดตในระบบ", url: incidentUrl(opts.appBaseUrl, opts.incidentId) }],
+    ],
+  };
 }
 
 export function recoveredMessage(opts: {
@@ -173,22 +224,30 @@ export function recoveredMessage(opts: {
   url: string;
   downMinutes: number;
   appBaseUrl: string;
-}): string {
+}): TgMessage {
   const caseCode = opts.incidentId.slice(-8).toUpperCase();
-  return [
+  const text = [
     `🟢 <b>ลิงก์กลับมาใช้งานได้แล้ว</b>`,
-    ``,
+    `━━━━━━━━━━━━━━━`,
     `🆔 เคส: <b>#${caseCode}</b>`,
     `🏢 บริษัท: ${escapeHtml(opts.company)}`,
-    `📌 <b>${escapeHtml(opts.name)}</b>`,
+    `📄 <b>${escapeHtml(opts.name)}</b>`,
     `🔗 ${escapeHtml(opts.url)}`,
     `⏱️ ล่มไปประมาณ ${opts.downMinutes} นาที`,
-    `${opts.appBaseUrl}/incidents?incident=${encodeURIComponent(opts.incidentId)}`,
   ].join("\n");
+  return {
+    text,
+    buttons: [
+      [
+        { text: "🔗 เปิดลิงก์", url: opts.url },
+        { text: "🛠️ ดูเคส", url: incidentUrl(opts.appBaseUrl, opts.incidentId) },
+      ],
+    ],
+  };
 }
 
 // สรุปรายงานรอบวัน สำหรับส่งผู้บริหาร/ทีม
-export function dailyReportMessage(r: DailyReport, appBaseUrl: string): string {
+export function dailyReportMessage(r: DailyReport, appBaseUrl: string): TgMessage {
   const icon: Record<string, string> = { morning: "🌅", evening: "🌆", night: "🌙" };
   const shiftLines = r.shifts.map((s) => {
     const badge = s.incidents === 0 ? "🟢 ไม่มีปัญหา" : s.allFixed ? "✅ แก้ครบ" : `⚠️ ค้าง ${s.open}`;
@@ -228,8 +287,11 @@ export function dailyReportMessage(r: DailyReport, appBaseUrl: string): string {
   }
   lines.push("", ...shiftLines, "");
   lines.push(`KPI เฉลี่ย — แอดมิน ${fmtMinutes(r.avgAdminMin)} · ไอที ${fmtMinutes(r.avgItMin)}`);
-  lines.push(`สรุป: <b>${summary}</b>`, "", `${appBaseUrl}/report?date=${r.date}`);
-  return lines.join("\n");
+  lines.push(`สรุป: <b>${summary}</b>`);
+  return {
+    text: lines.join("\n"),
+    buttons: [[{ text: "📊 เปิดรายงานเต็ม", url: `${appBaseUrl}/report?date=${r.date}` }]],
+  };
 }
 
 function escapeHtml(s: string): string {

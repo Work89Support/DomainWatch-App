@@ -6,6 +6,7 @@ import {
   recoveredMessage,
   oaAlertMessage,
   oaRecoveredMessage,
+  type TgMessage,
 } from "@/lib/telegram";
 import { checkOa } from "@/lib/line";
 import { confirmCheckState } from "@/lib/checkState";
@@ -219,7 +220,7 @@ type TgRoute = { botToken: string; chatId: string };
 async function notifyCompany(
   routes: Map<string, TgRoute>,
   companyId: string | null | undefined,
-  msg: string
+  msg: string | TgMessage
 ): Promise<{ ok: boolean }> {
   const r = companyId ? routes.get(companyId) : undefined;
   if (r) return sendTelegramTo(r.botToken, r.chatId, msg);
@@ -341,6 +342,7 @@ export async function runCheck(): Promise<CheckSummary> {
         category: link.category,
         httpCode: result.httpCode,
         error: result.error,
+        backupUrl: link.backupUrl,
         detectedAt: now,
         appBaseUrl: APP_BASE_URL,
       });
@@ -427,7 +429,7 @@ export async function runOaChecks(routes?: Map<string, TgRoute>): Promise<void> 
       await notifyCompany(
         r,
         g.companyId,
-        oaRecoveredMessage({ room: g.name, company: g.company.name })
+        oaRecoveredMessage({ room: g.name, company: g.company.name, appBaseUrl: APP_BASE_URL })
       );
     }
   }
