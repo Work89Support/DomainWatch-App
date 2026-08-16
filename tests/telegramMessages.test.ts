@@ -18,11 +18,15 @@ test("down alert identifies the exact incident, company, room and reason", () =>
     appBaseUrl: "https://watch.example.com",
   });
 
-  assert.match(message, /#ABCDEFGH/);
-  assert.match(message, /Example Co/);
-  assert.match(message, /Main room/);
-  assert.match(message, /HTTP 503/);
-  assert.match(message, /incidents\?incident=cmtest00000000abcdefgh/);
+  assert.match(message.text, /#ABCDEFGH/);
+  assert.match(message.text, /Example Co/);
+  assert.match(message.text, /Main room/);
+  assert.match(message.text, /HTTP 503/);
+  assert.ok(
+    message.buttons
+      ?.flat()
+      .some((button) => /incidents\?incident=cmtest00000000abcdefgh/.test(button.url))
+  );
 });
 
 test("recovery alert keeps the same incident reference", () => {
@@ -35,6 +39,10 @@ test("recovery alert keeps the same incident reference", () => {
     appBaseUrl: "https://watch.example.com",
   });
 
-  assert.match(message, /#ABCDEFGH/);
-  assert.match(message, /incidents\?incident=cmtest00000000abcdefgh/);
+  assert.match(message.text, /#ABCDEFGH/);
+  assert.ok(
+    message.buttons
+      ?.flat()
+      .some((button) => /incidents\?incident=cmtest00000000abcdefgh/.test(button.url))
+  );
 });
