@@ -135,8 +135,15 @@ git push -u origin main
    ไม่ต้องใช้ Terminal
 5. เปิดเว็บครั้งแรก → ไปที่ `https://<โดเมนของคุณ>/setup` สร้างบัญชีผู้ดูแลคนแรก
    (ถ้าต้องการข้อมูลตัวอย่างด้วย เปิด `https://<โดเมนของคุณ>/api/seed?token=<CRON_SECRET>` หนึ่งครั้ง)
-6. ไฟล์ `vercel.json` ตั้ง **Cron ทุก 5 นาที** ให้เรียก `/api/check` อยู่แล้ว
-   (Vercel จะแนบ `Authorization: Bearer <CRON_SECRET>` ให้อัตโนมัติเมื่อมี env `CRON_SECRET`)
+6. ถ้าใช้ Vercel Hobby ไฟล์ `vercel.json` จะตรวจวันละครั้งเป็นตัวสำรอง ส่วนการตรวจทุก 5 นาที
+   ให้ใช้บริการตั้งเวลาภายนอก เช่น [cron-job.org](https://cron-job.org/)
+7. สร้าง Cron Job โดยตั้ง URL เป็น `https://domain-watch-app-sandy.vercel.app/api/check`,
+   Method เป็น `GET` และ Schedule เป็นทุก 5 นาที
+8. เพิ่ม Request Header ชื่อ `Authorization` โดยใส่ค่า `Bearer <CRON_SECRET>`
+   และใช้รหัสเดียวกับ Environment Variable `CRON_SECRET` ใน Vercel จากนั้นกดทดสอบให้ได้ HTTP 200
+
+> อย่าใส่หรือเผยแพร่ค่า `CRON_SECRET` ใน GitHub และควรใช้ Header แทนการต่อรหัสไว้ใน URL
+> ถ้าอัปเกรดเป็น Vercel Pro จึงค่อยเปลี่ยน `vercel.json` เป็น `*/5 * * * *` ได้โดยตรง
 
 > deploy บนโฮสต์อื่น (Railway/Render/VPS) ก็ได้ ใช้ `npm run build` แล้ว `npm start`
 > และตั้ง cron เรียก `/api/check` เอง
@@ -169,7 +176,7 @@ domainwatch/
 │     ├─ kpi.ts            # รวมข้อมูล Dashboard
 │     └─ format.ts         # จัดรูปแบบวันเวลา/นาที
 ├─ docker-compose.yml      # PostgreSQL สำหรับ dev
-├─ vercel.json             # ตั้ง cron เช็คทุก 5 นาที
+├─ vercel.json             # Vercel Cron วันละครั้ง ใช้เป็นตัวสำรอง
 └─ .env.example
 ```
 
