@@ -213,6 +213,17 @@ export function classifyProbeStatus(result: ProbeResult): LinkStatus {
   return result.degraded || result.responseMs >= SLOW_RESPONSE_MS ? "SLOW" : "UP";
 }
 
+// CheckLog ใช้เป็นประวัติการเปลี่ยนสถานะ ไม่ใช่ heartbeat ทุก 5 นาที
+// สถานะปัจจุบันและเวลาตรวจล่าสุดเก็บอยู่บน Link อยู่แล้ว การเขียนทุกรอบทำให้
+// ฐานข้อมูลฟรีโตหลายแสนแถวต่อวันโดยไม่เพิ่มข้อมูลที่หน้ารายงานใช้งาน
+export function shouldRecordCheckLog(
+  previousStatus: LinkStatus,
+  probeStatus: LinkStatus,
+  lastCheckedAt: Date | null
+): boolean {
+  return lastCheckedAt === null || previousStatus !== probeStatus;
+}
+
 // แผนที่ route Telegram ต่อบริษัท (ถ้าตั้งไว้)
 type TgRoute = { botToken: string; chatId: string };
 
@@ -305,15 +316,17 @@ export async function runCheck(): Promise<CheckSummary> {
 
     const now = new Date();
 
-    await prisma.checkLog.create({
-      data: {
-        linkId: link.id,
-        status: probeStatus,
-        httpCode: result.httpCode,
-        responseMs: result.responseMs,
-        error: result.error,
-      },
-    });
+    if (shouldRecordCheckLog(link.lastStatus, probeStatus, link.lastCheckedAt)) {
+      await prisma.checkLog.create({
+        data: {
+          linkId: link.id,
+          status: probeStatus,
+          httpCode: result.httpCode,
+          responseMs: result.responseMs,
+          error: result.error,
+        },
+      });
+    }
 
     await prisma.link.update({
       where: { id: link.id },
