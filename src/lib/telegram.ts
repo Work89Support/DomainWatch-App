@@ -5,6 +5,17 @@ import { fmtMinutes } from "@/lib/format";
 import type { DailyReport } from "@/lib/report";
 
 type Audience = "admin" | "it" | "all";
+const TELEGRAM_TIMEOUT_MS = 5000;
+
+async function telegramFetch(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TELEGRAM_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // ปุ่มกดใต้ข้อความ (Inline Keyboard) — ใช้ปุ่มแบบเปิดลิงก์เท่านั้น (ไม่ต้องมี webhook)
 export type InlineButton = { text: string; url: string };
@@ -75,7 +86,7 @@ export async function sendTelegram(
   let sent = 0;
   for (const chatId of ids) {
     try {
-      const res = await fetch(
+      const res = await telegramFetch(
         `https://api.telegram.org/bot${token}/sendMessage`,
         {
           method: "POST",
@@ -107,7 +118,7 @@ export async function sendTelegramTo(
   let sent = 0;
   for (const chatId of ids) {
     try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      const res = await telegramFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildBody(chatId, msg)),
