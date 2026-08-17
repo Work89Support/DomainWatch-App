@@ -12,8 +12,10 @@ import { checkOa } from "@/lib/line";
 import { confirmCheckState } from "@/lib/checkState";
 import type { LinkStatus } from "@prisma/client";
 
-const TIMEOUT_MS = Number(process.env.CHECK_TIMEOUT_MS || 25000);
-const HEAD_TIMEOUT_MS = Number(process.env.CHECK_HEAD_TIMEOUT_MS || 5000);
+// cron-job.org ตัดคำขอที่ 30 วินาที จึงต้องให้ URL หนึ่งรายการจบภายใน ~16 วินาที
+// 12 วินาทียังพอสำหรับเว็บที่โหลดช้า และ HEAD สำรองได้เวลาเพิ่มอีก 4 วินาที
+const TIMEOUT_MS = Number(process.env.CHECK_TIMEOUT_MS || 12000);
+const HEAD_TIMEOUT_MS = Number(process.env.CHECK_HEAD_TIMEOUT_MS || 4000);
 const SLOW_RESPONSE_MS = Number(process.env.SLOW_RESPONSE_MS || 5000);
 const RETRIES = Number(process.env.CHECK_RETRIES || 0);
 const DOWN_CONFIRMATIONS = Math.max(1, Number(process.env.DOWN_CONFIRMATIONS || 2));
@@ -24,8 +26,11 @@ const DEGRADED_HTTP_CODES = new Set(
     .map((value) => Number(value.trim()))
     .filter(Number.isFinite)
 );
-// เช็คพร้อมกันกี่ลิงก์ (network-bound จึงขนานได้ ปลอดภัยกับ DB เพราะเขียนทีหลังแบบเรียงลำดับ)
-const CONCURRENCY = Number(process.env.CHECK_CONCURRENCY || 8);
+// URL ทั้งหมดต้องเริ่มใน wave เดียว มิฉะนั้น URL ที่ timeout หลายตัวจะต่อคิวยาวเกิน 60 วินาที
+const CONCURRENCY = Math.max(1, Number(process.env.CHECK_CONCURRENCY || 160));
+// จำกัดงานเขียน DB แยกต่างหาก เพื่อให้เร็วแต่ไม่เปิด connection พร้อมกันหลายร้อยรายการ
+const WRITE_CONCURRENCY = Math.max(1, Number(process.env.CHECK_WRITE_CONCURRENCY || 24));
+const OA_CONCURRENCY = Math.max(1, Number(process.env.CHECK_OA_CONCURRENCY || 80));
 const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
 
 const CHROME_UA =
@@ -208,6 +213,24 @@ export type CheckSummary = {
   ranAt: string;
 };
 
+export async function forEachConcurrent<T>(
+  items: T[],
+  concurrency: number,
+  task: (item: T, index: number) => Promise<void>
+): Promise<void> {
+  let cursor = 0;
+  async function worker() {
+    while (true) {
+      const index = cursor++;
+      if (index >= items.length) return;
+      await task(items[index], index);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(Math.max(1, concurrency), items.length) }, worker)
+  );
+}
+
 export function classifyProbeStatus(result: ProbeResult): LinkStatus {
   if (!result.ok) return "DOWN";
   return result.degraded || result.responseMs >= SLOW_RESPONSE_MS ? "SLOW" : "UP";
@@ -253,14 +276,16 @@ async function loadRoutes(): Promise<Map<string, TgRoute>> {
 
 // เช็คลิงก์ทั้งหมดที่เปิดใช้งาน + จัดการ incident + แจ้งเตือน
 export async function runCheck(): Promise<CheckSummary> {
-  const links = await prisma.link.findMany({
-    where: { isActive: true },
-    include: {
-      company: { select: { id: true, name: true } },
-      lineGroup: { select: { id: true, name: true } },
-    },
-  });
-  const routes = await loadRoutes();
+  const [links, routes] = await Promise.all([
+    prisma.link.findMany({
+      where: { isActive: true },
+      include: {
+        company: { select: { id: true, name: true } },
+        lineGroup: { select: { id: true, name: true } },
+      },
+    }),
+    loadRoutes(),
+  ]);
   const summary: CheckSummary = {
     checked: 0,
     up: 0,
@@ -275,29 +300,30 @@ export async function runCheck(): Promise<CheckSummary> {
   // URL เดียวอาจอยู่หลายห้อง: ยิงจริงครั้งเดียวแล้วใช้ผลร่วมกัน
   const uniqueUrls = Array.from(new Set(links.map((link) => urlKey(link.url))));
   const results = new Map<string, ProbeResult>();
-  let cursor = 0;
-  async function worker() {
-    while (true) {
-      const i = cursor++;
-      if (i >= uniqueUrls.length) return;
-      results.set(uniqueUrls[i], await probe(uniqueUrls[i]));
-    }
-  }
-  await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, uniqueUrls.length) }, worker)
-  );
+  const openIncidentsPromise = prisma.incident.findMany({
+    where: { linkId: { in: links.map((link) => link.id) }, status: { not: "CLOSED" } },
+    orderBy: { detectedAt: "desc" },
+  });
+  await forEachConcurrent(uniqueUrls, CONCURRENCY, async (url) => {
+    results.set(url, await probe(url));
+  });
 
-  // 2) บันทึกผล + จัดการ incident/แจ้งเตือน แบบเรียงลำดับ (กันโหลด DB พุ่ง)
-  for (let i = 0; i < links.length; i++) {
-    const link = links[i];
+  // โหลดเคสค้างครั้งเดียว แทนการ query ซ้ำ 504 ครั้ง
+  const openIncidentRows = await openIncidentsPromise;
+  const openByLink = new Map<string, typeof openIncidentRows>();
+  for (const incident of openIncidentRows) {
+    const rows = openByLink.get(incident.linkId) || [];
+    rows.push(incident);
+    openByLink.set(incident.linkId, rows);
+  }
+
+  // บันทึกแบบขนานอย่างมีเพดาน เพื่อให้ครบก่อน cron ตัดที่ 30 วินาที
+  await forEachConcurrent(links, WRITE_CONCURRENCY, async (link) => {
     const result = results.get(urlKey(link.url));
-    if (!result) continue;
+    if (!result) return;
     const probeStatus = classifyProbeStatus(result);
-    const openIncidents = await prisma.incident.findMany({
-      // URL เดียวกันแต่คนละห้อง LINE คือคนละงาน ต้องมี Incident/แจ้งเตือนแยกกัน
-      where: { linkId: link.id, status: { not: "CLOSED" } },
-      orderBy: { detectedAt: "desc" },
-    });
+    // URL เดียวกันแต่คนละห้อง LINE คือคนละงาน จึง map เคสตาม linkId
+    const openIncidents = openByLink.get(link.id) || [];
     const state = confirmCheckState({
       probeStatus,
       currentStatus: link.lastStatus,
@@ -394,7 +420,7 @@ export async function runCheck(): Promise<CheckSummary> {
         );
       }
     }
-  }
+  });
 
   await runOaChecks(routes);
 
@@ -408,9 +434,9 @@ export async function runOaChecks(routes?: Map<string, TgRoute>): Promise<void> 
     where: { isActive: true, NOT: { channelAccessToken: null } },
     include: { company: { select: { id: true, name: true } } },
   });
-  for (const g of groups) {
+  await forEachConcurrent(groups, OA_CONCURRENCY, async (g) => {
     const token = (g.channelAccessToken || "").trim();
-    if (!token) continue;
+    if (!token) return;
     const prevStatus = g.oaStatus;
     const res = await checkOa(token, g.expectedOaName);
     await prisma.lineGroup.update({
@@ -445,5 +471,5 @@ export async function runOaChecks(routes?: Map<string, TgRoute>): Promise<void> 
         oaRecoveredMessage({ room: g.name, company: g.company.name, appBaseUrl: APP_BASE_URL })
       );
     }
-  }
+  });
 }
