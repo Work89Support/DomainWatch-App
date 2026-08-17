@@ -10,7 +10,7 @@ import {
 } from "@/lib/telegram";
 import { checkOa } from "@/lib/line";
 import { confirmCheckState } from "@/lib/checkState";
-import type { LinkStatus } from "@prisma/client";
+import { Prisma, type LinkStatus } from "@prisma/client";
 
 // cron-job.org ตัดคำขอที่ 30 วินาที จึงต้องให้ URL หนึ่งรายการจบภายใน ~16 วินาที
 // 12 วินาทียังพอสำหรับเว็บที่โหลดช้า และ HEAD สำรองได้เวลาเพิ่มอีก 4 วินาที
@@ -296,6 +296,8 @@ export async function runCheck(): Promise<CheckSummary> {
     recovered: 0,
     ranAt: new Date().toISOString(),
   };
+  // OA เป็นงานอิสระ จึงเริ่มพร้อมกับการตรวจ URL แทนการรอต่อท้ายรอบ
+  const oaChecksPromise = runOaChecks(routes);
 
   // URL เดียวอาจอยู่หลายห้อง: ยิงจริงครั้งเดียวแล้วใช้ผลร่วมกัน
   const uniqueUrls = Array.from(new Set(links.map((link) => urlKey(link.url))));
@@ -317,10 +319,10 @@ export async function runCheck(): Promise<CheckSummary> {
     openByLink.set(incident.linkId, rows);
   }
 
-  // บันทึกแบบขนานอย่างมีเพดาน เพื่อให้ครบก่อน cron ตัดที่ 30 วินาที
-  await forEachConcurrent(links, WRITE_CONCURRENCY, async (link) => {
+  const checkedAt = new Date();
+  const prepared = links.flatMap((link) => {
     const result = results.get(urlKey(link.url));
-    if (!result) return;
+    if (!result) return [];
     const probeStatus = classifyProbeStatus(result);
     // URL เดียวกันแต่คนละห้อง LINE คือคนละงาน จึง map เคสตาม linkId
     const openIncidents = openByLink.get(link.id) || [];
@@ -340,31 +342,49 @@ export async function runCheck(): Promise<CheckSummary> {
     else if (status === "SLOW") summary.slow++;
     else summary.down++;
 
-    const now = new Date();
+    return [{ link, result, probeStatus, openIncidents, state, status, failureStreak, recoveryStreak }];
+  });
 
-    if (shouldRecordCheckLog(link.lastStatus, probeStatus, link.lastCheckedAt)) {
-      await prisma.checkLog.create({
-        data: {
-          linkId: link.id,
-          status: probeStatus,
-          httpCode: result.httpCode,
-          responseMs: result.responseMs,
-          error: result.error,
-        },
-      });
-    }
+  // อัปเดต heartbeat ทั้ง 504 ลิงก์ด้วย SQL คำสั่งเดียว แทน 504 round trips ไป Neon
+  // ซึ่งเป็นคอขวดหลักที่ทำให้ cron-job.org รอเกิน 30 วินาที
+  if (prepared.length > 0) {
+    const rows = prepared.map(({ link, result, status, failureStreak, recoveryStreak }) =>
+      Prisma.sql`(${link.id}::text, ${status}::"LinkStatus", ${result.httpCode}::integer, ${result.responseMs}::integer, ${failureStreak}::integer, ${recoveryStreak}::integer)`
+    );
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE "Link" AS target
+      SET
+        "lastStatus" = source.status,
+        "lastCheckedAt" = ${checkedAt},
+        "lastHttpCode" = source.http_code,
+        "lastResponseMs" = source.response_ms,
+        "failureStreak" = source.failure_streak,
+        "recoveryStreak" = source.recovery_streak,
+        "updatedAt" = ${checkedAt}
+      FROM (VALUES ${Prisma.join(rows)}) AS source(
+        id, status, http_code, response_ms, failure_streak, recovery_streak
+      )
+      WHERE target.id = source.id
+    `);
 
-    await prisma.link.update({
-      where: { id: link.id },
-      data: {
-        lastStatus: status,
-        lastCheckedAt: now,
-        lastHttpCode: result.httpCode,
-        lastResponseMs: result.responseMs,
-        failureStreak,
-        recoveryStreak,
-      },
-    });
+    const logRows = prepared
+      .filter(({ link, probeStatus }) =>
+        shouldRecordCheckLog(link.lastStatus, probeStatus, link.lastCheckedAt)
+      )
+      .map(({ link, result, probeStatus }) => ({
+        linkId: link.id,
+        status: probeStatus,
+        httpCode: result.httpCode,
+        responseMs: result.responseMs,
+        error: result.error,
+        checkedAt,
+      }));
+    if (logRows.length > 0) await prisma.checkLog.createMany({ data: logRows });
+  }
+
+  // เปิด/ปิด incident และส่งข้อความเฉพาะรายการที่เปลี่ยนสถานะเท่านั้น
+  await forEachConcurrent(prepared, WRITE_CONCURRENCY, async ({ link, result, openIncidents, state }) => {
+    const now = checkedAt;
 
     if (state.shouldOpenIncident) {
       const incident = await prisma.incident.create({
@@ -422,7 +442,7 @@ export async function runCheck(): Promise<CheckSummary> {
     }
   });
 
-  await runOaChecks(routes);
+  await oaChecksPromise;
 
   return summary;
 }
