@@ -364,6 +364,21 @@ function CompanyTgModal({ company, onClose, onSaved }: { company: Company; onClo
   const [botToken, setBotToken] = useState("");
   const [chatId, setChatId] = useState(company.tgChatId || "");
   const [busy, setBusy] = useState(false);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
+
+  async function sendTest() {
+    setBusy(true);
+    setTestMsg("กำลังส่งข้อความทดสอบ...");
+    try {
+      const res = await fetch(`/api/companies/${company.id}/test-telegram`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      setTestMsg(res.ok ? `✅ ส่งทดสอบแล้ว (${data.sent} กลุ่ม) — เช็กในกลุ่ม Telegram ได้เลย` : `❌ ${data.error || "ส่งไม่สำเร็จ"}`);
+    } catch {
+      setTestMsg("❌ ส่งไม่สำเร็จ — ลองใหม่อีกครั้ง");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function save() {
     setBusy(true);
@@ -397,6 +412,12 @@ function CompanyTgModal({ company, onClose, onSaved }: { company: Company; onClo
       <input type="password" className="input mb-2" value={botToken} onChange={(e) => setBotToken(e.target.value)} placeholder={company.hasTelegram ? "•••••• (ไม่กรอก = คงเดิม)" : "123456:ABC-DEF..."} autoComplete="off" />
       <label className="label">Chat ID (คั่นด้วย , ได้)</label>
       <input className="input mb-1" value={chatId} onChange={(e) => setChatId(e.target.value)} placeholder="-1001234567890" />
+      {company.hasTelegram && (
+        <div className="mt-2">
+          <button className="btn-ghost text-sm" disabled={busy} onClick={sendTest}>📨 ส่งข้อความทดสอบเข้ากลุ่ม</button>
+          {testMsg && <div className="text-xs mt-1 text-slate-600">{testMsg}</div>}
+        </div>
+      )}
       <div className="flex justify-between gap-2 mt-4">
         {company.hasTelegram ? <button className="btn-ghost text-xs" disabled={busy} onClick={clearTg}>ปิดการแจ้งเตือนแยก</button> : <span />}
         <div className="flex gap-2">
