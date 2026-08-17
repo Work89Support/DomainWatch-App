@@ -1,8 +1,6 @@
 {
   "crons": [
-    {
-      "path": "/api/check",
-      "schedule": "0 0 * * *"
-    }
+    { "path": "/api/report/send?day=prev", "schedule": "0 23 * * *" },
+    { "path": "/api/report/send?day=today", "schedule": "0 11 * * *" }
   ]
 }
