@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { canCreateLinks } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -49,7 +50,9 @@ function isLineLink(url: string): boolean {
 // นำเข้าแบบ "รวม" (idempotent): หา-หรือ-สร้าง บริษัท/ห้อง ตามชื่อ, ข้ามลิงก์ที่มีอยู่แล้ว
 // (คีย์ = ห้อง + url), ตั้ง isActive=false ให้ลิงก์ LINE. เรียกซ้ำได้ปลอดภัย
 export async function POST(req: NextRequest) {
-  if (!(await getCurrentUser())) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const me = await getCurrentUser();
+  if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!canCreateLinks(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
   const companyName: string = String(body.companyName || "").trim();

@@ -4,6 +4,8 @@ import { getDailyReport, todayBangkok, shiftDate, type DailyReport } from "@/lib
 import { PageHeader, StatCard } from "@/components/ui";
 import { fmtDateTime, fmtMinutes } from "@/lib/format";
 import ReportActions from "@/components/ReportActions";
+import { canViewReport } from "@/lib/permissions";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +13,8 @@ const SHIFT_ICON: Record<string, string> = { morning: "🌅", evening: "🌆", n
 const SHIFT_LABEL: Record<string, string> = { morning: "เช้า", evening: "เย็น", night: "กลางคืน" };
 
 export default async function ReportPage({ searchParams }: { searchParams: { date?: string } }) {
-  await requireUser();
+  const me = await requireUser();
+  if (!canViewReport(me.role)) redirect("/");
   const date = searchParams.date || todayBangkok();
   const r = await getDailyReport(date);
   const prev = shiftDate(date, -1);
@@ -24,7 +27,7 @@ export default async function ReportPage({ searchParams }: { searchParams: { dat
       <PageHeader
         title="รายงานสรุปรอบวัน"
         subtitle="สรุปปัญหา/การแก้ไข แบ่ง 3 รอบ (เช้า · เย็น · กลางคืน) สำหรับ Management และทีม"
-        action={<ReportActions date={date} />}
+        action={<ReportActions date={date} canSend={me.role === "ADMIN"} />}
       />
 
       {/* แถบเลือกวัน */}

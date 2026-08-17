@@ -28,8 +28,11 @@ function cronAuthorized(req: NextRequest): boolean {
 //   ?date=YYYY-MM-DD -> ระบุวันเอง
 async function handle(req: NextRequest) {
   const isCron = cronAuthorized(req);
-  if (!isCron && !(await getCurrentUser()))
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!isCron) {
+    const me = await getCurrentUser();
+    if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    if (me.role !== "ADMIN") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const url = new URL(req.url);
   const body = await req.json().catch(() => ({} as Record<string, unknown>));

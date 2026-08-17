@@ -10,7 +10,13 @@ export default async function UsersPage() {
   if (me.role !== "ADMIN") redirect("/");
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "asc" },
-    select: { id: true, name: true, username: true, role: true, isActive: true },
+    select: {
+      id: true, name: true, username: true, role: true, isActive: true,
+      companyAssignments: { select: { companyId: true } },
+    },
   });
-  return <UsersClient initial={JSON.parse(JSON.stringify(users))} />;
+  const companies = await prisma.company.findMany({
+    where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true },
+  });
+  return <UsersClient initial={JSON.parse(JSON.stringify(users))} companies={companies} currentUserId={me.id} />;
 }

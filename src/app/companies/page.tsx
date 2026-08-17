@@ -1,11 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import CompaniesClient from "./CompaniesClient";
 import { requireUser } from "@/lib/auth";
+import { canManageCompanies } from "@/lib/permissions";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function CompaniesPage() {
-  await requireUser();
+  const me = await requireUser();
+  if (!canManageCompanies(me.role)) redirect("/");
   const raw = await prisma.company.findMany({
     orderBy: { createdAt: "asc" },
     include: {

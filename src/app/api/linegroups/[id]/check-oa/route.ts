@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { canManageCompanies } from "@/lib/permissions";
 import { checkOa } from "@/lib/line";
 
 export const dynamic = "force-dynamic";
@@ -10,8 +11,9 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  if (!(await getCurrentUser()))
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const me = await getCurrentUser();
+  if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!canManageCompanies(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const g = await prisma.lineGroup.findUnique({ where: { id: params.id } });
   if (!g) return NextResponse.json({ error: "ไม่พบห้อง" }, { status: 404 });

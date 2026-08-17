@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { ROLE_LABELS, type AppRole } from "@/lib/permissions";
 
-type SessionUser = { id: string; name: string; username: string; role: "ADMIN" | "IT" };
+type SessionUser = { id: string; name: string; username: string; role: AppRole };
 
 export default function Topbar({ user }: { user: SessionUser }) {
   const router = useRouter();
@@ -16,7 +17,7 @@ export default function Topbar({ user }: { user: SessionUser }) {
       <div className="text-right leading-tight">
         <div className="text-sm font-medium text-slate-700">{user.name}</div>
         <div className="text-xs text-slate-400">
-          {user.role === "ADMIN" ? "แอดมิน" : "ไอที"} · @{user.username}
+          {ROLE_LABELS[user.role]} · @{user.username}
         </div>
       </div>
       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-brand-700 text-sm font-semibold">

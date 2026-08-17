@@ -23,6 +23,7 @@ model Company {
 
   lineGroups LineGroup[]
   links      Link[]
+  userAssignments UserCompany[]
 
   @@index([isActive])
 }
@@ -164,9 +165,26 @@ model User {
 
   adminIncidents Incident[] @relation("AdminIncidents")
   itIncidents    Incident[] @relation("ITIncidents")
+  companyAssignments UserCompany[]
 }
 
 enum Role {
   ADMIN
+  ADMIN_LEAD
+  ADMIN_COMPANY
   IT
+  MANAGEMENT
+}
+
+/// บริษัทที่มอบหมายให้ ADMIN_COMPANY — บทบาทอื่นไม่ใช้ขอบเขตนี้
+model UserCompany {
+  userId     String
+  companyId  String
+  assignedAt DateTime @default(now())
+
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, companyId])
+  @@index([companyId])
 }

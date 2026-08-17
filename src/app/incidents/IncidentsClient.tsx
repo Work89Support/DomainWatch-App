@@ -38,11 +38,17 @@ export default function IncidentsClient({
   companies,
   currentCompany,
   initialIncidentId,
+  canAdmin,
+  canIt,
+  showKpi,
 }: {
   initial: Incident[];
   companies: Company[];
   currentCompany?: string;
   initialIncidentId?: string;
+  canAdmin: boolean;
+  canIt: boolean;
+  showKpi: boolean;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<"open" | "all">("open");
@@ -57,8 +63,8 @@ export default function IncidentsClient({
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
       <PageHeader
-        title="เหตุการณ์ & KPI"
-        subtitle="ติดตามลิงก์ที่ล่ม จับเวลาการตอบสนองของแอดมินและไอที"
+        title={showKpi ? "เหตุการณ์ & KPI" : "เหตุการณ์"}
+        subtitle={showKpi ? "ติดตามลิงก์ที่ล่ม จับเวลาการตอบสนองของแอดมินและไอที" : "ติดตามและจัดการลิงก์ที่มีปัญหา"}
         action={
           <div className="flex flex-wrap items-center gap-3">
             <CompanyFilter companies={companies} value={currentCompany} />
@@ -110,10 +116,10 @@ export default function IncidentsClient({
             </div>
 
             {/* Timeline KPI */}
-            <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
+            {showKpi && <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
               <KpiPill label="แอดมินอัพเดต" value={fmtMinutes(i.adminResponseMin)} done={!!i.adminUpdatedAt} />
               <KpiPill label="ไอทีชี้แจง/สำรอง" value={fmtMinutes(i.itResponseMin)} done={!!i.itResolvedAt} />
-            </div>
+            </div>}
 
             {i.cause && (
               <div className="mt-3 text-xs text-slate-600 bg-slate-50 rounded-lg p-2">
@@ -124,7 +130,7 @@ export default function IncidentsClient({
 
             <div className="flex flex-wrap gap-2 mt-4">
               <button className="btn-ghost text-xs py-1.5" onClick={() => setSelected(i)}>
-                จัดการเคส →
+                {canAdmin || canIt ? "จัดการเคส →" : "ดูรายละเอียด →"}
               </button>
             </div>
           </div>
@@ -139,6 +145,8 @@ export default function IncidentsClient({
             setSelected(null);
             router.refresh();
           }}
+          canAdmin={canAdmin}
+          canIt={canIt}
         />
       )}
     </div>
@@ -160,10 +168,14 @@ function IncidentPanel({
   incident,
   onClose,
   onDone,
+  canAdmin,
+  canIt,
 }: {
   incident: Incident;
   onClose: () => void;
   onDone: () => void;
+  canAdmin: boolean;
+  canIt: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [newUrl, setNewUrl] = useState(incident.newUrl || "");
@@ -211,7 +223,7 @@ function IncidentPanel({
         </div>
 
         {/* ส่วนแอดมิน */}
-        <div className="border border-slate-100 rounded-xl p-4 mb-3">
+        {canAdmin && <div className="border border-slate-100 rounded-xl p-4 mb-3">
           <div className="text-sm font-semibold text-slate-700 mb-2">👤 ส่วนของแอดมิน</div>
           {!incident.adminAckAt && (
             <button className="btn-ghost text-xs mb-3" disabled={busy} onClick={() => act("admin_ack")}>
@@ -227,10 +239,10 @@ function IncidentPanel({
           >
             {busy ? "กำลังตรวจลิงก์..." : "ตรวจและบันทึกลิงก์ใหม่"}
           </button>
-        </div>
+        </div>}
 
         {/* ส่วนไอที */}
-        <div className="border border-slate-100 rounded-xl p-4 mb-3">
+        {canIt && <div className="border border-slate-100 rounded-xl p-4 mb-3">
           <div className="text-sm font-semibold text-slate-700 mb-2">🛠️ ส่วนของไอที</div>
           {!incident.itAckAt && (
             <button className="btn-ghost text-xs mb-3" disabled={busy} onClick={() => act("it_ack")}>
@@ -248,10 +260,10 @@ function IncidentPanel({
           >
             บันทึกสาเหตุ + ลิงก์สำรอง (จบหน้าที่ไอที)
           </button>
-        </div>
+        </div>}
 
         <div className="flex justify-between gap-2 mt-4">
-          {incident.status !== "CLOSED" ? (
+          {canAdmin && incident.status !== "CLOSED" ? (
             <button className="btn-danger text-xs" disabled={busy} onClick={() => act("close")}>
               ปิดเคส (ลิงก์กลับมาใช้ได้)
             </button>

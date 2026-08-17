@@ -9,6 +9,7 @@ import CompanyFilter from "@/components/CompanyFilter";
 import ItBackupCard from "@/components/ItBackupCard";
 import AdminQueueCard from "@/components/AdminQueueCard";
 import Link from "next/link";
+import { canActAsAdmin, canEditBackup, canRunCheck, canViewKpi } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -17,13 +18,21 @@ export default async function DashboardPage({
 }: {
   searchParams: { company?: string };
 }) {
-  await requireUser();
-  const companyId = searchParams.company || undefined;
+  const me = await requireUser();
+  const requestedCompany = searchParams.company || undefined;
+  const companyId = me.role === "ADMIN_COMPANY"
+    ? (requestedCompany && me.companyIds.includes(requestedCompany) ? requestedCompany : undefined)
+    : requestedCompany;
+  const allowedCompanyIds = me.role === "ADMIN_COMPANY" ? me.companyIds : undefined;
   const [d, companies, companyTelegramRoutes] = await Promise.all([
-    getDashboardData(companyId),
-    prisma.company.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true } }),
+    getDashboardData(companyId, allowedCompanyIds),
+    prisma.company.findMany({
+      where: allowedCompanyIds ? { id: { in: allowedCompanyIds } } : {},
+      orderBy: { createdAt: "asc" }, select: { id: true, name: true },
+    }),
     prisma.company.count({
       where: {
+        ...(allowedCompanyIds ? { id: { in: allowedCompanyIds } } : {}),
         NOT: [{ tgBotToken: null }, { tgChatId: null }],
       },
     }),
@@ -43,7 +52,7 @@ export default async function DashboardPage({
         action={
           <div className="flex flex-wrap items-center gap-3">
             <CompanyFilter companies={companies} value={companyId} />
-            <RunCheckButton />
+            {canRunCheck(me.role) && <RunCheckButton />}
           </div>
         }
       />
@@ -68,10 +77,10 @@ export default async function DashboardPage({
       </div>
 
       {/* มุมมองไอที + แอดมิน */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <ItBackupCard items={d.linksWithoutBackup} withBackup={d.linksWithBackup} total={d.activeLinks} />
-        <AdminQueueCard queue={d.updateQueue} />
-      </div>
+      {(canEditBackup(me.role) || canActAsAdmin(me.role)) && <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        {canEditBackup(me.role) && <ItBackupCard items={d.linksWithoutBackup} withBackup={d.linksWithBackup} total={d.activeLinks} />}
+        {canActAsAdmin(me.role) && <AdminQueueCard queue={d.updateQueue} />}
+      </div>}
 
       {/* Telegram */}
       <div className="card p-5 mb-6">
@@ -93,12 +102,12 @@ export default async function DashboardPage({
       </div>
 
       {/* KPI ย่อ */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {canViewKpi(me.role) && <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="เหตุการณ์เปิดค้าง" value={d.openIncidents} hint="รอแอดมิน/IT" tone={d.openIncidents > 0 ? "amber" : "green"} />
         <StatCard label="เหตุการณ์ 30 วัน" value={d.incidents30d} tone="brand" />
         <StatCard label="KPI แอดมิน (เฉลี่ย)" value={fmtMinutes(d.avgAdminMin)} tone="brand" />
         <StatCard label="KPI ไอที (เฉลี่ย)" value={fmtMinutes(d.avgItMin)} tone="brand" />
-      </div>
+      </div>}
 
       <DashboardCharts
         incidentsPerDay={d.incidentsPerDay}
@@ -146,7 +155,7 @@ export default async function DashboardPage({
       <div className="card p-5 mt-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-slate-800">เหตุการณ์ล่าสุด</h2>
-          <Link href="/kpi" className="text-sm text-brand-600 hover:underline">ดู KPI รายคน →</Link>
+          {canViewKpi(me.role) && <Link href="/kpi" className="text-sm text-brand-600 hover:underline">ดู KPI รายคน →</Link>}
         </div>
         {d.recentIncidents.length === 0 ? (
           <p className="text-sm text-slate-400 py-6 text-center">ยังไม่มีเหตุการณ์ — ทุกลิงก์ปกติ 🎉</p>
@@ -158,8 +167,8 @@ export default async function DashboardPage({
                   <th className="py-2 pr-4 font-medium">ลิงก์ / บริษัท</th>
                   <th className="py-2 pr-4 font-medium">สถานะ</th>
                   <th className="py-2 pr-4 font-medium">ตรวจพบ</th>
-                  <th className="py-2 pr-4 font-medium">KPI แอดมิน</th>
-                  <th className="py-2 pr-4 font-medium">KPI ไอที</th>
+                  {canViewKpi(me.role) && <th className="py-2 pr-4 font-medium">KPI แอดมิน</th>}
+                  {canViewKpi(me.role) && <th className="py-2 pr-4 font-medium">KPI ไอที</th>}
                 </tr>
               </thead>
               <tbody>
@@ -171,8 +180,8 @@ export default async function DashboardPage({
                     </td>
                     <td className="py-2.5 pr-4"><IncidentStatusBadge status={i.status} /></td>
                     <td className="py-2.5 pr-4 text-slate-500">{fmtDateTime(i.detectedAt)}</td>
-                    <td className="py-2.5 pr-4 text-slate-500">{fmtMinutes(i.adminResponseMin)}</td>
-                    <td className="py-2.5 pr-4 text-slate-500">{fmtMinutes(i.itResponseMin)}</td>
+                    {canViewKpi(me.role) && <td className="py-2.5 pr-4 text-slate-500">{fmtMinutes(i.adminResponseMin)}</td>}
+                    {canViewKpi(me.role) && <td className="py-2.5 pr-4 text-slate-500">{fmtMinutes(i.itResponseMin)}</td>}
                   </tr>
                 ))}
               </tbody>

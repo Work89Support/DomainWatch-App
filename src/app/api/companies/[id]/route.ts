@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { canManageCompanies } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 async function guard() {
-  return (await getCurrentUser()) ? null : NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const me = await getCurrentUser();
+  if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  return canManageCompanies(me.role) ? null : NextResponse.json({ error: "forbidden" }, { status: 403 });
 }
 
 // PATCH /api/companies/[id]

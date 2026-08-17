@@ -8,7 +8,7 @@ declare global {
   }
 }
 
-export default function ReportActions({ date }: { date: string }) {
+export default function ReportActions({ date, canSend }: { date: string; canSend: boolean }) {
   const [busy, setBusy] = useState(false);
   const [pngBusy, setPngBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -89,9 +89,9 @@ export default function ReportActions({ date }: { date: string }) {
         {pngBusy ? "กำลังบันทึก..." : "🖼️ บันทึก PNG"}
       </button>
       <button className="btn-ghost text-sm" onClick={() => window.print()}>🖨️ ปริ้น / PDF</button>
-      <button className="btn-primary text-sm disabled:opacity-60" disabled={busy} onClick={sendTg}>
+      {canSend && <button className="btn-primary text-sm disabled:opacity-60" disabled={busy} onClick={sendTg}>
         {busy ? "กำลังส่ง..." : "📢 ส่งเข้า Telegram"}
-      </button>
+      </button>}
     </div>
   );
 }

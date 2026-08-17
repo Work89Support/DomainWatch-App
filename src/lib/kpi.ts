@@ -50,17 +50,19 @@ export type DashboardData = {
 };
 
 // companyId = undefined => รวมทุกบริษัท
-export async function getDashboardData(companyId?: string): Promise<DashboardData> {
+export async function getDashboardData(companyId?: string, allowedCompanyIds?: string[]): Promise<DashboardData> {
   const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const linkWhere: Prisma.LinkWhereInput = companyId ? { companyId } : {};
-  const incWhere: Prisma.IncidentWhereInput = companyId
-    ? { link: { companyId } }
-    : {};
+  const companyScope = companyId ? { equals: companyId } : allowedCompanyIds ? { in: allowedCompanyIds } : undefined;
+  const linkWhere: Prisma.LinkWhereInput = companyScope ? { companyId: companyScope } : {};
+  const incWhere: Prisma.IncidentWhereInput = companyScope ? { link: { companyId: companyScope } } : {};
 
   const [links, companies, incidents30d, closedWithKpi, recent] =
     await Promise.all([
       prisma.link.findMany({ where: linkWhere, include: { company: true } }),
-      prisma.company.findMany({ orderBy: { createdAt: "asc" } }),
+      prisma.company.findMany({
+        where: allowedCompanyIds ? { id: { in: allowedCompanyIds } } : {},
+        orderBy: { createdAt: "asc" },
+      }),
       prisma.incident.count({ where: { ...incWhere, detectedAt: { gte: since30 } } }),
       prisma.incident.findMany({
         where: { ...incWhere, detectedAt: { gte: since30 } },
@@ -141,7 +143,7 @@ export async function getDashboardData(companyId?: string): Promise<DashboardDat
   // แยกตามบริษัท (เฉพาะเมื่อดูรวมทุกบริษัท จะได้เห็นภาพเทียบกัน)
   const openByCompany = new Map<string, number>();
   const openList = await prisma.incident.findMany({
-    where: { status: { not: "CLOSED" } },
+    where: { ...incWhere, status: { not: "CLOSED" } },
     select: { link: { select: { companyId: true, url: true } } },
   });
   for (const o of openList) {

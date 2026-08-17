@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { classifyProbeStatus, probe } from "@/lib/checker";
 import { normalizeReplacementUrl } from "@/lib/replacementLink";
 import type { Prisma } from "@prisma/client";
+import { canAccessCompany, canActAsAdmin, canActAsIt } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,8 @@ export async function PATCH(
   if (!incident) {
     return NextResponse.json({ error: "ไม่พบเหตุการณ์" }, { status: 404 });
   }
+  if (!canAccessCompany(me.role, me.companyIds, incident.link.companyId))
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const now = new Date();
   const baseTime = incident.notifiedAt || incident.detectedAt;
@@ -42,11 +45,13 @@ export async function PATCH(
 
   switch (action) {
     case "admin_ack":
+      if (!canActAsAdmin(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
       data.adminAckAt = incident.adminAckAt || now;
       data.adminUserId = me.id;
       break;
 
     case "admin_update": {
+      if (!canActAsAdmin(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
       const newUrl = normalizeReplacementUrl(body.newUrl);
       if (!newUrl) {
         return NextResponse.json(
@@ -73,6 +78,7 @@ export async function PATCH(
     }
 
     case "admin_use_backup": {
+      if (!canActAsAdmin(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
       if (!incident.link.backupUrl) {
         return NextResponse.json(
           { error: "ลิงก์นี้ยังไม่มีลิงก์สำรอง (ให้ไอทีเพิ่มก่อน)" },
@@ -105,11 +111,13 @@ export async function PATCH(
     }
 
     case "it_ack":
+      if (!canActAsIt(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
       data.itAckAt = incident.itAckAt || now;
       data.itUserId = me.id;
       break;
 
     case "it_resolve": {
+      if (!canActAsIt(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
       data.itResolvedAt = now;
       data.itResponseMin = minutesBetween(baseTime, now);
       data.itUserId = me.id;
@@ -127,6 +135,7 @@ export async function PATCH(
     }
 
     case "close":
+      if (!canActAsAdmin(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
       data.status = "CLOSED";
       data.resolvedAt = incident.resolvedAt || now;
       break;

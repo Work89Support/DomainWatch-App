@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
+import { isAppRole } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -21,15 +22,21 @@ export async function PATCH(
     data.passwordHash = hashPassword(String(body.password));
   }
   if ("isActive" in body) data.isActive = !!body.isActive;
-  if (body.role === "IT" || body.role === "ADMIN") data.role = body.role;
+  if ("role" in body) {
+    if (!isAppRole(body.role)) return NextResponse.json({ error: "บทบาทไม่ถูกต้อง" }, { status: 400 });
+    data.role = body.role;
+  }
   if (body.name) data.name = String(body.name).trim();
 
   // ต้องมีผู้ใช้จริง
-  const target = await prisma.user.findUnique({ where: { id: params.id } });
+  const target = await prisma.user.findUnique({
+    where: { id: params.id },
+    include: { companyAssignments: { select: { companyId: true } } },
+  });
   if (!target) return NextResponse.json({ error: "ไม่พบผู้ใช้" }, { status: 404 });
 
   const willDeactivate = "isActive" in body && !body.isActive;
-  const willDemote = body.role === "IT";
+  const willDemote = body.role && body.role !== "ADMIN";
 
   // กันล็อกตัวเองออก: แอดมินห้ามปิดการใช้งาน/ลดสิทธิ์บัญชีตัวเอง
   if (me.id === target.id && (willDeactivate || willDemote)) {
@@ -50,10 +57,31 @@ export async function PATCH(
     }
   }
 
-  const user = await prisma.user.update({
-    where: { id: params.id },
-    data,
-    select: { id: true, name: true, username: true, role: true, isActive: true },
+  const nextRole = (body.role || target.role) as string;
+  const assignedCompanyIds: string[] = Array.isArray(body.companyIds)
+    ? [...new Set<string>(body.companyIds.map((value: unknown) => String(value)))]
+    : target.companyAssignments.map((item) => item.companyId);
+  if (nextRole === "ADMIN_COMPANY" && assignedCompanyIds.length === 0)
+    return NextResponse.json({ error: "แอดมินบริษัทต้องถูกมอบหมายอย่างน้อย 1 บริษัท" }, { status: 400 });
+  if (nextRole === "ADMIN_COMPANY") {
+    const validCompanies = await prisma.company.count({ where: { id: { in: assignedCompanyIds } } });
+    if (validCompanies !== assignedCompanyIds.length)
+      return NextResponse.json({ error: "พบบริษัทที่เลือกไม่ถูกต้อง" }, { status: 400 });
+  }
+  const user = await prisma.$transaction(async (tx) => {
+    const updated = await tx.user.update({
+      where: { id: params.id }, data,
+      select: { id: true, name: true, username: true, role: true, isActive: true },
+    });
+    if ("role" in body || "companyIds" in body) {
+      await tx.userCompany.deleteMany({ where: { userId: params.id } });
+      if (nextRole === "ADMIN_COMPANY") {
+        await tx.userCompany.createMany({
+          data: assignedCompanyIds.map((companyId) => ({ userId: params.id, companyId })),
+        });
+      }
+    }
+    return updated;
   });
   return NextResponse.json(user);
 }

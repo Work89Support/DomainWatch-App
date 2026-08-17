@@ -3,11 +3,14 @@ import { getUserKpi } from "@/lib/userkpi";
 import { PageHeader, StatCard, IncidentStatusBadge } from "@/components/ui";
 import { fmtDateTime, fmtMinutes } from "@/lib/format";
 import KpiTrend from "@/components/KpiTrend";
+import { canViewKpi, ROLE_LABELS, type AppRole } from "@/lib/permissions";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function KpiPage() {
-  await requireUser();
+  const me = await requireUser();
+  if (!canViewKpi(me.role)) redirect("/");
   const d = await getUserKpi();
 
   return (
@@ -55,7 +58,7 @@ export default async function KpiPage() {
                     <td className="py-2.5 pr-4 font-medium text-slate-700">{u.name}</td>
                     <td className="py-2.5 pr-4">
                       <span className={`badge ${u.role === "ADMIN" ? "bg-brand-50 text-brand-700" : "bg-amber-50 text-amber-700"}`}>
-                        {u.role === "ADMIN" ? "แอดมิน" : "ไอที"}
+                        {ROLE_LABELS[u.role as AppRole] || u.role}
                       </span>
                     </td>
                     <td className="py-2.5 pr-4 font-semibold text-slate-800">{u.totalHandled}</td>

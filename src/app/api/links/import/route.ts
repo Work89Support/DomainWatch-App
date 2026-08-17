@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { canCreateLinks } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +70,9 @@ const HEADER_ALIASES: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
-  if (!(await getCurrentUser())) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const me = await getCurrentUser();
+  if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!canCreateLinks(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   let csvText = "";
   let companyId = "";
   const contentType = req.headers.get("content-type") || "";

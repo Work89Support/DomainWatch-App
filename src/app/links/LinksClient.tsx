@@ -56,11 +56,13 @@ export default function LinksClient({
   companies,
   currentCompany,
   focusId,
+  capabilities,
 }: {
   initialLinks: LinkRow[];
   companies: Company[];
   currentCompany?: string;
   focusId?: string;
+  capabilities: { create: boolean; edit: boolean; delete: boolean; editBackup: boolean; manageStructure: boolean };
 }) {
   const router = useRouter();
 
@@ -191,6 +193,18 @@ export default function LinksClient({
     });
   }
 
+  async function editBackup(l: LinkRow) {
+    const value = prompt(`ลิงก์สำรองสำหรับ ${l.name}`, l.backupUrl || "");
+    if (value === null) return;
+    const res = await fetch(`/api/links/${l.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ backupUrl: value.trim() || null }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return alert(data.error || "บันทึกไม่สำเร็จ");
+    router.refresh();
+  }
+
   const renderRow = (l: LinkRow) => (
     <tr key={l.id} className="border-t border-slate-50 hover:bg-slate-50/50">
       <td className="py-3 px-4 pl-8">
@@ -207,20 +221,14 @@ export default function LinksClient({
         {l.lastResponseMs !== null && <div className={l.lastStatus === "SLOW" ? "text-amber-600" : "text-slate-400"}>{(l.lastResponseMs / 1000).toFixed(1)} วินาที</div>}
       </td>
       <td className="py-3 px-4">
-        <button
-          onClick={() => toggleActive(l)}
-          className={`badge ${l.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"}`}
-        >
+        <button disabled={!capabilities.edit} onClick={() => toggleActive(l)} className={`badge disabled:cursor-default ${l.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
           {l.isActive ? "เฝ้าดู" : "ไม่เฝ้าดู"}
         </button>
       </td>
       <td className="py-3 px-4 text-right whitespace-nowrap">
-        <button className="text-brand-600 hover:underline text-xs mr-3" onClick={() => openEdit(l)}>
-          แก้ไข
-        </button>
-        <button className="text-red-500 hover:underline text-xs" onClick={() => remove(l.id, l.name)}>
-          ลบ
-        </button>
+        {capabilities.edit && <button className="text-brand-600 hover:underline text-xs mr-3" onClick={() => openEdit(l)}>แก้ไข</button>}
+        {!capabilities.edit && capabilities.editBackup && <button className="text-brand-600 hover:underline text-xs mr-3" onClick={() => editBackup(l)}>ลิงก์สำรอง</button>}
+        {capabilities.delete && <button className="text-red-500 hover:underline text-xs" onClick={() => remove(l.id, l.name)}>ลบ</button>}
       </td>
     </tr>
   );
@@ -291,12 +299,12 @@ export default function LinksClient({
         subtitle="คลังข้อมูลลิงก์ทั้งหมด — เพิ่ม/แก้ไขได้ที่นี่ (อัปเดตผ่านระบบ) และกรองดูตามบริษัท ห้อง หมวด หรือสถานะ"
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <button className="btn-ghost" disabled={noCompany} onClick={() => setImportOpen(true)}>
+            {capabilities.create && <button className="btn-ghost" disabled={noCompany} onClick={() => setImportOpen(true)}>
               ⬆ นำเข้า CSV
-            </button>
-            <button className="btn-primary" disabled={noCompany} onClick={openAdd}>
+            </button>}
+            {capabilities.create && <button className="btn-primary" disabled={noCompany} onClick={openAdd}>
               + เพิ่มลิงก์
-            </button>
+            </button>}
           </div>
         }
       />
@@ -416,7 +424,7 @@ export default function LinksClient({
                   onChange={(e) => setModal({ ...modal, companyId: e.target.value, lineGroupId: "" })}
                 >
                   {companies.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
-                  <option value="__new__">+ เพิ่มบริษัทใหม่...</option>
+                  {capabilities.manageStructure && <option value="__new__">+ เพิ่มบริษัทใหม่...</option>}
                 </select>
                 {modal.companyId === "__new__" && (
                   <input className="input mt-2" value={newCompanyName} onChange={(e) => setNewCompanyName(e.target.value)} placeholder="ชื่อบริษัทใหม่" />
@@ -430,7 +438,7 @@ export default function LinksClient({
                 >
                   <option value="">— ไม่ระบุ —</option>
                   {modalGroups.map((g) => (<option key={g.id} value={g.id}>{g.name}</option>))}
-                  <option value="__new__">+ เพิ่มห้องใหม่...</option>
+                  {capabilities.manageStructure && <option value="__new__">+ เพิ่มห้องใหม่...</option>}
                 </select>
                 {modal.lineGroupId === "__new__" && (
                   <input className="input mt-2" value={newRoomName} onChange={(e) => setNewRoomName(e.target.value)} placeholder="ชื่อห้อง LINE ใหม่" />

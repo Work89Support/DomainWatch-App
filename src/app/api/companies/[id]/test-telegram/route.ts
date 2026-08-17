@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { canManageCompanies } from "@/lib/permissions";
 import {
   sendTelegramTo,
   downAlertMessage,
@@ -18,9 +19,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  if (!(await getCurrentUser())) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const me = await getCurrentUser();
+  if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!canManageCompanies(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const company = await prisma.company.findUnique({
     where: { id: params.id },
     select: { name: true, tgBotToken: true, tgChatId: true },

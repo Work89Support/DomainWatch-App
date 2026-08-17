@@ -1,21 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { canAccessCompany, canDeleteLinks, canEditBackup, canEditLinks } from "@/lib/permissions";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
-
-async function guard() {
-  return (await getCurrentUser()) ? null : NextResponse.json({ error: "unauthorized" }, { status: 401 });
-}
 
 // PATCH /api/links/[id] — แก้ไขลิงก์
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const g = await guard(); if (g) return g;
+  const me = await getCurrentUser();
+  if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const existing = await prisma.link.findUnique({ where: { id: params.id }, select: { companyId: true } });
+  if (!existing) return NextResponse.json({ error: "ไม่พบลิงก์" }, { status: 404 });
+  if (!canAccessCompany(me.role, me.companyIds, existing.companyId))
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const body = await req.json();
+  const keys = Object.keys(body).filter((key) => key !== "id");
+  const backupOnly = keys.every((key) => key === "backupUrl");
+  if (!canEditLinks(me.role) && !(backupOnly && canEditBackup(me.role)))
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const data: Record<string, unknown> = {};
   for (const key of [
     "name",
@@ -29,8 +35,21 @@ export async function PATCH(
       data[key] = typeof v === "string" ? v.trim() || null : v;
     }
   }
-  if ("companyId" in body && body.companyId) data.companyId = String(body.companyId);
-  if ("lineGroupId" in body) data.lineGroupId = body.lineGroupId || null;
+  if ("companyId" in body && body.companyId) {
+    const nextCompanyId = String(body.companyId);
+    if (!canAccessCompany(me.role, me.companyIds, nextCompanyId))
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    data.companyId = nextCompanyId;
+  }
+  if ("lineGroupId" in body) {
+    const lineGroupId = body.lineGroupId ? String(body.lineGroupId) : null;
+    if (lineGroupId) {
+      const targetCompanyId = String(data.companyId || existing.companyId);
+      const group = await prisma.lineGroup.findFirst({ where: { id: lineGroupId, companyId: targetCompanyId } });
+      if (!group) return NextResponse.json({ error: "ห้อง LINE ไม่อยู่ในบริษัทที่เลือก" }, { status: 400 });
+    }
+    data.lineGroupId = lineGroupId;
+  }
   if ("isActive" in body) data.isActive = !!body.isActive;
 
   try {
@@ -52,7 +71,9 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const g = await guard(); if (g) return g;
+  const me = await getCurrentUser();
+  if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!canDeleteLinks(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   try {
     await prisma.link.delete({ where: { id: params.id } });
     return NextResponse.json({ ok: true });

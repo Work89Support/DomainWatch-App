@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { AppRole } from "@/lib/permissions";
 
 const baseNav = [
   { href: "/", label: "แดชบอร์ด", icon: "📊" },
@@ -12,10 +13,18 @@ const baseNav = [
   { href: "/kpi", label: "KPI รายคน", icon: "🏆" },
 ];
 
-export default function Sidebar({ role }: { role?: "ADMIN" | "IT" }) {
+const allowedByRole: Record<AppRole, string[]> = {
+  ADMIN: ["/", "/companies", "/links", "/incidents", "/report", "/kpi", "/users"],
+  ADMIN_LEAD: ["/", "/links", "/incidents", "/kpi"],
+  ADMIN_COMPANY: ["/", "/links", "/incidents"],
+  IT: ["/", "/links", "/incidents"],
+  MANAGEMENT: ["/", "/report", "/kpi"],
+};
+
+export default function Sidebar({ role }: { role: AppRole }) {
   const pathname = usePathname();
-  const nav = [...baseNav];
-  if (role === "ADMIN") nav.push({ href: "/users", label: "จัดการผู้ใช้", icon: "👥" });
+  const allNav = [...baseNav, { href: "/users", label: "จัดการผู้ใช้", icon: "👥" }];
+  const nav = allNav.filter((item) => allowedByRole[role].includes(item.href));
 
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col bg-brand-800 text-white">

@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { canManageCompanies, canViewLinks } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 // GET /api/companies — บริษัททั้งหมด (พร้อมห้อง LINE และจำนวนลิงก์)
 export async function GET() {
-  if (!(await getCurrentUser())) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const me = await getCurrentUser();
+  if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!canViewLinks(me.role) && !canManageCompanies(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const companies = await prisma.company.findMany({
+    where: me.role === "ADMIN_COMPANY" ? { id: { in: me.companyIds } } : {},
     orderBy: { createdAt: "asc" },
     select: {
       id: true,
@@ -40,7 +44,9 @@ export async function GET() {
 
 // POST /api/companies — เพิ่มบริษัท
 export async function POST(req: NextRequest) {
-  if (!(await getCurrentUser())) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const me = await getCurrentUser();
+  if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!canManageCompanies(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const body = await req.json();
   if (!body?.name?.trim()) {
     return NextResponse.json({ error: "ต้องระบุชื่อบริษัท" }, { status: 400 });

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
+import type { AppRole } from "@/lib/permissions";
 
 export const COOKIE_NAME = "dw_session";
 const SECRET = process.env.AUTH_SECRET || "dev-insecure-secret-change-me";
@@ -55,7 +56,8 @@ export type SessionUser = {
   id: string;
   name: string;
   username: string;
-  role: "ADMIN" | "IT";
+  role: AppRole;
+  companyIds: string[];
 };
 
 // อ่านผู้ใช้ปัจจุบันจาก cookie (server component / route handler)
@@ -64,14 +66,23 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   if (!parsed) return null;
   // หมดอายุแล้ว?
   if (Date.now() - parsed.issuedAt > SESSION_MAX_AGE_MS) return null;
-  const user = await prisma.user.findUnique({ where: { id: parsed.userId } });
+  const user = await prisma.user.findUnique({
+    where: { id: parsed.userId },
+    include: { companyAssignments: { select: { companyId: true } } },
+  });
   if (!user || !user.isActive) return null;
   // ตรวจลายเซ็นโดยผูกกับ passwordHash ปัจจุบัน (เปลี่ยนรหัส = โทเคนเก่าใช้ไม่ได้)
   const expected = signSession(user.id, parsed.issuedAt, user.passwordHash);
   const a = Buffer.from(parsed.sig);
   const b = Buffer.from(expected);
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-  return { id: user.id, name: user.name, username: user.username, role: user.role };
+  return {
+    id: user.id,
+    name: user.name,
+    username: user.username,
+    role: user.role,
+    companyIds: user.companyAssignments.map((item) => item.companyId),
+  };
 }
 
 // บังคับต้องล็อกอิน (ใช้ต้นหน้า server component) — ถ้าไม่ล็อกอินเด้งไป /login
