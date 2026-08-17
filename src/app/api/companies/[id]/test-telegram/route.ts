@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { sendTelegramTo } from "@/lib/telegram";
+import {
+  sendTelegramTo,
+  downAlertMessage,
+  recoveredMessage,
+  dailyReportMessage,
+} from "@/lib/telegram";
+import { getDailyReport, todayBangkok } from "@/lib/report";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
-// POST /api/companies/[id]/test-telegram — ส่งข้อความทดสอบเข้ากลุ่ม Telegram ของบริษัทนี้
+// POST /api/companies/[id]/test-telegram
+// ส่ง "ตัวอย่างจริง" 3 แบบเข้ากลุ่ม Telegram ของบริษัทนี้: ผิดปกติ (ล่ม) · ปกติ (กลับมา) · รายงานรอบวัน
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -30,21 +38,16 @@ export async function POST(
   }
 
   const origin = new URL(req.url).origin;
-  const text = [
-    `🔔 <b>ทดสอบการแจ้งเตือน DomainWatch</b>`,
-    `━━━━━━━━━━━━━━━`,
-    `🏢 บริษัท: ${escapeHtml(company.name)}`,
-    ``,
-    `✅ เชื่อมต่อ Telegram สำเร็จ! ถ้าเห็นข้อความนี้ = ตั้งค่าถูกต้อง`,
-    `พร้อมรับแจ้งเตือน ลิงก์ล่ม / OA ผิดปกติ / รายงานรอบวัน ของบริษัทนี้`,
-  ].join("\n");
+  let sent = 0;
 
-  const res = await sendTelegramTo(token, chatId, {
-    text,
-    buttons: [[{ text: "🖥️ เปิดระบบ DomainWatch", url: origin }]],
+  // ข้อความนำ — ถ้าอันนี้ส่งไม่ได้ = ตั้งค่าผิด (แจ้ง error กลับไปเลย)
+  const head = await sendTelegramTo(token, chatId, {
+    text: [
+      `🧪 <b>ตัวอย่างการแจ้งเตือน — ${escapeHtml(company.name)}</b>`,
+      `ต่อไปนี้คือตัวอย่าง 3 แบบที่ทีมจะได้รับจริง`,
+    ].join("\n"),
   });
-
-  if (!res.ok) {
+  if (!head.ok) {
     return NextResponse.json(
       {
         error:
@@ -54,7 +57,53 @@ export async function POST(
       { status: 502 }
     );
   }
-  return NextResponse.json({ ok: true, sent: res.sent });
+  sent += head.sent;
+
+  // 1) ตัวอย่าง "ผิดปกติ" (ลิงก์ล่ม)
+  const down = await sendTelegramTo(
+    token,
+    chatId,
+    downAlertMessage({
+      incidentId: "SAMPLEDOWN01",
+      company: company.name,
+      room: "@ตัวอย่าง",
+      name: "หน้าเข้าเล่นหลัก (ตัวอย่าง)",
+      url: "https://example.com/login",
+      category: "ทางเข้า",
+      httpCode: 403,
+      error: "ถูกบล็อค/ต้องสิทธิ์ (HTTP 403)",
+      backupUrl: "https://backup.example.com/login",
+      detectedAt: new Date(),
+      appBaseUrl: origin,
+    })
+  );
+  sent += down.sent;
+
+  // 2) ตัวอย่าง "ปกติ" (ลิงก์กลับมาใช้ได้)
+  const up = await sendTelegramTo(
+    token,
+    chatId,
+    recoveredMessage({
+      incidentId: "SAMPLEUP0001",
+      company: company.name,
+      name: "หน้าเข้าเล่นหลัก (ตัวอย่าง)",
+      url: "https://example.com/login",
+      downMinutes: 12,
+      appBaseUrl: origin,
+    })
+  );
+  sent += up.sent;
+
+  // 3) ตัวอย่าง "หน้าสรุป" (รายงานรอบวันจริงของวันนี้)
+  try {
+    const report = await getDailyReport(todayBangkok());
+    const rep = await sendTelegramTo(token, chatId, dailyReportMessage(report, origin));
+    sent += rep.sent;
+  } catch {
+    /* ถ้าดึงรายงานไม่ได้ ก็ข้ามไป — 2 ตัวอย่างแรกส่งแล้ว */
+  }
+
+  return NextResponse.json({ ok: true, sent });
 }
 
 function escapeHtml(s: string): string {

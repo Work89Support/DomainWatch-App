@@ -23,7 +23,7 @@ export default async function ReportPage({ searchParams }: { searchParams: { dat
     <div id="report-capture" className="p-6 md:p-8 max-w-5xl mx-auto bg-slate-50 print:hidden">
       <PageHeader
         title="รายงานสรุปรอบวัน"
-        subtitle="สรุปปัญหา/การแก้ไข แบ่ง 3 รอบ (เช้า · เย็น · กลางคืน) สำหรับผู้บริหารและทีม"
+        subtitle="สรุปปัญหา/การแก้ไข แบ่ง 3 รอบ (เช้า · เย็น · กลางคืน) สำหรับ Management และทีม"
         action={<ReportActions date={date} />}
       />
 
@@ -183,7 +183,7 @@ function ExportReportView({ report: r }: { report: DailyReport }) {
       <div className="flex items-start justify-between border-b border-slate-200 pb-5">
         <div>
           <div className="text-3xl font-bold">รายงานสรุปรอบวัน</div>
-          <div className="mt-1 text-base text-slate-500">DomainWatch · สำหรับผู้บริหารและทีมปฏิบัติการ</div>
+          <div className="mt-1 text-base text-slate-500">DomainWatch · สำหรับ Management และทีมปฏิบัติการ</div>
         </div>
         <div className="text-right">
           <div className="text-xl font-semibold">{r.dateLabel}</div>

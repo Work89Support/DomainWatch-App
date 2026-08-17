@@ -246,7 +246,7 @@ export function recoveredMessage(opts: {
   };
 }
 
-// สรุปรายงานรอบวัน สำหรับส่งผู้บริหาร/ทีม
+// สรุปรายงานรอบวัน สำหรับส่ง Management/ทีม
 export function dailyReportMessage(r: DailyReport, appBaseUrl: string): TgMessage {
   const icon: Record<string, string> = { morning: "🌅", evening: "🌆", night: "🌙" };
   const shiftLines = r.shifts.map((s) => {
