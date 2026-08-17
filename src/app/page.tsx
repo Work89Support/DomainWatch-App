@@ -61,7 +61,12 @@ export default async function DashboardPage({
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <StatCard label="ลิงก์ทั้งหมด" value={d.totalLinks} hint={`เว็บที่เฝ้าดู ${d.activeLinks} · ลิงก์ LINE ${notMonitored}`} tone="slate" />
         <StatCard label="ใช้งานได้" value={d.upCount} hint={`จาก ${d.activeLinks} ที่เฝ้าดู`} tone="green" />
-        <StatCard label="โหลดช้า" value={d.slowCount} hint="ตอบสำเร็จ แต่เกินเกณฑ์" tone="amber" />
+        <StatCard
+          label="โหลดช้า / ยืนยันไม่ทัน"
+          value={d.slowCount}
+          hint="ตอบช้า หรือ monitor ถูกเว็บปลายทางจำกัด"
+          tone="amber"
+        />
         <StatCard
           label="ใช้ไม่ได้"
           value={d.downCount}
