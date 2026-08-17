@@ -111,6 +111,10 @@ export function isConfiguredDegradedStatus(status: number): boolean {
   return DEGRADED_HTTP_CODES.has(status);
 }
 
+export function isMonitorTimeout(error: { name?: string } | null | undefined): boolean {
+  return error?.name === "AbortError";
+}
+
 // ยิงเช็ค URL 1 ครั้ง
 async function probeOnce(url: string): Promise<ProbeResult> {
   const start = Date.now();
@@ -172,10 +176,19 @@ async function probeOnce(url: string): Promise<ProbeResult> {
     } catch (e2: unknown) {
       const responseMs = Date.now() - start;
       const err = e2 as { name?: string; message?: string };
-      const message =
-        err?.name === "AbortError"
-          ? `หมดเวลา (timeout ${TIMEOUT_MS}ms)`
-          : err?.message || "เชื่อมต่อไม่ได้";
+      // timeout จากทั้ง GET และ HEAD ยังพิสูจน์ไม่ได้ว่าเว็บล่มจริง เพราะหลายเว็บ
+      // ทิ้ง request จาก IP ศูนย์ข้อมูล/WAF แต่ผู้ใช้ผ่านมือถือยังเปิดได้ตามปกติ
+      // จึงจัดเป็น SLOW/degraded; DNS/connection error ที่ตอบกลับชัดเจนยังเป็น DOWN
+      if (isMonitorTimeout(err)) {
+        return {
+          ok: true,
+          httpCode: null,
+          responseMs,
+          error: `monitor timeout ${TIMEOUT_MS + HEAD_TIMEOUT_MS}ms (ยังยืนยันว่าเว็บล่มไม่ได้)`,
+          degraded: true,
+        };
+      }
+      const message = err?.message || "เชื่อมต่อไม่ได้";
       return { ok: false, httpCode: null, responseMs, error: message };
     }
   }
@@ -426,18 +439,22 @@ export async function runCheck(): Promise<CheckSummary> {
           data: { status: "CLOSED", resolvedAt: now },
         });
         summary.recovered += openIncidents.length;
-        await notifyCompany(
-          routes,
-          link.companyId,
-          recoveredMessage({
-            incidentId: newestOpen.id,
-            company: link.company.name,
-            name: link.name,
-            url: link.url,
-            downMinutes,
-            appBaseUrl: APP_BASE_URL,
-          })
-        );
+        // เคสที่เกิดจาก monitor timeout เป็น false DOWN เดิม ไม่ส่ง recovery
+        // หลายสิบข้อความไปรบกวนกลุ่ม Telegram ตอนระบบแก้สถานะกลับเป็น SLOW
+        if (!(result.degraded && result.httpCode === null)) {
+          await notifyCompany(
+            routes,
+            link.companyId,
+            recoveredMessage({
+              incidentId: newestOpen.id,
+              company: link.company.name,
+              name: link.name,
+              url: link.url,
+              downMinutes,
+              appBaseUrl: APP_BASE_URL,
+            })
+          );
+        }
       }
     }
   });
