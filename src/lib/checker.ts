@@ -32,6 +32,9 @@ const CONCURRENCY = Math.max(1, Number(process.env.CHECK_CONCURRENCY || 160));
 const WRITE_CONCURRENCY = Math.max(1, Number(process.env.CHECK_WRITE_CONCURRENCY || 24));
 const OA_CONCURRENCY = Math.max(1, Number(process.env.CHECK_OA_CONCURRENCY || 80));
 const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
+// กลุ่ม Telegram ใช้เป็นช่องแจ้ง "ปัญหาที่ต้องจัดการ" เป็นหลัก
+// ข้อความสีเขียวตอนฟื้นตัวเปิดได้ภายหลัง แต่ค่าเริ่มต้นปิดเพื่อไม่รบกวนกลุ่ม
+const NOTIFY_RECOVERY = recoveryNotificationsEnabled(process.env.TELEGRAM_NOTIFY_RECOVERY);
 
 const CHROME_UA =
   "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
@@ -113,6 +116,10 @@ export function isConfiguredDegradedStatus(status: number): boolean {
 
 export function isMonitorTimeout(error: { name?: string } | null | undefined): boolean {
   return error?.name === "AbortError";
+}
+
+export function recoveryNotificationsEnabled(value: string | undefined): boolean {
+  return value?.trim().toLowerCase() === "true";
 }
 
 // ยิงเช็ค URL 1 ครั้ง
@@ -441,7 +448,7 @@ export async function runCheck(): Promise<CheckSummary> {
         summary.recovered += openIncidents.length;
         // เคสที่เกิดจาก monitor timeout เป็น false DOWN เดิม ไม่ส่ง recovery
         // หลายสิบข้อความไปรบกวนกลุ่ม Telegram ตอนระบบแก้สถานะกลับเป็น SLOW
-        if (!(result.degraded && result.httpCode === null)) {
+        if (NOTIFY_RECOVERY && !(result.degraded && result.httpCode === null)) {
           await notifyCompany(
             routes,
             link.companyId,
@@ -501,7 +508,12 @@ export async function runOaChecks(routes?: Map<string, TgRoute>): Promise<void> 
           appBaseUrl: APP_BASE_URL,
         })
       );
-    } else if (res.status === "OK" && prevStatus !== "OK" && prevStatus !== "UNKNOWN") {
+    } else if (
+      NOTIFY_RECOVERY &&
+      res.status === "OK" &&
+      prevStatus !== "OK" &&
+      prevStatus !== "UNKNOWN"
+    ) {
       await notifyCompany(
         r,
         g.companyId,
