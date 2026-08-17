@@ -201,3 +201,5 @@ domainwatch/
 
 จัดทำโครงระบบเวอร์ชัน 1.0 — พร้อมต่อยอด (เพิ่มระบบล็อกอิน/สิทธิ์, รายงานส่งออก,
 บันทึก uptime %, ฯลฯ)
+
+<!-- redeploy trigger: 2026-08-17T03:21Z re-trigger Vercel build for dbfbf3d -->
