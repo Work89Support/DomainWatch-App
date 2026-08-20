@@ -32,8 +32,8 @@ const CONCURRENCY = Math.max(1, Number(process.env.CHECK_CONCURRENCY || 160));
 const WRITE_CONCURRENCY = Math.max(1, Number(process.env.CHECK_WRITE_CONCURRENCY || 24));
 const OA_CONCURRENCY = Math.max(1, Number(process.env.CHECK_OA_CONCURRENCY || 80));
 const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
-// กลุ่ม Telegram ใช้เป็นช่องแจ้ง "ปัญหาที่ต้องจัดการ" เป็นหลัก
-// ข้อความสีเขียวตอนฟื้นตัวเปิดได้ภายหลัง แต่ค่าเริ่มต้นปิดเพื่อไม่รบกวนกลุ่ม
+// LINE OA recovery ยังเลือกเปิด/ปิดได้ เพราะไม่ได้ผูกกับ Incident ของลิงก์
+// ส่วน recovery ของลิงก์ส่งอัตโนมัติเมื่อปิด Incident ที่ยืนยันแล้วเสมอ
 const NOTIFY_RECOVERY = recoveryNotificationsEnabled(process.env.TELEGRAM_NOTIFY_RECOVERY);
 
 const CHROME_UA =
@@ -446,18 +446,22 @@ export async function runCheck(): Promise<CheckSummary> {
           data: { status: "CLOSED", resolvedAt: now },
         });
         summary.recovered += openIncidents.length;
-        // เคสที่เกิดจาก monitor timeout เป็น false DOWN เดิม ไม่ส่ง recovery
-        // หลายสิบข้อความไปรบกวนกลุ่ม Telegram ตอนระบบแก้สถานะกลับเป็น SLOW
-        if (NOTIFY_RECOVERY && !(result.degraded && result.httpCode === null)) {
+        // Incident ของลิงก์ถูกเปิดหลังยืนยัน DOWN หลายรอบแล้ว จึงต้องมีข้อความปิดวงจรเสมอ
+        // ยกเว้น timeout เก่าที่เคยถูกตีความผิดเป็น DOWN ก่อนกติกาใหม่ เพื่อไม่ให้สแปม recovery เท็จ
+        if (!(result.degraded && result.httpCode === null)) {
           await notifyCompany(
             routes,
             link.companyId,
             recoveredMessage({
               incidentId: newestOpen.id,
               company: link.company.name,
+              room: link.lineGroup?.name,
               name: link.name,
               url: link.url,
               downMinutes,
+              slow: state.status === "SLOW",
+              responseMs: result.responseMs,
+              detail: result.error,
               appBaseUrl: APP_BASE_URL,
             })
           );
