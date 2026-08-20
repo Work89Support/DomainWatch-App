@@ -231,20 +231,32 @@ export function downAlertMessage(opts: {
 export function recoveredMessage(opts: {
   incidentId: string;
   company: string;
+  room?: string | null;
   name: string;
   url: string;
   downMinutes: number;
+  slow?: boolean;
+  responseMs?: number | null;
+  detail?: string | null;
   appBaseUrl: string;
 }): TgMessage {
   const caseCode = opts.incidentId.slice(-8).toUpperCase();
+  const responseSeconds =
+    typeof opts.responseMs === "number" ? Math.max(0, opts.responseMs / 1000).toFixed(1) : null;
   const text = [
-    `🟢 <b>ลิงก์กลับมาใช้งานได้แล้ว</b>`,
+    opts.slow
+      ? `🟡 <b>ลิงก์กลับมาใช้งานได้แล้ว — แต่ยังโหลดช้า</b>`
+      : `🟢 <b>ลิงก์กลับมาใช้งานได้แล้ว</b>`,
     `━━━━━━━━━━━━━━━`,
     `🆔 เคส: <b>#${caseCode}</b>`,
     `🏢 บริษัท: ${escapeHtml(opts.company)}`,
+    ...(opts.room ? [`💬 ห้อง: ${escapeHtml(opts.room)}`] : []),
     `📄 <b>${escapeHtml(opts.name)}</b>`,
     `🔗 ${escapeHtml(opts.url)}`,
     `⏱️ ล่มไปประมาณ ${opts.downMinutes} นาที`,
+    ...(opts.slow && responseSeconds ? [`🐢 เวลาตอบกลับ: ${responseSeconds} วินาที`] : []),
+    ...(opts.slow && opts.detail ? [`ℹ️ รายละเอียด: ${escapeHtml(opts.detail)}`] : []),
+    ...(opts.slow ? [`🔎 ระบบจะตรวจติดตามต่ออัตโนมัติ`] : []),
   ].join("\n");
   return {
     text,
