@@ -20,21 +20,31 @@ export default async function IncidentsPage({
   const companyWhere = me.role === "ADMIN_COMPANY"
     ? (companyId ? { companyId } : { companyId: { in: me.companyIds } })
     : (companyId ? { companyId } : {});
-  const [incidents, companies] = await Promise.all([
+  const include = { link: { include: { company: true, lineGroup: true } } } as const;
+  const [incidents, requestedIncident, companies] = await Promise.all([
     prisma.incident.findMany({
       where: { link: companyWhere },
       orderBy: { detectedAt: "desc" },
       take: 200,
-      include: { link: { include: { company: true, lineGroup: true } } },
+      include,
     }),
+    searchParams.incident
+      ? prisma.incident.findFirst({
+          where: { id: searchParams.incident, link: companyWhere },
+          include,
+        })
+      : Promise.resolve(null),
     prisma.company.findMany({
       where: me.role === "ADMIN_COMPANY" ? { id: { in: me.companyIds } } : {},
       orderBy: { createdAt: "asc" }, select: { id: true, name: true },
     }),
   ]);
+  const visibleIncidents = requestedIncident && !incidents.some((incident) => incident.id === requestedIncident.id)
+    ? [requestedIncident, ...incidents]
+    : incidents;
   return (
     <IncidentsClient
-      initial={JSON.parse(JSON.stringify(incidents))}
+      initial={JSON.parse(JSON.stringify(visibleIncidents))}
       companies={companies}
       currentCompany={companyId}
       initialIncidentId={searchParams.incident}

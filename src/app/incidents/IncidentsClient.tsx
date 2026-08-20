@@ -51,10 +51,14 @@ export default function IncidentsClient({
   showKpi: boolean;
 }) {
   const router = useRouter();
-  const [filter, setFilter] = useState<"open" | "all">("open");
+  // ลิงก์จาก Telegram อาจชี้มายังเคสที่บอทปิดอัตโนมัติแล้ว
+  // เปิดประวัติทั้งหมดทันทีเพื่อไม่ให้เคสดังกล่าวดูเหมือนหายไปจากระบบ
+  const [filter, setFilter] = useState<"open" | "all">(initialIncidentId ? "all" : "open");
   const [selected, setSelected] = useState<Incident | null>(
     initial.find((incident) => incident.id === initialIncidentId) || null
   );
+
+  const openCount = initial.filter((incident) => incident.status !== "CLOSED").length;
 
   const list = filter === "open"
     ? initial.filter((incident) => incident.status !== "CLOSED")
@@ -75,7 +79,9 @@ export default function IncidentsClient({
                   onClick={() => setFilter(f)}
                   className={`px-3 py-1.5 text-sm rounded-md ${filter === f ? "bg-white shadow text-brand-700 font-medium" : "text-slate-500"}`}
                 >
-                  {f === "open" ? "เปิดค้าง" : "ทั้งหมด"}
+                  {f === "open"
+                    ? `เปิดค้าง (${openCount})`
+                    : `ประวัติทั้งหมด (${initial.length})`}
                 </button>
               ))}
             </div>
@@ -86,7 +92,12 @@ export default function IncidentsClient({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {list.length === 0 && (
           <div className="card p-10 text-center text-slate-400 lg:col-span-2">
-            ไม่มีเหตุการณ์ในหมวดนี้
+            <div>ไม่มีเหตุการณ์เปิดค้าง</div>
+            {filter === "open" && initial.length > 0 && (
+              <button className="btn-ghost text-xs mt-3" onClick={() => setFilter("all")}>
+                ดูประวัติที่ปิดแล้ว {initial.length} เคส
+              </button>
+            )}
           </div>
         )}
         {list.map((i) => (
@@ -110,6 +121,7 @@ export default function IncidentsClient({
                   🏢 {i.link.company.name}
                   {i.link.lineGroup ? ` · 💬 ${i.link.lineGroup.name}` : ""}
                   {` · 🏷️ ${i.link.category || "ทั่วไป"} · ตรวจพบ ${fmtDateTime(i.detectedAt)}`}
+                  {i.resolvedAt ? ` · กลับมา ${fmtDateTime(i.resolvedAt)}` : ""}
                 </div>
               </div>
               <IncidentStatusBadge status={i.status} />
@@ -214,7 +226,13 @@ function IncidentPanel({
         {/* Timeline */}
         <div className="space-y-2 text-sm mb-5">
           <TimelineRow label="ตรวจพบล่ม" time={incident.detectedAt} active />
-          <TimelineRow label="ส่งแจ้งเตือน" time={incident.notifiedAt} />
+          <TimelineRow
+            label={incident.notifiedAt
+              ? "Telegram ยืนยันการส่งแล้ว"
+              : "เรียกส่ง Telegram แล้ว (ไม่พบผลตอบรับ)"}
+            time={incident.notifiedAt || incident.detectedAt}
+            uncertain={!incident.notifiedAt}
+          />
           <TimelineRow label="แอดมินรับเรื่อง" time={incident.adminAckAt} />
           <TimelineRow label="แอดมินอัพเดตลิงก์ (จบหน้าที่แอดมิน)" time={incident.adminUpdatedAt} />
           <TimelineRow label="ไอทีรับเรื่อง" time={incident.itAckAt} />
@@ -275,12 +293,22 @@ function IncidentPanel({
   );
 }
 
-function TimelineRow({ label, time, active }: { label: string; time: string | null; active?: boolean }) {
+function TimelineRow({
+  label,
+  time,
+  active,
+  uncertain,
+}: {
+  label: string;
+  time: string | null;
+  active?: boolean;
+  uncertain?: boolean;
+}) {
   const done = !!time;
   return (
     <div className="flex items-center gap-3">
-      <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${done ? "bg-emerald-500" : active ? "bg-red-500" : "bg-slate-200"}`} />
-      <span className={`${done ? "text-slate-700" : "text-slate-400"}`}>{label}</span>
+      <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${uncertain ? "bg-amber-400" : done ? "bg-emerald-500" : active ? "bg-red-500" : "bg-slate-200"}`} />
+      <span className={`${uncertain ? "text-amber-700" : done ? "text-slate-700" : "text-slate-400"}`}>{label}</span>
       <span className="ml-auto text-xs text-slate-400">{time ? fmtDateTime(time) : "-"}</span>
     </div>
   );
