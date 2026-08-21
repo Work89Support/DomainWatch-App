@@ -1,16 +1,17 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { ROLE_LABELS, type AppRole } from "@/lib/permissions";
 
 type SessionUser = { id: string; name: string; username: string; role: AppRole };
 
 export default function Topbar({ user }: { user: SessionUser }) {
-  const router = useRouter();
   async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
+    const res = await fetch("/api/auth/logout", { method: "POST" });
+    if (res.ok) {
+      // บังคับขอ Layout ใหม่จาก server หลังลบ session แล้ว
+      // จึงไม่มี Sidebar จากหน้าก่อนหน้าค้างบนหน้า Login
+      window.location.replace("/login");
+    }
   }
   return (
     <header className="flex items-center justify-end gap-3 px-6 py-3 bg-white border-b border-slate-100">

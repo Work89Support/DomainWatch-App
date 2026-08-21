@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function LoginClient() {
-  const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -21,8 +19,9 @@ export default function LoginClient() {
     });
     setBusy(false);
     if (res.ok) {
-      router.push("/");
-      router.refresh();
+      // โหลด RootLayout ใหม่จาก server หลัง cookie ถูกตั้งแล้ว
+      // ป้องกัน Layout ก่อนล็อกอินค้างและแสดงเมนูผิดสถานะ
+      window.location.replace("/");
     } else {
       const e = await res.json().catch(() => ({}));
       setErr(e.error || "เข้าสู่ระบบไม่สำเร็จ");
