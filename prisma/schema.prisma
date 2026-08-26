@@ -81,11 +81,110 @@ model Link {
 
   checkLogs CheckLog[]
   incidents Incident[]
+  networkIncidents NetworkIncident[]
 
   @@index([companyId])
   @@index([lineGroupId])
   @@index([lastStatus])
   @@index([category])
+}
+
+/// โทรศัพท์ตรวจเครือข่ายมือถือ — token เก็บเฉพาะ hash และผูกได้ทีละเครื่อง
+model MobileAgent {
+  id              String   @id @default(cuid())
+  name            String
+  carrier         String   @default("TRUE")
+  isActive        Boolean  @default(true)
+  tokenHash       String?  @unique
+  deviceId        String?  @unique
+  deviceLabel     String?
+  appVersion      String?
+  networkType     String?
+  reportedCarrier String?
+  lastIp          String?
+  enrolledAt      DateTime?
+  lastSeenAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  enrollments     MobileEnrollment[]
+  urlStatuses     MobileUrlStatus[]
+  checkLogs       MobileCheckLog[]
+  networkIncidents NetworkIncident[]
+
+  @@index([isActive])
+  @@index([lastSeenAt])
+}
+
+/// QR ผูกเครื่องแบบใช้ครั้งเดียว มีอายุสั้น และไม่เก็บรหัสจริง
+model MobileEnrollment {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     MobileAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  codeHash  String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([agentId, expiresAt])
+}
+
+/// ผลล่าสุดต่อ URL ของแต่ละเครื่อง ใช้ยืนยัน 2 รอบก่อนแจ้งเตือน
+model MobileUrlStatus {
+  id             String     @id @default(cuid())
+  agentId        String
+  agent          MobileAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  urlHash        String
+  url            String
+  status         LinkStatus @default(UNKNOWN)
+  httpCode       Int?
+  responseMs     Int?
+  error          String?
+  failureStreak  Int        @default(0)
+  recoveryStreak Int        @default(0)
+  checkedAt      DateTime
+  updatedAt      DateTime   @updatedAt
+
+  @@unique([agentId, urlHash])
+  @@index([status, checkedAt])
+}
+
+/// บันทึกเฉพาะตอนสถานะเปลี่ยน เพื่อลดขนาดฐานข้อมูล
+model MobileCheckLog {
+  id         String     @id @default(cuid())
+  agentId    String
+  agent      MobileAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  urlHash    String
+  url        String
+  status     LinkStatus
+  httpCode   Int?
+  responseMs Int?
+  error      String?
+  checkedAt  DateTime
+  createdAt  DateTime   @default(now())
+
+  @@index([agentId, checkedAt])
+  @@index([urlHash, checkedAt])
+}
+
+/// เหตุการณ์ที่ตรวจพบจากเครือข่ายซิม แยกจากเคส cloud เพื่อไม่ทำให้ dashboard ล่มผิด
+model NetworkIncident {
+  id         String          @id @default(cuid())
+  agentId    String
+  agent      MobileAgent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  linkId     String
+  link       Link            @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  status     IncidentStatus  @default(OPEN)
+  detectedAt DateTime        @default(now())
+  resolvedAt DateTime?
+  httpCode   Int?
+  responseMs Int?
+  error      String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([agentId, status])
+  @@index([linkId, detectedAt])
 }
 
 enum LinkStatus {
