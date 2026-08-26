@@ -69,6 +69,10 @@ export function canRunCheck(role: AppRole): boolean {
   return role === "ADMIN" || role === "ADMIN_LEAD";
 }
 
+export function canManageMobileAgents(role: AppRole): boolean {
+  return role === "ADMIN";
+}
+
 export function canAccessCompany(role: AppRole, assignedCompanyIds: string[], companyId: string): boolean {
   return role !== "ADMIN_COMPANY" || assignedCompanyIds.includes(companyId);
 }
