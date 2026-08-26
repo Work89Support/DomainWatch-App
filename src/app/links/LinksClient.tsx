@@ -10,7 +10,7 @@ type Company = { id: string; name: string; lineGroups: LineGroup[] };
 type MobileAgentOption = { id: string; name: string; carrier: string; reportedCarrier: string | null; isActive: boolean };
 type MobileCheck = {
   agentId: string; agentName: string; carrier: string; agentActive: boolean;
-  status: string; checkedAt: string; responseMs: number | null; httpCode: number | null; error: string | null;
+  status: string; checkedAt: string; responseMs: number | null; httpCode: number | null; error: string | null; failureStreak: number;
 };
 
 type LinkRow = {
@@ -135,13 +135,14 @@ export default function LinksClient({
         httpCode: link.lastHttpCode,
         detail: "ตัวตรวจระบบกลาง",
         error: null as string | null,
+        failureStreak: 0,
       };
     }
     const checks = link.mobileChecks.filter((check) =>
       fAgent ? check.agentId === fAgent : check.agentActive
     );
     if (checks.length === 0) {
-      return { status: "UNKNOWN", checkedAt: null, responseMs: null, httpCode: null, detail: "ยังไม่มีผลจากซิม", error: null as string | null };
+      return { status: "UNKNOWN", checkedAt: null, responseMs: null, httpCode: null, detail: "ยังไม่มีผลจากซิม", error: null as string | null, failureStreak: 0 };
     }
     const priority: Record<string, number> = { DOWN: 4, SLOW: 3, UNKNOWN: 2, UP: 1 };
     const selected = [...checks].sort((a, b) =>
@@ -155,6 +156,7 @@ export default function LinksClient({
       httpCode: selected.httpCode,
       detail: fAgent ? `${selected.carrier} · ${selected.agentName}` : `รวม ${checks.length} เครื่อง`,
       error: selected.error,
+      failureStreak: selected.failureStreak,
     };
   };
 
@@ -261,9 +263,11 @@ export default function LinksClient({
       </td>
       <td className="py-3 px-4 text-slate-600">{l.category || "-"}</td>
       <td className="py-3 px-4">
-        <StatusBadge status={view.status} />
+        {view.status === "UNKNOWN" && view.failureStreak > 0
+          ? <span className="badge bg-amber-50 text-amber-700">● รอยืนยัน {view.failureStreak}/2</span>
+          : <StatusBadge status={view.status} />}
         <div className="mt-1 text-[11px] text-slate-400">{view.detail}</div>
-        {view.error && <div className="mt-1 max-w-[220px] text-[11px] text-red-500 line-clamp-2">{view.error}</div>}
+        {view.error && <div className={`mt-1 max-w-[220px] text-[11px] line-clamp-2 ${view.status === "DOWN" ? "text-red-500" : "text-amber-600"}`}>{view.error}</div>}
       </td>
       <td className="py-3 px-4 text-slate-500 text-xs">
         <div>{fmtDateTime(view.checkedAt)}</div>

@@ -71,6 +71,7 @@ export default async function LinksPage({
             responseMs: true,
             httpCode: true,
             error: true,
+            failureStreak: true,
           },
         },
       },
@@ -78,7 +79,7 @@ export default async function LinksPage({
   ]);
   const checksByUrl = new Map<string, Array<{
     agentId: string; agentName: string; carrier: string; agentActive: boolean;
-    status: string; checkedAt: Date; responseMs: number | null; httpCode: number | null; error: string | null;
+    status: string; checkedAt: Date; responseMs: number | null; httpCode: number | null; error: string | null; failureStreak: number;
   }>>();
   for (const agent of mobileAgents) {
     for (const status of agent.urlStatuses) {
@@ -94,6 +95,7 @@ export default async function LinksPage({
         responseMs: status.responseMs,
         httpCode: status.httpCode,
         error: status.error,
+        failureStreak: status.failureStreak,
       });
       checksByUrl.set(key, rows);
     }

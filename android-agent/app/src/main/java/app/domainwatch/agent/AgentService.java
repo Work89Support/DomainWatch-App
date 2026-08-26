@@ -55,10 +55,20 @@ public class AgentService extends Service {
             long cycleStarted = System.currentTimeMillis();
             try { runCycle(); }
             catch (Exception error) {
-                String message = "ตรวจไม่สำเร็จ: " + String.valueOf(error.getMessage());
+                String raw = String.valueOf(error.getMessage());
+                boolean unauthorized = raw.toLowerCase(java.util.Locale.US).contains("unauthorized");
+                String message = unauthorized
+                        ? "สิทธิ์ผูกเครื่องหมดอายุ กรุณาสแกน QR ใหม่"
+                        : "ตรวจไม่สำเร็จ: " + raw;
                 prefs.setLastSummary(message, System.currentTimeMillis());
                 updateNotification(message);
                 broadcastUpdate();
+                if (unauthorized) {
+                    stopped = true;
+                    prefs.clearEnrollment();
+                    prefs.setLastSummary(message, System.currentTimeMillis());
+                    break;
+                }
             }
             long remaining = 300_000L - (System.currentTimeMillis() - cycleStarted);
             long sleep = Math.max(15_000L, remaining);

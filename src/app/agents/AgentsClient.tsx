@@ -16,6 +16,7 @@ type NetworkIncident = {
 };
 type Agent = {
   id: string; name: string; carrier: string; isActive: boolean; deviceLabel: string | null;
+  hasEnrollment: boolean;
   appVersion: string | null; networkType: string | null; reportedCarrier: string | null;
   enrolledAt: string | null; lastSeenAt: string | null; createdAt: string;
   urlStatuses: UrlStatus[]; networkIncidents: NetworkIncident[];
@@ -66,11 +67,25 @@ export default function AgentsClient({ initial, canManage }: { initial: Agent[];
   async function toggle(agent: Agent) {
     const action = agent.isActive ? "ปิดเครื่องและยกเลิกสิทธิ์ของโทรศัพท์เครื่องเดิม" : "เปิดเครื่องตรวจนี้";
     if (!confirm(`ยืนยัน${action}?`)) return;
+    setBusy(true);
     const response = await fetch(`/api/mobile-agents/${agent.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isActive: !agent.isActive }),
     });
-    if (!response.ok) return alert("เปลี่ยนสถานะไม่สำเร็จ");
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setBusy(false);
+      return alert(data.error || "เปลี่ยนสถานะไม่สำเร็จ");
+    }
+    if (!agent.isActive) {
+      const enrollmentResponse = await fetch(`/api/mobile-agents/${agent.id}/enrollment`, { method: "POST" });
+      const enrollmentData = await enrollmentResponse.json().catch(() => ({}));
+      setBusy(false);
+      if (!enrollmentResponse.ok) return alert(enrollmentData.error || "สร้าง QR ผูกเครื่องใหม่ไม่สำเร็จ");
+      setQr({ agentName: agent.name, enrollment: enrollmentData.enrollment });
+    } else {
+      setBusy(false);
+    }
     router.refresh();
   }
 
@@ -130,8 +145,8 @@ export default function AgentsClient({ initial, canManage }: { initial: Agent[];
       />
 
       <div className="card mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border-brand-100 bg-brand-50/40">
-        <div><div className="font-semibold text-slate-700">1) ติดตั้งแอปบนโทรศัพท์ก่อน</div><div className="mt-1 text-xs text-slate-500">รองรับ Android 8 ขึ้นไป · รุ่น 1.0.2 · ป้องกัน timeout ถูกแจ้งเป็นเว็บล่ม</div></div>
-        <a className="btn-primary whitespace-nowrap" href="/downloads/DomainWatch-Agent-v1.0.2.apk" download>⬇️ ดาวน์โหลด APK</a>
+        <div><div className="font-semibold text-slate-700">1) ติดตั้งแอปบนโทรศัพท์ก่อน</div><div className="mt-1 text-xs text-slate-500">รองรับ Android 8 ขึ้นไป · รุ่น 1.0.3 · แจ้งชัดเมื่อสิทธิ์หมดและต้องผูก QR ใหม่</div></div>
+        <a className="btn-primary whitespace-nowrap" href="/downloads/DomainWatch-Agent-v1.0.3.apk" download>⬇️ ดาวน์โหลด APK</a>
       </div>
 
       {canManage && <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
@@ -159,13 +174,13 @@ export default function AgentsClient({ initial, canManage }: { initial: Agent[];
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="space-y-3">
             {initial.map((agent) => {
-              const online = Boolean(agent.isActive && agent.lastSeenAt && Date.now() - new Date(agent.lastSeenAt).getTime() < 12 * 60_000);
+              const online = Boolean(agent.isActive && agent.hasEnrollment && agent.lastSeenAt && Date.now() - new Date(agent.lastSeenAt).getTime() < 12 * 60_000);
               const open = agent.networkIncidents.filter((item) => item.status !== "CLOSED").length;
               return (
                 <button key={agent.id} onClick={() => setSelectedId(agent.id)} className={`card w-full p-4 text-left transition ${selected?.id === agent.id ? "ring-2 ring-brand-500" : "hover:border-brand-200"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div><div className="font-semibold text-slate-800">📱 {agent.name}</div><div className="text-xs text-slate-400 mt-1">ซิม {agent.carrier} · {since(agent.lastSeenAt)}</div></div>
-                    <span className={`badge ${online ? "bg-emerald-50 text-emerald-700" : agent.isActive ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-400"}`}>{online ? "ออนไลน์" : agent.isActive ? "ขาดการเชื่อมต่อ" : "ปิดใช้งาน"}</span>
+                    <span className={`badge ${online ? "bg-emerald-50 text-emerald-700" : agent.isActive ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-400"}`}>{online ? "ออนไลน์" : agent.isActive && !agent.hasEnrollment ? "รอผูก QR ใหม่" : agent.isActive ? "ขาดการเชื่อมต่อ" : "ปิดใช้งาน"}</span>
                   </div>
                   {open > 0 && <div className="mt-3 text-xs font-medium text-red-600">🔴 มีปัญหาเครือข่ายค้าง {open} รายการ</div>}
                 </button>
@@ -204,10 +219,13 @@ export default function AgentsClient({ initial, canManage }: { initial: Agent[];
                     )}
                     <p className="text-xs text-slate-400 mt-1">{selected.deviceLabel || "ยังไม่มีข้อมูลรุ่นเครื่อง"} · แอป {selected.appVersion || "-"}</p>
                     <p className="text-xs text-slate-400 mt-1">เครือข่ายที่รายงาน: {selected.reportedCarrier || selected.carrier} · {selected.networkType || "รอข้อมูล"}</p>
+                    {selected.isActive && !selected.hasEnrollment && (
+                      <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-700">สิทธิ์โทรศัพท์เดิมหมดแล้ว ต้องสร้าง QR และสแกนผูกเครื่องใหม่</div>
+                    )}
                   </div>
                   {canManage && <div className="flex gap-2">
-                    {selected.isActive && <button className="btn-ghost" disabled={busy} onClick={() => newQr(selected)}>สร้าง QR / ย้ายเครื่อง</button>}
-                    <button className={selected.isActive ? "btn-danger" : "btn-primary"} onClick={() => toggle(selected)}>{selected.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}</button>
+                    {selected.isActive && <button className="btn-ghost" disabled={busy} onClick={() => newQr(selected)}>{selected.hasEnrollment ? "สร้าง QR / ย้ายเครื่อง" : "สร้าง QR ผูกใหม่"}</button>}
+                    <button disabled={busy} className={selected.isActive ? "btn-danger" : "btn-primary"} onClick={() => toggle(selected)}>{selected.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน + QR ใหม่"}</button>
                     <button className="btn-ghost text-red-600" disabled={busy} onClick={() => deleteAgent(selected)}>🗑️ ลบเครื่อง</button>
                   </div>}
                 </div>

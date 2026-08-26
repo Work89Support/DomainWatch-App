@@ -16,6 +16,7 @@ export default async function AgentsPage() {
       name: true,
       carrier: true,
       isActive: true,
+      tokenHash: true,
       deviceLabel: true,
       appVersion: true,
       networkType: true,
@@ -40,8 +41,12 @@ export default async function AgentsPage() {
       },
     },
   });
+  const safeAgents = agents.map(({ tokenHash, ...agent }) => ({
+    ...agent,
+    hasEnrollment: Boolean(tokenHash),
+  }));
   return <AgentsClient
-    initial={JSON.parse(JSON.stringify(agents))}
+    initial={JSON.parse(JSON.stringify(safeAgents))}
     canManage={canManageMobileAgents(user.role)}
   />;
 }

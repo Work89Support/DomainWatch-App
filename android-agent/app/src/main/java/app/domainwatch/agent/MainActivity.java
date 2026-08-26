@@ -176,8 +176,10 @@ public class MainActivity extends Activity {
     private void refresh() {
         if (!prefs.isEnrolled()) {
             titleStatus.setText("⚪ ยังไม่ผูกเครื่อง");
-            detail.setText("ติดตั้งสำเร็จแล้ว รอสแกน QR จาก DomainWatch");
-            lastResult.setText("ยังไม่มีผลตรวจ");
+            detail.setText("กรุณาสร้าง QR ใหม่จาก DomainWatch แล้วสแกนเพื่อผูกเครื่อง");
+            String last = prefs.lastSummary();
+            if (prefs.lastTime() > 0) last += "\n" + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(new Date(prefs.lastTime()));
+            lastResult.setText(last);
             startButton.setEnabled(false);
             stopButton.setEnabled(false);
             return;
