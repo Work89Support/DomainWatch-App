@@ -37,3 +37,11 @@ _v2.zip
 
 _to_delete/
 _import/
+
+# Android Agent build/private signing files
+android-agent/.gradle/
+android-agent/**/build/
+android-agent/local.properties
+android-agent/keystore.properties
+android-agent/keystore/
+deliverables/private/

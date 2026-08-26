@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { downAlertMessage, recoveredMessage } from "../src/lib/telegram";
+import { downAlertMessage, networkDownMessage, networkRecoveredMessage, recoveredMessage } from "../src/lib/telegram";
 
 const incidentId = "cmtest00000000abcdefgh";
 
@@ -69,4 +69,40 @@ test("slow recovery says the link is back but still slow", () => {
   assert.match(message.text, /กลับมาใช้งานได้แล้ว — แต่ยังโหลดช้า/);
   assert.match(message.text, /6\.8 วินาที/);
   assert.match(message.text, /ระบบจะตรวจติดตามต่ออัตโนมัติ/);
+});
+
+test("mobile carrier outage message identifies TRUE and the exact room", () => {
+  const message = networkDownMessage({
+    incidentId,
+    carrier: "TRUE",
+    agentName: "TRUE Phone 1",
+    company: "Example Co",
+    room: "Room A",
+    name: "Login",
+    url: "https://example.com/login",
+    error: "HTTP 503 จากเครือข่ายมือถือ",
+    detectedAt: new Date("2026-08-26T00:00:00Z"),
+    appBaseUrl: "https://watch.example.com",
+  });
+  assert.match(message.text, /TRUE เปิดลิงก์ไม่ได้/);
+  assert.match(message.text, /Room A/);
+  assert.match(message.text, /ยืนยันจากซิม 2 รอบ/);
+});
+
+test("mobile slow recovery is clearly reported", () => {
+  const message = networkRecoveredMessage({
+    incidentId,
+    carrier: "TRUE",
+    agentName: "TRUE Phone 1",
+    company: "Example Co",
+    room: "Room A",
+    name: "Login",
+    url: "https://example.com/login",
+    downMinutes: 10,
+    slow: true,
+    responseMs: 7200,
+    appBaseUrl: "https://watch.example.com",
+  });
+  assert.match(message.text, /กลับมาเปิดได้แล้ว — แต่ยังโหลดช้า/);
+  assert.match(message.text, /7\.2 วินาที/);
 });

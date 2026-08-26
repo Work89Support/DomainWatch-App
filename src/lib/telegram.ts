@@ -269,6 +269,80 @@ export function recoveredMessage(opts: {
   };
 }
 
+export function networkDownMessage(opts: {
+  incidentId: string;
+  carrier: string;
+  agentName: string;
+  company: string;
+  room?: string | null;
+  name: string;
+  url: string;
+  httpCode?: number | null;
+  error?: string | null;
+  detectedAt: Date;
+  appBaseUrl: string;
+}): TgMessage {
+  const detected = opts.detectedAt.toLocaleString("th-TH", { timeZone: "Asia/Bangkok" });
+  const reason = opts.error || (opts.httpCode ? `HTTP ${opts.httpCode}` : "เชื่อมต่อไม่ได้");
+  return {
+    text: [
+      `🔴 <b>${escapeHtml(opts.carrier)} เปิดลิงก์ไม่ได้ — ยืนยันจากซิม 2 รอบ</b>`,
+      `━━━━━━━━━━━━━━━`,
+      `🆔 เคสเครือข่าย: <b>#${opts.incidentId.slice(-8).toUpperCase()}</b>`,
+      `📱 เครื่องตรวจ: ${escapeHtml(opts.agentName)}`,
+      `🏢 บริษัท: ${escapeHtml(opts.company)}`,
+      ...(opts.room ? [`💬 ห้อง: ${escapeHtml(opts.room)}`] : []),
+      `📄 <b>${escapeHtml(opts.name)}</b>`,
+      `🔗 ${escapeHtml(opts.url)}`,
+      `⚠️ สาเหตุ: ${escapeHtml(reason)}`,
+      `🕒 ตรวจพบ: ${detected}`,
+    ].join("\n"),
+    buttons: [
+      [{ text: "🔗 เปิดลิงก์", url: opts.url }],
+      [{ text: "📱 ดูผลตรวจเครือข่าย", url: `${opts.appBaseUrl}/agents?incident=${encodeURIComponent(opts.incidentId)}` }],
+    ],
+  };
+}
+
+export function networkRecoveredMessage(opts: {
+  incidentId: string;
+  carrier: string;
+  agentName: string;
+  company: string;
+  room?: string | null;
+  name: string;
+  url: string;
+  downMinutes: number;
+  slow?: boolean;
+  responseMs?: number | null;
+  appBaseUrl: string;
+}): TgMessage {
+  const responseSeconds = typeof opts.responseMs === "number"
+    ? Math.max(0, opts.responseMs / 1000).toFixed(1)
+    : null;
+  return {
+    text: [
+      opts.slow
+        ? `🟡 <b>${escapeHtml(opts.carrier)} กลับมาเปิดได้แล้ว — แต่ยังโหลดช้า</b>`
+        : `🟢 <b>${escapeHtml(opts.carrier)} กลับมาเปิดลิงก์ได้แล้ว</b>`,
+      `━━━━━━━━━━━━━━━`,
+      `🆔 เคสเครือข่าย: <b>#${opts.incidentId.slice(-8).toUpperCase()}</b>`,
+      `📱 เครื่องตรวจ: ${escapeHtml(opts.agentName)}`,
+      `🏢 บริษัท: ${escapeHtml(opts.company)}`,
+      ...(opts.room ? [`💬 ห้อง: ${escapeHtml(opts.room)}`] : []),
+      `📄 <b>${escapeHtml(opts.name)}</b>`,
+      `🔗 ${escapeHtml(opts.url)}`,
+      `⏱️ ใช้งานไม่ได้ประมาณ ${opts.downMinutes} นาที`,
+      ...(opts.slow && responseSeconds ? [`🐢 เวลาตอบกลับ: ${responseSeconds} วินาที`] : []),
+      ...(opts.slow ? ["🔎 ระบบจะตรวจติดตามต่ออัตโนมัติ"] : []),
+    ].join("\n"),
+    buttons: [[
+      { text: "🔗 เปิดลิงก์", url: opts.url },
+      { text: "📱 ดูผลตรวจ", url: `${opts.appBaseUrl}/agents?incident=${encodeURIComponent(opts.incidentId)}` },
+    ]],
+  };
+}
+
 // สรุปรายงานรอบวัน สำหรับส่ง Management/ทีม
 export function dailyReportMessage(r: DailyReport, appBaseUrl: string): TgMessage {
   const icon: Record<string, string> = { morning: "🌅", evening: "🌆", night: "🌙" };

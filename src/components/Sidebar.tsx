@@ -11,10 +11,11 @@ const baseNav = [
   { href: "/incidents", label: "เหตุการณ์", icon: "🚨" },
   { href: "/report", label: "รายงานรอบวัน", icon: "📅" },
   { href: "/kpi", label: "KPI รายคน", icon: "🏆" },
+  { href: "/agents", label: "เครื่องตรวจเครือข่าย", icon: "📱" },
 ];
 
 const allowedByRole: Record<AppRole, string[]> = {
-  ADMIN: ["/", "/companies", "/links", "/incidents", "/report", "/kpi", "/users"],
+  ADMIN: ["/", "/companies", "/links", "/incidents", "/report", "/kpi", "/agents", "/users"],
   ADMIN_LEAD: ["/", "/links", "/incidents", "/kpi"],
   ADMIN_COMPANY: ["/", "/links", "/incidents"],
   IT: ["/", "/links", "/incidents"],
