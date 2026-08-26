@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Kanit } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
-import Topbar from "@/components/Topbar";
+import AppShell from "@/components/AppShell";
 import HelpGuide from "@/components/HelpGuide";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -29,13 +28,7 @@ export default async function RootLayout({
       <body className="font-sans">
         {user ? (
           <>
-            <div className="flex min-h-screen">
-              <Sidebar role={user.role} />
-              <div className="flex-1 min-w-0 flex flex-col">
-                <Topbar user={user} />
-                <main className="flex-1 min-w-0">{children}</main>
-              </div>
-            </div>
+            <AppShell user={user}>{children}</AppShell>
             <HelpGuide />
           </>
         ) : (
