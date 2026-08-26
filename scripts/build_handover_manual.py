@@ -12,6 +12,7 @@ from docx.oxml.ns import qn
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "deliverables" / "public"
 ASSETS = OUT / "manual-assets"
+FONTS = OUT / "fonts"
 OUT.mkdir(parents=True, exist_ok=True)
 ASSETS.mkdir(parents=True, exist_ok=True)
 
@@ -23,8 +24,9 @@ LIGHT = "F5F7FC"
 GREEN = "059669"
 AMBER = "D97706"
 RED = "DC2626"
-FONT_PATH = "/System/Library/Fonts/Supplemental/Tahoma.ttf"
-FONT_BOLD_PATH = "/System/Library/Fonts/Supplemental/Tahoma Bold.ttf"
+FONT_FAMILY = "Kanit"
+FONT_PATH = str(FONTS / "Kanit-Regular.ttf")
+FONT_BOLD_PATH = str(FONTS / "Kanit-Bold.ttf")
 
 
 def font(size, bold=False):
@@ -178,12 +180,12 @@ def add_page_number(paragraph):
 
 def style_doc(doc):
     styles=doc.styles
-    normal=styles['Normal']; normal.font.name='Tahoma'; normal._element.rPr.rFonts.set(qn('w:eastAsia'),'Tahoma'); normal._element.rPr.rFonts.set(qn('w:cs'),'Tahoma'); normal.font.size=Pt(10.5); normal.font.color.rgb=RGBColor.from_string(INK)
+    normal=styles['Normal']; normal.font.name=FONT_FAMILY; normal._element.rPr.rFonts.set(qn('w:eastAsia'),FONT_FAMILY); normal._element.rPr.rFonts.set(qn('w:cs'),FONT_FAMILY); normal.font.size=Pt(10.5); normal.font.color.rgb=RGBColor.from_string(INK)
     normal.paragraph_format.space_after=Pt(5); normal.paragraph_format.line_spacing=1.08
     for name,size,color in [('Title',32,NAVY),('Heading 1',22,NAVY),('Heading 2',15,BLUE),('Heading 3',12,INK)]:
-        s=styles[name]; s.font.name='Tahoma'; s._element.rPr.rFonts.set(qn('w:eastAsia'),'Tahoma'); s._element.rPr.rFonts.set(qn('w:cs'),'Tahoma'); s.font.size=Pt(size); s.font.bold=True; s.font.color.rgb=RGBColor.from_string(color)
+        s=styles[name]; s.font.name=FONT_FAMILY; s._element.rPr.rFonts.set(qn('w:eastAsia'),FONT_FAMILY); s._element.rPr.rFonts.set(qn('w:cs'),FONT_FAMILY); s.font.size=Pt(size); s.font.bold=True; s.font.color.rgb=RGBColor.from_string(color)
     if 'Caption Thai' not in styles:
-        s=styles.add_style('Caption Thai',WD_STYLE_TYPE.PARAGRAPH); s.font.name='Tahoma'; s._element.rPr.rFonts.set(qn('w:eastAsia'),'Tahoma'); s._element.rPr.rFonts.set(qn('w:cs'),'Tahoma'); s.font.size=Pt(8.5); s.font.color.rgb=RGBColor.from_string(MUTED); s.paragraph_format.space_after=Pt(8)
+        s=styles.add_style('Caption Thai',WD_STYLE_TYPE.PARAGRAPH); s.font.name=FONT_FAMILY; s._element.rPr.rFonts.set(qn('w:eastAsia'),FONT_FAMILY); s._element.rPr.rFonts.set(qn('w:cs'),FONT_FAMILY); s.font.size=Pt(8.5); s.font.color.rgb=RGBColor.from_string(MUTED); s.paragraph_format.space_after=Pt(8)
 
 
 def force_thai_fonts(doc):
@@ -196,13 +198,13 @@ def force_thai_fonts(doc):
                     yield from paragraphs_in(cell)
     for p in paragraphs_in(doc):
         for r in p.runs:
-            r.font.name='Tahoma'
+            r.font.name=FONT_FAMILY
             rpr=r._element.get_or_add_rPr()
             rfonts=rpr.rFonts
             if rfonts is None:
                 rfonts=OxmlElement('w:rFonts'); rpr.insert(0,rfonts)
             for key in ('ascii','hAnsi','eastAsia','cs'):
-                rfonts.set(qn('w:'+key),'Tahoma')
+                rfonts.set(qn('w:'+key),FONT_FAMILY)
             lang=rpr.find(qn('w:lang'))
             if lang is None:
                 lang=OxmlElement('w:lang'); rpr.append(lang)
@@ -211,12 +213,12 @@ def force_thai_fonts(doc):
         for part in (section.header,section.footer):
             for p in paragraphs_in(part):
                 for r in p.runs:
-                    r.font.name='Tahoma'
+                    r.font.name=FONT_FAMILY
                     rpr=r._element.get_or_add_rPr(); rfonts=rpr.rFonts
                     if rfonts is None:
                         rfonts=OxmlElement('w:rFonts'); rpr.insert(0,rfonts)
                     for key in ('ascii','hAnsi','eastAsia','cs'):
-                        rfonts.set(qn('w:'+key),'Tahoma')
+                        rfonts.set(qn('w:'+key),FONT_FAMILY)
 
 
 def add_header_footer(section):
@@ -265,13 +267,13 @@ def build_doc():
     sec=doc.sections[0]; sec.header.is_linked_to_previous=False
 
     # Cover
-    p=doc.add_paragraph(); p.paragraph_format.space_before=Pt(45); p.alignment=WD_ALIGN_PARAGRAPH.CENTER
+    p=doc.add_paragraph(); p.paragraph_format.space_before=Pt(32); p.alignment=WD_ALIGN_PARAGRAPH.CENTER
     r=p.add_run("D"); r.bold=True; r.font.size=Pt(50); r.font.color.rgb=RGBColor.from_string(BLUE)
     p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER; r=p.add_run("DOMAINWATCH"); r.bold=True; r.font.size=Pt(17); r.font.color.rgb=RGBColor.from_string(NAVY)
-    p=doc.add_paragraph(); p.paragraph_format.space_before=Pt(55); p.alignment=WD_ALIGN_PARAGRAPH.CENTER
+    p=doc.add_paragraph(); p.paragraph_format.space_before=Pt(38); p.alignment=WD_ALIGN_PARAGRAPH.CENTER
     r=p.add_run("คู่มือส่งมอบ\nเครื่องตรวจเครือข่ายมือถือ TRUE"); r.bold=True; r.font.size=Pt(29); r.font.color.rgb=RGBColor.from_string(NAVY)
     p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER; r=p.add_run("ติดตั้ง • ผูกเครื่องด้วย QR • ตรวจตลอดเวลา • ย้ายเครื่องได้"); r.font.size=Pt(13); r.font.color.rgb=RGBColor.from_string(MUTED)
-    doc.add_picture(str(phone),width=Cm(7.0)); doc.paragraphs[-1].alignment=WD_ALIGN_PARAGRAPH.CENTER
+    doc.add_picture(str(phone),width=Cm(5.8)); doc.paragraphs[-1].alignment=WD_ALIGN_PARAGRAPH.CENTER
     p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER; r=p.add_run("เวอร์ชันเอกสาร 1.0  |  แอป Android 1.0.0  |  26 สิงหาคม 2569"); r.font.size=Pt(9); r.font.color.rgb=RGBColor.from_string(MUTED)
 
     add_page(doc,"เริ่มใช้งานแบบเร็ว","ใช้เวลาโดยประมาณ 10–15 นาที เมื่อโทรศัพท์มีซิม TRUE และอินเทอร์เน็ตพร้อม")
@@ -297,7 +299,7 @@ def build_doc():
         ("กลับมา 2 รอบ","ต้องปกติต่อเนื่อง 2 รอบจึงปิดเคสและแจ้งว่ากลับมาแล้ว แม้ยังช้า"),
     ])
 
-    add_page(doc,"ตั้งค่าเครื่องจากหน้าแอดมิน","เมนูนี้เห็นได้เฉพาะ ADMIN และทุก API มีการตรวจสิทธิ์ฝั่ง server")
+    add_title(doc,"ตั้งค่าเครื่องจากหน้าแอดมิน","เมนูนี้เห็นได้เฉพาะ ADMIN และทุก API มีการตรวจสิทธิ์ฝั่ง server")
     doc.add_picture(str(admin),width=Cm(17.4)); doc.paragraphs[-1].alignment=WD_ALIGN_PARAGRAPH.CENTER
     p=doc.add_paragraph("ภาพที่ 2 — ตัวอย่างหน้า /agents และ QR ตัวอย่าง (ไม่ใช่ QR ใช้งานจริง)"); p.style='Caption Thai'; p.alignment=WD_ALIGN_PARAGRAPH.CENTER
     add_steps(doc,[
@@ -319,7 +321,7 @@ def build_doc():
     add_checklist(doc,["ลบ APK ที่ดาวน์โหลดไม่ครบแล้วดาวน์โหลดใหม่","ตรวจพื้นที่ว่างอย่างน้อย 300 MB","หากมีแอปรุ่นทดสอบคนละลายเซ็น ให้ถอนรุ่นทดสอบก่อน","อย่าแชร์ APK ผ่านแอปที่บีบอัดหรือเปลี่ยนชื่อไฟล์"])
 
     add_page(doc,"ผูกเครื่องด้วย QR และเปิดตรวจตลอดเวลา","ขั้นตอนนี้ต้องให้ Mobile data ของ TRUE เปิดอยู่")
-    doc.add_picture(str(phone),height=Cm(14.0)); doc.paragraphs[-1].alignment=WD_ALIGN_PARAGRAPH.CENTER
+    doc.add_picture(str(phone),height=Cm(11.8)); doc.paragraphs[-1].alignment=WD_ALIGN_PARAGRAPH.CENTER
     add_steps(doc,[
         ("สแกน QR ด้วยกล้อง","กล้องจะเปิดลิงก์ https ของ DomainWatch แล้วส่งต่อเข้าแอปด้วย domainwatch-agent://"),
         ("เลือกเปิดด้วย DomainWatch Agent","แอปจะยืนยัน QR ผ่านเครือข่าย Cellular และเก็บ token แบบเข้ารหัสใน Android Keystore"),

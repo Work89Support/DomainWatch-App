@@ -1,6 +1,7 @@
 <?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
 <fontconfig>
+  <dir>/Users/a/Desktop/DomainWatch-App/deliverables/public/fonts</dir>
   <dir>/System/Library/Fonts</dir>
   <dir>/System/Library/Fonts/Supplemental</dir>
   <dir>/Library/Fonts</dir>
