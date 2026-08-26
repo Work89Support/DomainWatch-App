@@ -45,3 +45,6 @@ android-agent/local.properties
 android-agent/keystore.properties
 android-agent/keystore/
 deliverables/private/
+
+# Local visual QA output for generated handover manuals
+deliverables/public/rendered-manual-v*-kanit/
