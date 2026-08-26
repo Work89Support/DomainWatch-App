@@ -1,4 +1,4 @@
-export const ROLES = ["ADMIN", "ADMIN_LEAD", "ADMIN_COMPANY", "IT", "MANAGEMENT"] as const;
+export const ROLES = ["ADMIN", "ADMIN_LEAD", "ADMIN_COMPANY", "IT", "MANAGEMENT", "SITE_STAFF"] as const;
 export type AppRole = (typeof ROLES)[number];
 
 export const ROLE_LABELS: Record<AppRole, string> = {
@@ -7,6 +7,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   ADMIN_COMPANY: "แอดมินบริษัท",
   IT: "ไอที",
   MANAGEMENT: "Management",
+  SITE_STAFF: "พนักงานหน้าไซต์",
 };
 
 export function isAppRole(value: unknown): value is AppRole {
@@ -71,6 +72,10 @@ export function canRunCheck(role: AppRole): boolean {
 
 export function canManageMobileAgents(role: AppRole): boolean {
   return role === "ADMIN";
+}
+
+export function canViewMobileAgents(role: AppRole): boolean {
+  return role === "ADMIN" || role === "SITE_STAFF";
 }
 
 export function canAccessCompany(role: AppRole, assignedCompanyIds: string[], companyId: string): boolean {

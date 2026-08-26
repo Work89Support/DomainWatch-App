@@ -30,7 +30,7 @@ function since(value: string | null) {
   return `${Math.floor(seconds / 3600)} ชั่วโมงที่แล้ว`;
 }
 
-export default function AgentsClient({ initial }: { initial: Agent[] }) {
+export default function AgentsClient({ initial, canManage }: { initial: Agent[]; canManage: boolean }) {
   const router = useRouter();
   const [name, setName] = useState("เครื่องตรวจ TRUE 1");
   const [busy, setBusy] = useState(false);
@@ -121,8 +121,10 @@ export default function AgentsClient({ initial }: { initial: Agent[] }) {
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
       <PageHeader
         title="เครื่องตรวจเครือข่ายมือถือ"
-        subtitle="ตรวจลิงก์จากซิมจริง แยกจากตัวตรวจบน Vercel — แจ้งเตือนเมื่อยืนยันผิดปกติ 2 รอบ"
-        action={initial.some((agent) => agent.networkIncidents.length > 0 || agent.urlStatuses.some((row) => row.status === "DOWN")) ? (
+        subtitle={canManage
+          ? "ตรวจลิงก์จากซิมจริง แยกจากตัวตรวจบน Vercel — แจ้งเตือนเมื่อยืนยันผิดปกติ 2 รอบ"
+          : "ดูสถานะเครื่องตรวจและดาวน์โหลดแอปสำหรับติดตั้ง — บัญชีนี้เป็นแบบอ่านอย่างเดียว"}
+        action={canManage && initial.some((agent) => agent.networkIncidents.length > 0 || agent.urlStatuses.some((row) => row.status === "DOWN")) ? (
           <button className="btn-danger" disabled={busy} onClick={clearOldProblems}>ล้างปัญหาจากซิมเดิมทั้งหมด</button>
         ) : undefined}
       />
@@ -132,7 +134,7 @@ export default function AgentsClient({ initial }: { initial: Agent[] }) {
         <a className="btn-primary whitespace-nowrap" href="/downloads/DomainWatch-Agent-v1.0.2.apk" download>⬇️ ดาวน์โหลด APK</a>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+      {canManage && <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
         <div className="card p-5 lg:col-span-2">
           <div className="text-sm font-semibold text-slate-700">เพิ่มเครื่องตรวจ TRUE</div>
           <p className="mt-1 text-xs text-slate-400">สร้าง QR ใช้ครั้งเดียว อายุ 15 นาที แล้วสแกนด้วยกล้องโทรศัพท์</p>
@@ -147,10 +149,12 @@ export default function AgentsClient({ initial }: { initial: Agent[] }) {
           <div className="text-lg font-semibold">กลับมา 2 รอบ → ปิดเคส</div>
           <p className="mt-2 text-xs text-brand-200">เว็บช้าจะแสดงสีเหลืองและไม่ถูกนับเป็นเว็บล่ม</p>
         </div>
-      </div>
+      </div>}
 
       {initial.length === 0 ? (
-        <div className="card p-10 text-center text-slate-400">ยังไม่มีเครื่องตรวจ กรอกชื่อด้านบนแล้วสร้าง QR แรกได้เลย</div>
+        <div className="card p-10 text-center text-slate-400">
+          {canManage ? "ยังไม่มีเครื่องตรวจ กรอกชื่อด้านบนแล้วสร้าง QR แรกได้เลย" : "ยังไม่มีเครื่องตรวจในระบบ กรุณาติดต่อแอดมิน"}
+        </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="space-y-3">
@@ -174,7 +178,7 @@ export default function AgentsClient({ initial }: { initial: Agent[] }) {
               <div className="card p-5">
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div>
-                    {renamingId === selected.id ? (
+                    {canManage && renamingId === selected.id ? (
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                         <input
                           className="input min-w-[240px]"
@@ -195,17 +199,17 @@ export default function AgentsClient({ initial }: { initial: Agent[] }) {
                     ) : (
                       <div className="flex items-center gap-2">
                         <h2 className="text-lg font-semibold text-slate-800">{selected.name}</h2>
-                        <button className="text-xs font-medium text-brand-600 hover:underline" onClick={() => beginRename(selected)}>✏️ เปลี่ยนชื่อ</button>
+                        {canManage && <button className="text-xs font-medium text-brand-600 hover:underline" onClick={() => beginRename(selected)}>✏️ เปลี่ยนชื่อ</button>}
                       </div>
                     )}
                     <p className="text-xs text-slate-400 mt-1">{selected.deviceLabel || "ยังไม่มีข้อมูลรุ่นเครื่อง"} · แอป {selected.appVersion || "-"}</p>
                     <p className="text-xs text-slate-400 mt-1">เครือข่ายที่รายงาน: {selected.reportedCarrier || selected.carrier} · {selected.networkType || "รอข้อมูล"}</p>
                   </div>
-                  <div className="flex gap-2">
+                  {canManage && <div className="flex gap-2">
                     {selected.isActive && <button className="btn-ghost" disabled={busy} onClick={() => newQr(selected)}>สร้าง QR / ย้ายเครื่อง</button>}
                     <button className={selected.isActive ? "btn-danger" : "btn-primary"} onClick={() => toggle(selected)}>{selected.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}</button>
                     <button className="btn-ghost text-red-600" disabled={busy} onClick={() => deleteAgent(selected)}>🗑️ ลบเครื่อง</button>
-                  </div>
+                  </div>}
                 </div>
                 <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                   <div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">ตรวจล่าสุด</div><div className="font-medium text-slate-700 mt-1">{since(selected.lastSeenAt)}</div></div>

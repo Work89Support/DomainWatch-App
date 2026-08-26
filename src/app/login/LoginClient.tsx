@@ -19,9 +19,10 @@ export default function LoginClient() {
     });
     setBusy(false);
     if (res.ok) {
+      const data = await res.json().catch(() => ({}));
       // โหลด RootLayout ใหม่จาก server หลัง cookie ถูกตั้งแล้ว
       // ป้องกัน Layout ก่อนล็อกอินค้างและแสดงเมนูผิดสถานะ
-      window.location.replace("/");
+      window.location.replace(data.redirectTo || "/");
     } else {
       const e = await res.json().catch(() => ({}));
       setErr(e.error || "เข้าสู่ระบบไม่สำเร็จ");

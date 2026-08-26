@@ -29,7 +29,7 @@ export default async function RootLayout({
         {user ? (
           <>
             <AppShell user={user}>{children}</AppShell>
-            <HelpGuide />
+            {user.role !== "SITE_STAFF" && <HelpGuide />}
           </>
         ) : (
           <main>{children}</main>

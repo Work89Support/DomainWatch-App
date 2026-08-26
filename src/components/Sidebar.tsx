@@ -20,6 +20,7 @@ const allowedByRole: Record<AppRole, string[]> = {
   ADMIN_COMPANY: ["/", "/links", "/incidents"],
   IT: ["/", "/links", "/incidents"],
   MANAGEMENT: ["/", "/report", "/kpi"],
+  SITE_STAFF: ["/agents"],
 };
 
 export default function Sidebar({

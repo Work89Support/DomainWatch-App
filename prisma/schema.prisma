@@ -273,6 +273,7 @@ enum Role {
   ADMIN_COMPANY
   IT
   MANAGEMENT
+  SITE_STAFF
 }
 
 /// บริษัทที่มอบหมายให้ ADMIN_COMPANY — บทบาทอื่นไม่ใช้ขอบเขตนี้

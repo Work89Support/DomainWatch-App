@@ -10,6 +10,7 @@ import ItBackupCard from "@/components/ItBackupCard";
 import AdminQueueCard from "@/components/AdminQueueCard";
 import Link from "next/link";
 import { canActAsAdmin, canEditBackup, canRunCheck, canViewKpi } from "@/lib/permissions";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export default async function DashboardPage({
   searchParams: { company?: string };
 }) {
   const me = await requireUser();
+  if (me.role === "SITE_STAFF") redirect("/agents");
   const requestedCompany = searchParams.company || undefined;
   const companyId = me.role === "ADMIN_COMPANY"
     ? (requestedCompany && me.companyIds.includes(requestedCompany) ? requestedCompany : undefined)

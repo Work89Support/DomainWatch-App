@@ -10,6 +10,7 @@ import {
   canManageCompanies,
   canManageUsers,
   canManageMobileAgents,
+  canViewMobileAgents,
   canRunCheck,
   canViewKpi,
   canViewReport,
@@ -62,4 +63,14 @@ test("MANAGEMENT is read-only for dashboard, report and KPI", () => {
   assert.equal(canActAsIt("MANAGEMENT"), false);
   assert.equal(canRunCheck("MANAGEMENT"), false);
   assert.equal(canManageMobileAgents("MANAGEMENT"), false);
+});
+
+test("SITE_STAFF can only view the mobile agent page", () => {
+  assert.equal(canViewMobileAgents("SITE_STAFF"), true);
+  assert.equal(canManageMobileAgents("SITE_STAFF"), false);
+  assert.equal(canViewReport("SITE_STAFF"), false);
+  assert.equal(canViewKpi("SITE_STAFF"), false);
+  assert.equal(canEditLinks("SITE_STAFF"), false);
+  assert.equal(canEditBackup("SITE_STAFF"), false);
+  assert.equal(canRunCheck("SITE_STAFF"), false);
 });
