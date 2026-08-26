@@ -33,8 +33,28 @@ type Incident = {
 
 type Company = { id: string; name: string };
 
+type MobileIncident = {
+  id: string;
+  status: string;
+  detectedAt: string;
+  resolvedAt: string | null;
+  httpCode: number | null;
+  responseMs: number | null;
+  error: string | null;
+  agent: {
+    id: string;
+    name: string;
+    carrier: string;
+    reportedCarrier: string | null;
+    deviceLabel: string | null;
+    appVersion: string | null;
+  };
+  link: Incident["link"];
+};
+
 export default function IncidentsClient({
   initial,
+  mobileInitial,
   companies,
   currentCompany,
   initialIncidentId,
@@ -43,6 +63,7 @@ export default function IncidentsClient({
   showKpi,
 }: {
   initial: Incident[];
+  mobileInitial: MobileIncident[];
   companies: Company[];
   currentCompany?: string;
   initialIncidentId?: string;
@@ -57,12 +78,19 @@ export default function IncidentsClient({
   const [selected, setSelected] = useState<Incident | null>(
     initial.find((incident) => incident.id === initialIncidentId) || null
   );
+  const [selectedMobile, setSelectedMobile] = useState<MobileIncident | null>(
+    mobileInitial.find((incident) => incident.id === initialIncidentId) || null
+  );
 
-  const openCount = initial.filter((incident) => incident.status !== "CLOSED").length;
+  const openCount = initial.filter((incident) => incident.status !== "CLOSED").length
+    + mobileInitial.filter((incident) => incident.status !== "CLOSED").length;
 
   const list = filter === "open"
     ? initial.filter((incident) => incident.status !== "CLOSED")
     : initial;
+  const mobileList = filter === "open"
+    ? mobileInitial.filter((incident) => incident.status !== "CLOSED")
+    : mobileInitial;
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
@@ -81,7 +109,7 @@ export default function IncidentsClient({
                 >
                   {f === "open"
                     ? `เปิดค้าง (${openCount})`
-                    : `ประวัติทั้งหมด (${initial.length})`}
+                    : `ประวัติทั้งหมด (${initial.length + mobileInitial.length})`}
                 </button>
               ))}
             </div>
@@ -89,13 +117,52 @@ export default function IncidentsClient({
         }
       />
 
+      {mobileList.length > 0 && (
+        <div className="mb-6">
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="font-semibold text-slate-800">📱 ปัญหาที่ตรวจจากซิมมือถือ</h2>
+            <span className="badge bg-red-50 text-red-600">{mobileList.length} เคส</span>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {mobileList.map((incident) => (
+              <div key={incident.id} className="card border-red-100 p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="badge bg-brand-50 text-brand-700">{incident.agent.reportedCarrier || incident.agent.carrier}</span>
+                      <span className="font-semibold text-slate-800">{incident.link.name}</span>
+                    </div>
+                    <div className="mt-1 text-xs font-medium text-slate-500">เคส #{incident.id.slice(-8).toUpperCase()}</div>
+                    <a href={incident.link.url} target="_blank" rel="noreferrer" className="text-xs text-brand-600 hover:underline break-all">
+                      {incident.link.url} ↗
+                    </a>
+                    <div className="mt-2 text-xs text-slate-500">
+                      📱 {incident.agent.name} · 🏢 {incident.link.company.name}
+                      {incident.link.lineGroup ? ` · 💬 ${incident.link.lineGroup.name}` : ""}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      ตรวจพบ {fmtDateTime(incident.detectedAt)}
+                      {incident.httpCode ? ` · HTTP ${incident.httpCode}` : ""}
+                      {incident.responseMs ? ` · ${(incident.responseMs / 1000).toFixed(1)} วินาที` : ""}
+                    </div>
+                    {incident.error && <div className="mt-2 rounded-lg bg-red-50 p-2 text-xs text-red-700">สาเหตุ: {incident.error}</div>}
+                  </div>
+                  <IncidentStatusBadge status={incident.status} />
+                </div>
+                <button className="btn-ghost mt-4 text-xs py-1.5" onClick={() => setSelectedMobile(incident)}>ดูรายละเอียดจากเครื่องตรวจ →</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {list.length === 0 && (
+        {list.length === 0 && mobileList.length === 0 && (
           <div className="card p-10 text-center text-slate-400 lg:col-span-2">
             <div>ไม่มีเหตุการณ์เปิดค้าง</div>
-            {filter === "open" && initial.length > 0 && (
+            {filter === "open" && initial.length + mobileInitial.length > 0 && (
               <button className="btn-ghost text-xs mt-3" onClick={() => setFilter("all")}>
-                ดูประวัติที่ปิดแล้ว {initial.length} เคส
+                ดูประวัติที่ปิดแล้ว {initial.length + mobileInitial.length} เคส
               </button>
             )}
           </div>
@@ -161,6 +228,46 @@ export default function IncidentsClient({
           canIt={canIt}
         />
       )}
+      {selectedMobile && <MobileIncidentPanel incident={selectedMobile} onClose={() => setSelectedMobile(null)} />}
+    </div>
+  );
+}
+
+function MobileIncidentPanel({ incident, onClose }: { incident: MobileIncident; onClose: () => void }) {
+  const carrier = incident.agent.reportedCarrier || incident.agent.carrier;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+      <div className="card w-full max-w-xl p-6 max-h-[92vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold text-brand-700">📱 ตรวจจากซิม {carrier}</div>
+            <h3 className="mt-1 text-lg font-semibold text-slate-800">{incident.link.name}</h3>
+            <div className="text-xs text-slate-400">เคส #{incident.id.slice(-8).toUpperCase()}</div>
+          </div>
+          <IncidentStatusBadge status={incident.status} />
+        </div>
+        <div className="mt-5 grid gap-3 text-sm">
+          <Detail label="เครื่องตรวจ" value={`${incident.agent.name} · ${incident.agent.deviceLabel || "ไม่ระบุรุ่น"} · แอป ${incident.agent.appVersion || "-"}`} />
+          <Detail label="บริษัท / ห้อง" value={`${incident.link.company.name}${incident.link.lineGroup ? ` · ${incident.link.lineGroup.name}` : ""}`} />
+          <Detail label="ตรวจพบ" value={fmtDateTime(incident.detectedAt)} />
+          <Detail label="ผลตอบกลับ" value={`HTTP ${incident.httpCode ?? "-"} · ${incident.responseMs ? `${(incident.responseMs / 1000).toFixed(1)} วินาที` : "ไม่ทราบเวลา"}`} />
+          <Detail label="สาเหตุจากเครื่อง" value={incident.error || "ไม่ระบุ"} danger />
+          <div>
+            <div className="text-xs text-slate-400">ลิงก์ที่ตรวจ</div>
+            <a href={incident.link.url} target="_blank" rel="noreferrer" className="text-brand-600 break-all hover:underline">{incident.link.url} ↗</a>
+          </div>
+        </div>
+        <button className="btn-ghost mt-6 w-full" onClick={onClose}>ปิดหน้าต่าง</button>
+      </div>
+    </div>
+  );
+}
+
+function Detail({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
+  return (
+    <div className={`rounded-xl p-3 ${danger ? "bg-red-50" : "bg-slate-50"}`}>
+      <div className="text-xs text-slate-400">{label}</div>
+      <div className={`mt-1 break-words ${danger ? "text-red-700" : "text-slate-700"}`}>{value}</div>
     </div>
   );
 }

@@ -21,17 +21,35 @@ export default async function IncidentsPage({
     ? (companyId ? { companyId } : { companyId: { in: me.companyIds } })
     : (companyId ? { companyId } : {});
   const include = { link: { include: { company: true, lineGroup: true } } } as const;
-  const [incidents, requestedIncident, companies] = await Promise.all([
+  const [incidents, mobileIncidents, requestedIncident, requestedMobileIncident, companies] = await Promise.all([
     prisma.incident.findMany({
       where: { link: companyWhere },
       orderBy: { detectedAt: "desc" },
       take: 200,
       include,
     }),
+    prisma.networkIncident.findMany({
+      where: { link: companyWhere },
+      orderBy: { detectedAt: "desc" },
+      take: 200,
+      include: {
+        agent: { select: { id: true, name: true, carrier: true, reportedCarrier: true, deviceLabel: true, appVersion: true } },
+        link: { include: { company: true, lineGroup: true } },
+      },
+    }),
     searchParams.incident
       ? prisma.incident.findFirst({
           where: { id: searchParams.incident, link: companyWhere },
           include,
+        })
+      : Promise.resolve(null),
+    searchParams.incident
+      ? prisma.networkIncident.findFirst({
+          where: { id: searchParams.incident, link: companyWhere },
+          include: {
+            agent: { select: { id: true, name: true, carrier: true, reportedCarrier: true, deviceLabel: true, appVersion: true } },
+            link: { include: { company: true, lineGroup: true } },
+          },
         })
       : Promise.resolve(null),
     prisma.company.findMany({
@@ -42,9 +60,13 @@ export default async function IncidentsPage({
   const visibleIncidents = requestedIncident && !incidents.some((incident) => incident.id === requestedIncident.id)
     ? [requestedIncident, ...incidents]
     : incidents;
+  const visibleMobileIncidents = requestedMobileIncident && !mobileIncidents.some((incident) => incident.id === requestedMobileIncident.id)
+    ? [requestedMobileIncident, ...mobileIncidents]
+    : mobileIncidents;
   return (
     <IncidentsClient
       initial={JSON.parse(JSON.stringify(visibleIncidents))}
+      mobileInitial={JSON.parse(JSON.stringify(visibleMobileIncidents))}
       companies={companies}
       currentCompany={companyId}
       initialIncidentId={searchParams.incident}

@@ -74,6 +74,28 @@ export default function AgentsClient({ initial }: { initial: Agent[] }) {
     router.refresh();
   }
 
+  async function clearOldProblems() {
+    if (!confirm("ยืนยันล้างปัญหาจากซิมเดิมทั้งหมด?\n\nระบบจะลบเคสเครือข่ายเดิมและเริ่มนับผลใหม่จากรอบถัดไป โดยจะไม่ส่ง Telegram")) return;
+    setBusy(true);
+    const response = await fetch("/api/mobile-agents/cleanup", { method: "POST" });
+    const data = await response.json().catch(() => ({}));
+    setBusy(false);
+    if (!response.ok) return alert(data.error || "ล้างปัญหาเดิมไม่สำเร็จ");
+    alert(`ล้างเรียบร้อย ${data.removedIncidents || 0} เคส ระบบจะเริ่มอ่านผลใหม่ในรอบถัดไป`);
+    router.refresh();
+  }
+
+  async function deleteAgent(agent: Agent) {
+    if (!confirm(`ลบเครื่อง “${agent.name}” ออกจากระบบถาวร?\n\nข้อมูลผลตรวจและประวัติจากเครื่องนี้จะถูกลบทั้งหมด โทรศัพท์เดิมจะเชื่อมต่อไม่ได้`)) return;
+    setBusy(true);
+    const response = await fetch(`/api/mobile-agents/${agent.id}`, { method: "DELETE" });
+    const data = await response.json().catch(() => ({}));
+    setBusy(false);
+    if (!response.ok) return alert(data.error || "ลบเครื่องไม่สำเร็จ");
+    setSelectedId(initial.find((item) => item.id !== agent.id)?.id || "");
+    router.refresh();
+  }
+
   function beginRename(agent: Agent) {
     setRenamingId(agent.id);
     setRenameValue(agent.name);
@@ -97,7 +119,13 @@ export default function AgentsClient({ initial }: { initial: Agent[] }) {
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
-      <PageHeader title="เครื่องตรวจเครือข่ายมือถือ" subtitle="ตรวจลิงก์จากซิมจริง แยกจากตัวตรวจบน Vercel — แจ้งเตือนเมื่อยืนยันผิดปกติ 2 รอบ" />
+      <PageHeader
+        title="เครื่องตรวจเครือข่ายมือถือ"
+        subtitle="ตรวจลิงก์จากซิมจริง แยกจากตัวตรวจบน Vercel — แจ้งเตือนเมื่อยืนยันผิดปกติ 2 รอบ"
+        action={initial.some((agent) => agent.networkIncidents.length > 0 || agent.urlStatuses.some((row) => row.status === "DOWN")) ? (
+          <button className="btn-danger" disabled={busy} onClick={clearOldProblems}>ล้างปัญหาจากซิมเดิมทั้งหมด</button>
+        ) : undefined}
+      />
 
       <div className="card mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border-brand-100 bg-brand-50/40">
         <div><div className="font-semibold text-slate-700">1) ติดตั้งแอปบนโทรศัพท์ก่อน</div><div className="mt-1 text-xs text-slate-500">รองรับ Android 8 ขึ้นไป · รุ่น 1.0.2 · ป้องกัน timeout ถูกแจ้งเป็นเว็บล่ม</div></div>
@@ -176,6 +204,7 @@ export default function AgentsClient({ initial }: { initial: Agent[] }) {
                   <div className="flex gap-2">
                     {selected.isActive && <button className="btn-ghost" disabled={busy} onClick={() => newQr(selected)}>สร้าง QR / ย้ายเครื่อง</button>}
                     <button className={selected.isActive ? "btn-danger" : "btn-primary"} onClick={() => toggle(selected)}>{selected.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}</button>
+                    <button className="btn-ghost text-red-600" disabled={busy} onClick={() => deleteAgent(selected)}>🗑️ ลบเครื่อง</button>
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
