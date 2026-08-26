@@ -47,7 +47,7 @@ export default async function ReportPage({ searchParams }: { searchParams: { dat
           {r.allClear
             ? (r.isToday ? "✅ วันนี้เรียบร้อย — ปิดครบทุกเคส และทุกลิงก์ปกติ" : "✅ วันนั้นเรียบร้อย — ปิดครบทุกเคส")
             : (r.isToday
-              ? `⚠️ ค้างสะสม ${r.currentOpenIncidents} เคส / ใช้ไม่ได้ ${r.downNowUnique} URLจริง (${r.downNow} รายการตามห้อง)`
+              ? `⚠️ ค้างสะสม ${r.currentOpenIncidents} เคส / ใช้ไม่ได้ ${r.downNowUnique} URLจริง (${r.downNow} รายการตามห้อง) / จากซิมค้าง ${r.mobileTotals.openIncidents} เคส`
               : `⚠️ วันนั้นมี ${r.totalOpen} เคสที่ปิดไม่ครบ`)}
         </div>
       </div>
@@ -92,6 +92,74 @@ export default async function ReportPage({ searchParams }: { searchParams: { dat
           </div>
         </div>
       )}
+
+      {/* ผลตรวจจากเครื่องซิมจริง */}
+      <div className="card p-5 mb-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800">ผลตรวจจากซิมมือถือ แยกตามเครื่อง / ค่าย</h2>
+            <p className="mt-1 text-xs text-slate-400">แต่ละเครื่องตรวจผ่านเครือข่ายของตัวเอง จึงแสดงผลแยกกันแม้ตรวจ URL เดียวกัน</p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className="badge bg-slate-100 text-slate-600">ทั้งหมด {r.mobileTotals.agents} เครื่อง</span>
+            <span className="badge bg-emerald-50 text-emerald-700">ออนไลน์ {r.mobileTotals.online}</span>
+            <span className={`badge ${r.mobileTotals.openIncidents ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>เคสค้าง {r.mobileTotals.openIncidents}</span>
+          </div>
+        </div>
+
+        {r.mobileAgents.length === 0 ? (
+          <p className="py-7 text-center text-sm text-slate-400">ยังไม่มีเครื่องตรวจเครือข่ายมือถือ</p>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+            {r.mobileAgents.map((agent) => (
+              <div key={agent.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="badge bg-brand-50 text-brand-700">{agent.reportedCarrier || agent.carrier}</span>
+                      <span className="font-semibold text-slate-800">{agent.name}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      {agent.deviceLabel || "ยังไม่มีข้อมูลรุ่นเครื่อง"} · แอป {agent.appVersion || "-"}
+                    </div>
+                  </div>
+                  <span className={`badge ${!agent.isActive ? "bg-slate-100 text-slate-500" : agent.online ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                    {!agent.isActive ? "ปิดใช้งาน" : agent.online ? "ออนไลน์" : "ขาดการเชื่อมต่อ"}
+                  </span>
+                </div>
+                <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs">
+                  <MobileMetric label="ใช้ได้" value={agent.up} tone="green" />
+                  <MobileMetric label="โหลดช้า" value={agent.slow} tone="amber" />
+                  <MobileMetric label="ใช้ไม่ได้" value={agent.down} tone="red" />
+                  <MobileMetric label="เคสค้าง" value={agent.openIncidents} tone={agent.openIncidents ? "red" : "slate"} />
+                </div>
+                <div className="mt-3 flex flex-wrap justify-between gap-2 text-xs text-slate-500">
+                  <span>รอบวัน: พบ {agent.newIncidents} · กลับมา {agent.resolvedIncidents}</span>
+                  <span>ล่าสุด: {agent.lastSeenAt ? fmtDateTime(agent.lastSeenAt) : "ยังไม่เคยเชื่อมต่อ"}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {r.mobileOpenDetails.length > 0 && (
+          <div className="mt-5 border-t border-slate-100 pt-4">
+            <div className="font-semibold text-red-700">ปัญหาจากซิมที่ยังค้าง ({r.mobileOpenDetails.length})</div>
+            <div className="mt-3 space-y-2">
+              {r.mobileOpenDetails.map((incident) => (
+                <div key={incident.id} className="rounded-xl border border-red-100 bg-red-50/40 p-3 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="badge bg-red-100 text-red-700">{incident.carrier}</span>
+                    <span className="font-medium text-slate-800">{incident.agentName}</span>
+                    <span className="text-slate-500">· {incident.name} · {incident.company}{incident.room ? ` · ห้อง ${incident.room}` : ""}</span>
+                  </div>
+                  <div className="mt-1 text-xs text-red-600">เคส #{incident.id.slice(-8).toUpperCase()} · ค้างตั้งแต่ {fmtDateTime(incident.detectedAt)} · {fmtMinutes(incident.openMinutes)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* 3 รอบ */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -198,7 +266,7 @@ function ExportReportView({ report: r }: { report: DailyReport }) {
         <div className={`text-lg font-semibold ${r.allClear ? "text-emerald-700" : "text-amber-800"}`}>
           {r.allClear
             ? "✅ สถานะเรียบร้อย ไม่มีเคสค้าง"
-            : `⚠️ ค้างสะสม ${r.currentOpenIncidents} เคส · ใช้ไม่ได้ ${r.downNowUnique} URLจริง (${r.downNow} รายการตามห้อง)`}
+            : `⚠️ ค้างสะสม ${r.currentOpenIncidents} เคส · ใช้ไม่ได้ ${r.downNowUnique} URLจริง (${r.downNow} รายการตามห้อง) · จากซิมค้าง ${r.mobileTotals.openIncidents} เคส`}
         </div>
       </div>
 
@@ -228,6 +296,46 @@ function ExportReportView({ report: r }: { report: DailyReport }) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {r.mobileAgents.length > 0 && (
+        <div className="mt-5 rounded-2xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-lg font-semibold">ผลตรวจจากซิมมือถือ แยกตามเครื่อง / ค่าย</div>
+            <div className="text-sm text-slate-500">ออนไลน์ {r.mobileTotals.online}/{r.mobileTotals.agents} · เคสค้าง {r.mobileTotals.openIncidents}</div>
+          </div>
+          <table className="mt-3 w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-slate-500">
+                <th className="py-2 pr-3 font-medium">ค่าย / เครื่อง</th>
+                <th className="py-2 pr-3 font-medium">สถานะเครื่อง</th>
+                <th className="py-2 pr-3 font-medium">ใช้ได้</th>
+                <th className="py-2 pr-3 font-medium">ช้า</th>
+                <th className="py-2 pr-3 font-medium">ใช้ไม่ได้</th>
+                <th className="py-2 font-medium">เคสค้าง</th>
+              </tr>
+            </thead>
+            <tbody>
+              {r.mobileAgents.map((agent) => (
+                <tr key={agent.id} className="border-b border-slate-100 last:border-0">
+                  <td className="py-2.5 pr-3"><b>{agent.reportedCarrier || agent.carrier}</b> · {agent.name}</td>
+                  <td className="py-2.5 pr-3">{!agent.isActive ? "ปิดใช้งาน" : agent.online ? "ออนไลน์" : "ขาดการเชื่อมต่อ"}</td>
+                  <td className="py-2.5 pr-3 text-emerald-700">{agent.up}</td>
+                  <td className="py-2.5 pr-3 text-amber-700">{agent.slow}</td>
+                  <td className="py-2.5 pr-3 text-red-700">{agent.down}</td>
+                  <td className="py-2.5 font-medium text-red-700">{agent.openIncidents}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {r.mobileOpenDetails.length > 0 && (
+            <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800">
+              <b>ปัญหาจากซิมที่ยังค้าง:</b>{" "}
+              {r.mobileOpenDetails.slice(0, 8).map((item) => `${item.carrier}/${item.agentName} — ${item.name} (${item.company})`).join(" · ")}
+              {r.mobileOpenDetails.length > 8 ? ` · และอีก ${r.mobileOpenDetails.length - 8} รายการ` : ""}
+            </div>
+          )}
         </div>
       )}
 
@@ -286,6 +394,21 @@ function ExportSmall({ label, value, tone = "slate" }: { label: string; value: n
     <div className="rounded-lg bg-slate-50 px-2 py-3">
       <div className={`text-xl font-bold ${color}`}>{value}</div>
       <div className="text-[11px] text-slate-500">{label}</div>
+    </div>
+  );
+}
+
+function MobileMetric({ label, value, tone }: { label: string; value: number; tone: "green" | "amber" | "red" | "slate" }) {
+  const colors = {
+    green: "bg-emerald-50 text-emerald-700",
+    amber: "bg-amber-50 text-amber-700",
+    red: "bg-red-50 text-red-700",
+    slate: "bg-slate-100 text-slate-600",
+  };
+  return (
+    <div className={`rounded-lg px-2 py-2 ${colors[tone]}`}>
+      <div className="text-base font-semibold">{value}</div>
+      <div className="text-[11px]">{label}</div>
     </div>
   );
 }

@@ -36,6 +36,8 @@ export default function AgentsClient({ initial }: { initial: Agent[] }) {
   const [busy, setBusy] = useState(false);
   const [qr, setQr] = useState<{ agentName: string; enrollment: Enrollment } | null>(null);
   const [selectedId, setSelectedId] = useState(initial[0]?.id || "");
+  const [renamingId, setRenamingId] = useState("");
+  const [renameValue, setRenameValue] = useState("");
   const selected = useMemo(() => initial.find((item) => item.id === selectedId) || initial[0], [initial, selectedId]);
 
   async function createAgent() {
@@ -69,6 +71,27 @@ export default function AgentsClient({ initial }: { initial: Agent[] }) {
       body: JSON.stringify({ isActive: !agent.isActive }),
     });
     if (!response.ok) return alert("เปลี่ยนสถานะไม่สำเร็จ");
+    router.refresh();
+  }
+
+  function beginRename(agent: Agent) {
+    setRenamingId(agent.id);
+    setRenameValue(agent.name);
+  }
+
+  async function saveRename(agent: Agent) {
+    const nextName = renameValue.trim();
+    if (!nextName) return alert("กรุณาระบุชื่อเครื่อง");
+    setBusy(true);
+    const response = await fetch(`/api/mobile-agents/${agent.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: nextName }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setBusy(false);
+    if (!response.ok) return alert(data.error || "เปลี่ยนชื่อเครื่องไม่สำเร็จ");
+    setRenamingId("");
     router.refresh();
   }
 
@@ -123,7 +146,30 @@ export default function AgentsClient({ initial }: { initial: Agent[] }) {
               <div className="card p-5">
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div>
-                    <h2 className="text-lg font-semibold text-slate-800">{selected.name}</h2>
+                    {renamingId === selected.id ? (
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <input
+                          className="input min-w-[240px]"
+                          maxLength={80}
+                          autoFocus
+                          value={renameValue}
+                          onChange={(event) => setRenameValue(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") saveRename(selected);
+                            if (event.key === "Escape") setRenamingId("");
+                          }}
+                        />
+                        <div className="flex gap-2">
+                          <button className="btn-primary" disabled={busy} onClick={() => saveRename(selected)}>บันทึกชื่อ</button>
+                          <button className="btn-ghost" disabled={busy} onClick={() => setRenamingId("")}>ยกเลิก</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-semibold text-slate-800">{selected.name}</h2>
+                        <button className="text-xs font-medium text-brand-600 hover:underline" onClick={() => beginRename(selected)}>✏️ เปลี่ยนชื่อ</button>
+                      </div>
+                    )}
                     <p className="text-xs text-slate-400 mt-1">{selected.deviceLabel || "ยังไม่มีข้อมูลรุ่นเครื่อง"} · แอป {selected.appVersion || "-"}</p>
                     <p className="text-xs text-slate-400 mt-1">เครือข่ายที่รายงาน: {selected.reportedCarrier || selected.carrier} · {selected.networkType || "รอข้อมูล"}</p>
                   </div>

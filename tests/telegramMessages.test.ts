@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { downAlertMessage, networkDownMessage, networkRecoveredMessage, recoveredMessage } from "../src/lib/telegram";
+import { downAlertMessage, mobileAgentReportLines, networkDownMessage, networkRecoveredMessage, recoveredMessage } from "../src/lib/telegram";
 
 const incidentId = "cmtest00000000abcdefgh";
 
@@ -105,4 +105,46 @@ test("mobile slow recovery is clearly reported", () => {
   });
   assert.match(message.text, /กลับมาเปิดได้แล้ว — แต่ยังโหลดช้า/);
   assert.match(message.text, /7\.2 วินาที/);
+});
+
+test("daily mobile summary separates carrier, agent and open incident", () => {
+  const lines = mobileAgentReportLines({
+    mobileAgents: [{
+      id: "agent-1",
+      name: "เครื่องห้อง IT",
+      carrier: "TRUE",
+      reportedCarrier: "TRUE-H",
+      deviceLabel: "Samsung",
+      appVersion: "1.0.1",
+      isActive: true,
+      online: true,
+      lastSeenAt: "2026-08-26T12:00:00.000Z",
+      lastCheckedAt: "2026-08-26T12:00:00.000Z",
+      totalUrls: 10,
+      up: 7,
+      slow: 2,
+      down: 1,
+      unknown: 0,
+      newIncidents: 1,
+      resolvedIncidents: 0,
+      openIncidents: 1,
+    }],
+    mobileOpenDetails: [{
+      id: incidentId,
+      agentId: "agent-1",
+      agentName: "เครื่องห้อง IT",
+      carrier: "TRUE-H",
+      name: "Login",
+      company: "Example Co",
+      room: "Room A",
+      url: "https://example.com/login",
+      detectedAt: "2026-08-26T12:00:00.000Z",
+      openMinutes: 15,
+    }],
+  }).join("\n");
+
+  assert.match(lines, /TRUE-H.*เครื่องห้อง IT/);
+  assert.match(lines, /ใช้ได้ 7 · ช้า 2 · ใช้ไม่ได้ 1 · เคสค้าง 1/);
+  assert.match(lines, /#ABCDEFGH/);
+  assert.match(lines, /Example Co.*Room A/);
 });

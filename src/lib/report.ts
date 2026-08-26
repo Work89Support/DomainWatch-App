@@ -38,6 +38,47 @@ export type DailyReport = {
     carriedOver: boolean;
   }[];
   oaIssues: number;
+  mobileTotals: {
+    agents: number;
+    online: number;
+    up: number;
+    slow: number;
+    down: number;
+    unknown: number;
+    openIncidents: number;
+  };
+  mobileAgents: {
+    id: string;
+    name: string;
+    carrier: string;
+    reportedCarrier: string | null;
+    deviceLabel: string | null;
+    appVersion: string | null;
+    isActive: boolean;
+    online: boolean;
+    lastSeenAt: string | null;
+    lastCheckedAt: string | null;
+    totalUrls: number;
+    up: number;
+    slow: number;
+    down: number;
+    unknown: number;
+    newIncidents: number;
+    resolvedIncidents: number;
+    openIncidents: number;
+  }[];
+  mobileOpenDetails: {
+    id: string;
+    agentId: string;
+    agentName: string;
+    carrier: string;
+    name: string;
+    company: string;
+    room: string | null;
+    url: string;
+    detectedAt: string;
+    openMinutes: number;
+  }[];
   totalIncidents: number;
   totalResolved: number;
   totalOpen: number;
@@ -76,7 +117,7 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
   ];
   const dayEnd = new Date(dayStart.getTime() + 24 * H);
 
-  const [incs, activeLinks, upNow, slowNow, downLinksNow, openIncidentsNow, oaIssues] = await Promise.all([
+  const [incs, activeLinks, upNow, slowNow, downLinksNow, openIncidentsNow, oaIssues, mobileAgentRows] = await Promise.all([
     prisma.incident.findMany({
       where: { detectedAt: { gte: dayStart, lt: dayEnd } },
       include: { link: { include: { company: true } } },
@@ -103,6 +144,29 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
         oaStatus: { notIn: ["OK", "UNKNOWN"] },
       },
     }),
+    prisma.mobileAgent.findMany({
+      orderBy: [{ carrier: "asc" }, { name: "asc" }],
+      include: {
+        urlStatuses: true,
+        networkIncidents: {
+          where: {
+            OR: [
+              { status: { not: "CLOSED" } },
+              { detectedAt: { gte: dayStart, lt: dayEnd } },
+              { resolvedAt: { gte: dayStart, lt: dayEnd } },
+            ],
+          },
+          include: {
+            link: {
+              include: {
+                company: true,
+                lineGroup: true,
+              },
+            },
+          },
+        },
+      },
+    }),
   ]);
   const downNow = downLinksNow.length;
   const downNowUnique = countUniqueCompanyUrls(downLinksNow);
@@ -121,6 +185,58 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
     ),
     carriedOver: incident.detectedAt < dayStart,
   }));
+
+  const mobileAgents = mobileAgentRows.map((agent) => {
+    const count = (status: "UP" | "SLOW" | "DOWN" | "UNKNOWN") =>
+      agent.urlStatuses.filter((item) => item.status === status).length;
+    const latestCheck = agent.urlStatuses.reduce<Date | null>((latest, item) =>
+      !latest || item.checkedAt > latest ? item.checkedAt : latest, null);
+    return {
+      id: agent.id,
+      name: agent.name,
+      carrier: agent.carrier,
+      reportedCarrier: agent.reportedCarrier,
+      deviceLabel: agent.deviceLabel,
+      appVersion: agent.appVersion,
+      isActive: agent.isActive,
+      online: Boolean(agent.isActive && agent.lastSeenAt && reportNow.getTime() - agent.lastSeenAt.getTime() < 12 * 60_000),
+      lastSeenAt: agent.lastSeenAt?.toISOString() || null,
+      lastCheckedAt: latestCheck?.toISOString() || null,
+      totalUrls: agent.urlStatuses.length,
+      up: count("UP"),
+      slow: count("SLOW"),
+      down: count("DOWN"),
+      unknown: count("UNKNOWN"),
+      newIncidents: agent.networkIncidents.filter((item) => item.detectedAt >= dayStart && item.detectedAt < dayEnd).length,
+      resolvedIncidents: agent.networkIncidents.filter((item) => item.resolvedAt && item.resolvedAt >= dayStart && item.resolvedAt < dayEnd).length,
+      openIncidents: agent.networkIncidents.filter((item) => item.status !== "CLOSED").length,
+    };
+  });
+  const mobileOpenDetails = mobileAgentRows.flatMap((agent) =>
+    agent.networkIncidents
+      .filter((incident) => incident.status !== "CLOSED")
+      .map((incident) => ({
+        id: incident.id,
+        agentId: agent.id,
+        agentName: agent.name,
+        carrier: agent.reportedCarrier || agent.carrier,
+        name: incident.link.name,
+        company: incident.link.company.name,
+        room: incident.link.lineGroup?.name || null,
+        url: incident.link.url,
+        detectedAt: incident.detectedAt.toISOString(),
+        openMinutes: Math.max(1, Math.round((reportNow.getTime() - incident.detectedAt.getTime()) / 60000)),
+      }))
+  ).sort((a, b) => a.detectedAt.localeCompare(b.detectedAt));
+  const mobileTotals = mobileAgents.reduce((total, agent) => ({
+    agents: total.agents + 1,
+    online: total.online + (agent.online ? 1 : 0),
+    up: total.up + agent.up,
+    slow: total.slow + agent.slow,
+    down: total.down + agent.down,
+    unknown: total.unknown + agent.unknown,
+    openIncidents: total.openIncidents + agent.openIncidents,
+  }), { agents: 0, online: 0, up: 0, slow: 0, down: 0, unknown: 0, openIncidents: 0 });
 
   const shiftOf = (d: Date): string => {
     const t = d.getTime();
@@ -175,6 +291,9 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
     currentOpenIncidents,
     currentOpenDetails,
     oaIssues,
+    mobileTotals,
+    mobileAgents,
+    mobileOpenDetails,
     totalIncidents: incs.length,
     totalResolved,
     totalOpen,
@@ -182,7 +301,7 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
     avgItMin: avg(itVals),
     // ดูย้อนหลัง: ตัดสินจากเคสในวันนั้นเท่านั้น (ไม่เอาสถานะ "ล่มตอนนี้" มาปน)
     allClear: isToday
-      ? currentOpenIncidents === 0 && downNowUnique === 0
+      ? currentOpenIncidents === 0 && downNowUnique === 0 && mobileTotals.openIncidents === 0
       : totalOpen === 0,
     shifts,
     incidents: incs.map((i) => ({

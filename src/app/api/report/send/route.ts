@@ -3,11 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { getDailyReport, todayBangkok, shiftDate } from "@/lib/report";
 import { dailyReportMessage, sendTelegram, sendTelegramTo } from "@/lib/telegram";
+import { resolvePublicBaseUrl } from "@/lib/mobileAgent";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
-
-const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
 
 // อนุญาตเรียกจาก cron: ?token=, header x-cron-token, หรือ Authorization: Bearer (Vercel Cron ใส่ให้อัตโนมัติ)
 function cronAuthorized(req: NextRequest): boolean {
@@ -46,7 +45,7 @@ async function handle(req: NextRequest) {
   }
 
   const report = await getDailyReport(date);
-  const msg = dailyReportMessage(report, APP_BASE_URL);
+  const msg = dailyReportMessage(report, resolvePublicBaseUrl(new URL(req.url).origin));
 
   // ส่งเข้ากลุ่ม Telegram ที่ตั้งไว้ต่อบริษัท (รวมกลุ่มที่ซ้ำกันให้เหลือส่งครั้งเดียว)
   const companies = await prisma.company.findMany({

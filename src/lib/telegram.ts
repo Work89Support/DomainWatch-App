@@ -351,9 +351,9 @@ export function dailyReportMessage(r: DailyReport, appBaseUrl: string): TgMessag
     return `${icon[s.key] || "•"} <b>${escapeHtml(s.label)}</b> (${s.time}): ปัญหา ${s.incidents} · แก้แล้ว ${s.resolved} · ${badge}`;
   });
   const summary = r.isToday
-    ? (r.currentOpenIncidents === 0
-      ? "✅ ไม่มีเคสค้างสะสม"
-      : `⚠️ ค้างสะสม ${r.currentOpenIncidents} เคส`)
+    ? (r.currentOpenIncidents === 0 && r.mobileTotals.openIncidents === 0
+      ? "✅ ไม่มีเคสค้างสะสม ทั้งตัวตรวจหลักและซิมมือถือ"
+      : `⚠️ ค้างสะสม ตัวตรวจหลัก ${r.currentOpenIncidents} เคส · ซิมมือถือ ${r.mobileTotals.openIncidents} เคส`)
     : (r.totalOpen === 0
       ? (r.totalIncidents === 0 ? "✅ ทั้งวันไม่มีปัญหา" : "✅ ปิดครบทุกเคสแล้ว")
       : `⚠️ ยังมี ${r.totalOpen} เคสจากวันนั้นที่ปิดไม่ครบ`);
@@ -382,6 +382,7 @@ export function dailyReportMessage(r: DailyReport, appBaseUrl: string): TgMessag
       lines.push(`…และอีก ${r.currentOpenDetails.length - 10} เคส ดูต่อในระบบ`);
     }
   }
+  lines.push(...mobileAgentReportLines(r));
   lines.push("", ...shiftLines, "");
   lines.push(`KPI เฉลี่ย — แอดมิน ${fmtMinutes(r.avgAdminMin)} · ไอที ${fmtMinutes(r.avgItMin)}`);
   lines.push(`สรุป: <b>${summary}</b>`);
@@ -389,6 +390,35 @@ export function dailyReportMessage(r: DailyReport, appBaseUrl: string): TgMessag
     text: lines.join("\n"),
     buttons: [[{ text: "📊 เปิดรายงานเต็ม", url: `${appBaseUrl}/report?date=${r.date}` }]],
   };
+}
+
+export function mobileAgentReportLines(
+  r: Pick<DailyReport, "mobileAgents" | "mobileOpenDetails">
+): string[] {
+  if (r.mobileAgents.length === 0) return [];
+  const lines = ["", `<b>📱 ผลตรวจจากซิมมือถือ แยกตามเครื่อง / ค่าย</b>`];
+  for (const agent of r.mobileAgents.slice(0, 10)) {
+    const carrier = agent.reportedCarrier || agent.carrier;
+    const status = !agent.isActive ? "⚪ ปิดใช้งาน" : agent.online ? "🟢 ออนไลน์" : "🟠 ขาดการเชื่อมต่อ";
+    lines.push(
+      `${status} · <b>${escapeHtml(carrier)}</b> / ${escapeHtml(agent.name)}`,
+      `  ใช้ได้ ${agent.up} · ช้า ${agent.slow} · ใช้ไม่ได้ ${agent.down} · เคสค้าง ${agent.openIncidents}`
+    );
+  }
+  if (r.mobileAgents.length > 10) lines.push(`…และอีก ${r.mobileAgents.length - 10} เครื่อง ดูต่อในระบบ`);
+
+  if (r.mobileOpenDetails.length > 0) {
+    lines.push(`<b>ปัญหาจากซิมที่ยังค้าง (${r.mobileOpenDetails.length})</b>`);
+    for (const incident of r.mobileOpenDetails.slice(0, 5)) {
+      const room = incident.room ? ` · ห้อง ${escapeHtml(incident.room)}` : "";
+      lines.push(
+        `🔴 #${incident.id.slice(-8).toUpperCase()} ${escapeHtml(incident.carrier)}/${escapeHtml(incident.agentName)}`,
+        `  ${escapeHtml(incident.name)} · ${escapeHtml(incident.company)}${room} · ${fmtMinutes(incident.openMinutes)}`
+      );
+    }
+    if (r.mobileOpenDetails.length > 5) lines.push(`…และอีก ${r.mobileOpenDetails.length - 5} ปัญหาจากซิม ดูต่อในระบบ`);
+  }
+  return lines;
 }
 
 function escapeHtml(s: string): string {
