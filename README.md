@@ -212,3 +212,29 @@ domainwatch/
 จัดทำโครงระบบเวอร์ชัน 2.0 — รองรับระบบล็อกอิน สิทธิ์ตามบทบาท ขอบเขตบริษัท และรายงานส่งออก
 
 <!-- redeploy trigger: 2026-08-17T03:21Z re-trigger Vercel build for dbfbf3d -->
+
+## เครื่องตรวจผ่านซิมมือถือ (DomainWatch Agent)
+
+ระบบมี Android Agent สำหรับตรวจจากเครือข่ายผู้ใช้งานจริง แยกจากตัวตรวจบน Vercel:
+
+- ADMIN เปิดเมนู **เครื่องตรวจเครือข่าย** แล้วดาวน์โหลด APK
+- สร้างเครื่องตรวจตามค่าย เช่น TRUE จากนั้นสแกน QR ใช้ครั้งเดียว (อายุ 15 นาที)
+- แอปบังคับ HTTP request ให้ออกผ่าน `TRANSPORT_CELLULAR` แม้โทรศัพท์เปิด Wi-Fi อยู่
+- ตรวจ URL ที่เปิดใช้งานทั้งหมดทุก 5 นาทีแบบขนาน แล้วส่งผลกลับระบบเป็น batch
+- ล้มติดต่อกัน 2 รอบจึงสร้างเหตุการณ์เครือข่ายและแจ้ง Telegram
+- กลับมาเปิดได้ติดต่อกัน 2 รอบจึงปิดเหตุการณ์ ถ้ายังช้าจะแจ้งว่า “กลับมาแล้ว แต่ยังโหลดช้า”
+- URL เดียวกันที่อยู่คนละห้อง LINE จะสร้าง/แจ้งเหตุการณ์แยกตามรายการลิงก์
+- กด **สร้าง QR / ย้ายเครื่อง** เพื่อผูกโทรศัพท์ใหม่ เมื่อผูกสำเร็จ token ของเครื่องเดิมจะใช้ไม่ได้ทันที
+
+โค้ด Android อยู่ใน `android-agent/` (Java 17, minSdk 26, targetSdk 34) และ APK รุ่นส่งมอบอยู่ที่
+`public/downloads/DomainWatch-Agent-v1.0.0.apk` ผู้ใช้ดาวน์โหลดจากหน้าเครื่องตรวจได้โดยตรง
+
+### สร้าง APK รุ่นใหม่
+
+1. ติดตั้ง JDK 17 และ Android SDK Platform/Build Tools 34
+2. สำรอง signing key เดิมและสร้าง `android-agent/keystore.properties` ตามไฟล์ส่งมอบส่วนตัว
+3. เพิ่ม `versionCode` และ `versionName` ใน `android-agent/app/build.gradle`
+4. รัน `cd android-agent && ./gradlew assembleRelease`
+5. ห้ามเปลี่ยน signing key มิฉะนั้น Android จะติดตั้งทับรุ่นเดิมไม่ได้
+
+ไฟล์ `keystore.properties`, โฟลเดอร์ `android-agent/keystore/` และ `deliverables/private/` ถูก ignore และห้ามอัปโหลด GitHub
