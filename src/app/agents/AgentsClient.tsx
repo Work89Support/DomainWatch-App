@@ -77,8 +77,8 @@ export default function AgentsClient({ initial }: { initial: Agent[] }) {
       <PageHeader title="เครื่องตรวจเครือข่ายมือถือ" subtitle="ตรวจลิงก์จากซิมจริง แยกจากตัวตรวจบน Vercel — แจ้งเตือนเมื่อยืนยันผิดปกติ 2 รอบ" />
 
       <div className="card mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border-brand-100 bg-brand-50/40">
-        <div><div className="font-semibold text-slate-700">1) ติดตั้งแอปบนโทรศัพท์ก่อน</div><div className="mt-1 text-xs text-slate-500">รองรับ Android 8 ขึ้นไป · รุ่น 1.0.0 · ลงนามสำหรับอัปเดตต่อเนื่องแล้ว</div></div>
-        <a className="btn-primary whitespace-nowrap" href="/downloads/DomainWatch-Agent-v1.0.0.apk" download>⬇️ ดาวน์โหลด APK</a>
+        <div><div className="font-semibold text-slate-700">1) ติดตั้งแอปบนโทรศัพท์ก่อน</div><div className="mt-1 text-xs text-slate-500">รองรับ Android 8 ขึ้นไป · รุ่น 1.0.1 · ลงนามสำหรับอัปเดตต่อเนื่องแล้ว</div></div>
+        <a className="btn-primary whitespace-nowrap" href="/downloads/DomainWatch-Agent-v1.0.1.apk" download>⬇️ ดาวน์โหลด APK</a>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
