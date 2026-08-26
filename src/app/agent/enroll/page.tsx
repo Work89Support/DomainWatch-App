@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { hashSecret } from "@/lib/mobileAgent";
+import { hashSecret, resolvePublicBaseUrl } from "@/lib/mobileAgent";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,13 @@ export default async function AgentEnrollPage({ searchParams }: { searchParams: 
     include: { agent: { select: { name: true, carrier: true, isActive: true } } },
   }) : null;
   const valid = Boolean(enrollment && !enrollment.usedAt && enrollment.expiresAt > new Date() && enrollment.agent.isActive);
-  const base = (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+  const requestHeaders = headers();
+  const host = requestHeaders.get("x-forwarded-host") || requestHeaders.get("host") || "";
+  const forwardedProto = requestHeaders.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const protocol = forwardedProto === "http" || forwardedProto === "https"
+    ? forwardedProto
+    : host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https";
+  const base = resolvePublicBaseUrl(host ? `${protocol}://${host}` : undefined);
   const appUrl = `domainwatch-agent://enroll?base=${encodeURIComponent(base)}&code=${encodeURIComponent(code)}`;
 
   return (

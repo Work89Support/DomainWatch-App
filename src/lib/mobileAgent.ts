@@ -36,6 +36,32 @@ export function mobileUrlHash(value: string): string {
   return hashSecret(normalizeUrl(value));
 }
 
+function cleanBaseUrl(value?: string): string {
+  return (value || "").trim().replace(/\/$/, "");
+}
+
+function isLoopbackUrl(value: string): boolean {
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "::1";
+  } catch {
+    return false;
+  }
+}
+
+export function resolvePublicBaseUrl(requestBaseUrl?: string): string {
+  const configured = cleanBaseUrl(process.env.APP_BASE_URL);
+  const requested = cleanBaseUrl(requestBaseUrl);
+
+  // ป้องกันค่า APP_BASE_URL ของเครื่องพัฒนาหลุดไปอยู่ใน QR บน production
+  if (configured && (!isLoopbackUrl(configured) || !requested || isLoopbackUrl(requested))) return configured;
+  if (requested) return requested;
+
+  const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  if (vercelHost) return `https://${vercelHost.replace(/^https?:\/\//, "").replace(/\/$/, "")}`;
+  return "http://localhost:3000";
+}
+
 export function bearerToken(header: string | null): string {
   if (!header?.startsWith("Bearer ")) return "";
   return header.slice(7).trim();
@@ -55,7 +81,7 @@ export async function createEnrollment(agentId: string, requestBaseUrl: string) 
   await prisma.mobileEnrollment.create({
     data: { agentId, codeHash: hashSecret(code), expiresAt },
   });
-  const base = (process.env.APP_BASE_URL || requestBaseUrl).replace(/\/$/, "");
+  const base = resolvePublicBaseUrl(requestBaseUrl);
   return {
     code,
     expiresAt,
