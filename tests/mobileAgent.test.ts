@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mobileUrlHash, nextMobileState, normalizeUrl, resolvePublicBaseUrl } from "../src/lib/mobileAgent";
+import { mobileUrlHash, nextMobileState, normalizeMobileProbeStatus, normalizeUrl, resolvePublicBaseUrl } from "../src/lib/mobileAgent";
 
 test("mobile URL hash ignores fragments but keeps a stable normalized URL", () => {
   assert.equal(normalizeUrl("https://example.com/path#section"), "https://example.com/path");
@@ -45,4 +45,12 @@ test("mobile recovery requires two successful rounds and preserves slow recovery
   const second = nextMobileState({ status: first.status, failureStreak: 0, recoveryStreak: 1 }, "SLOW");
   assert.equal(second.status, "SLOW");
   assert.equal(second.recovered, true);
+});
+
+test("mobile timeout is inconclusive/slow and must not open a false outage", () => {
+  assert.equal(normalizeMobileProbeStatus("DOWN", "SocketTimeoutException: Read timed out"), "SLOW");
+  assert.equal(normalizeMobileProbeStatus("DOWN", "ConnectException: Connection refused"), "DOWN");
+  const first = nextMobileState(null, normalizeMobileProbeStatus("DOWN", "Read timed out"));
+  assert.equal(first.status, "SLOW");
+  assert.equal(first.opened, false);
 });

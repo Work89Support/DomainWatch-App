@@ -24,7 +24,7 @@ export async function POST(
   if (!canManageCompanies(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const company = await prisma.company.findUnique({
     where: { id: params.id },
-    select: { name: true, tgBotToken: true, tgChatId: true },
+    select: { id: true, name: true, tgBotToken: true, tgChatId: true },
   });
   if (!company) {
     return NextResponse.json({ error: "ไม่พบบริษัท" }, { status: 404 });
@@ -97,7 +97,10 @@ export async function POST(
 
   // 3) ตัวอย่าง "หน้าสรุป" (รายงานรอบวันจริงของวันนี้)
   try {
-    const report = await getDailyReport(todayBangkok());
+    const report = await getDailyReport(todayBangkok(), {
+      companyIds: [company.id],
+      scopeLabel: company.name,
+    });
     const rep = await sendTelegramTo(token, chatId, dailyReportMessage(report, origin));
     sent += rep.sent;
   } catch {

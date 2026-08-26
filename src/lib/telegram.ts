@@ -360,6 +360,7 @@ export function dailyReportMessage(r: DailyReport, appBaseUrl: string): TgMessag
   const lines: string[] = [
     `📊 <b>รายงานสรุปรอบวัน</b>`,
     `🗓️ ${escapeHtml(r.dateLabel)}`,
+    ...(r.scopeLabel ? [`🏢 เฉพาะ: <b>${escapeHtml(r.scopeLabel)}</b>`] : []),
     ``,
     `เฝ้าดู ${r.activeLinks} รายการ · ตอนนี้ใช้ได้ ${r.upNow} · ช้า ${r.slowNow} · ใช้ไม่ได้ ${r.downNowUnique} URLจริง (${r.downNow} รายการ)`,
     `เคสในรอบวัน ${r.totalIncidents} · แก้แล้ว ${r.totalResolved} · ค้างจากวันนี้ ${r.totalOpen}`,

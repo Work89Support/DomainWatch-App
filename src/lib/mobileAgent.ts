@@ -147,6 +147,20 @@ export function nextMobileState(previous: {
   };
 }
 
+export function isInconclusiveMobileTimeout(error?: string | null): boolean {
+  if (!error) return false;
+  return /(sockettimeoutexception|read timed out|connect timed out|timeout|timed out)/i.test(error);
+}
+
+export function normalizeMobileProbeStatus(
+  status: LinkStatus,
+  error?: string | null
+): LinkStatus {
+  // Timeout จากซิมบอกได้เพียงว่าเว็บตอบช้า/ตรวจไม่จบ ไม่ได้ยืนยันว่าเว็บล่ม
+  // ทำที่ server ด้วยเพื่อรองรับแอปรุ่นเก่าที่ยังส่ง DOWN มา
+  return status === "DOWN" && isInconclusiveMobileTimeout(error) ? "SLOW" : status;
+}
+
 export async function storeMobileResults(agentId: string, results: MobileResultInput[]) {
   const agent = await prisma.mobileAgent.findUniqueOrThrow({ where: { id: agentId } });
   const routes = await loadRoutes();
@@ -160,7 +174,11 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
       where: { agentId_urlHash: { agentId, urlHash: result.urlHash } },
     });
     if (previous && result.checkedAt <= previous.checkedAt) continue;
-    const next = nextMobileState(previous, result.status);
+    const probeStatus = normalizeMobileProbeStatus(result.status, result.error);
+    const normalizedError = probeStatus === "SLOW" && result.status === "DOWN"
+      ? "ตอบกลับช้าหรือหมดเวลาตรวจ (ยังไม่ยืนยันว่าเว็บล่ม)"
+      : result.error ?? null;
+    const next = nextMobileState(previous, probeStatus);
 
     await prisma.mobileUrlStatus.upsert({
       where: { agentId_urlHash: { agentId, urlHash: result.urlHash } },
@@ -171,7 +189,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
         status: next.status,
         httpCode: result.httpCode ?? null,
         responseMs: result.responseMs ?? null,
-        error: result.error ?? null,
+        error: normalizedError,
         failureStreak: next.failureStreak,
         recoveryStreak: next.recoveryStreak,
         checkedAt: result.checkedAt,
@@ -181,7 +199,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
         status: next.status,
         httpCode: result.httpCode ?? null,
         responseMs: result.responseMs ?? null,
-        error: result.error ?? null,
+        error: normalizedError,
         failureStreak: next.failureStreak,
         recoveryStreak: next.recoveryStreak,
         checkedAt: result.checkedAt,
@@ -197,7 +215,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
           status: next.status,
           httpCode: result.httpCode ?? null,
           responseMs: result.responseMs ?? null,
-          error: result.error ?? null,
+          error: normalizedError,
           checkedAt: result.checkedAt,
         },
       });
@@ -226,7 +244,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
             detectedAt: result.checkedAt,
             httpCode: result.httpCode ?? null,
             responseMs: result.responseMs ?? null,
-            error: result.error ?? null,
+            error: normalizedError,
           },
         });
         await notifyCompany(routes, link.company.id, networkDownMessage({
@@ -238,7 +256,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
           name: link.name,
           url: link.url,
           httpCode: result.httpCode,
-          error: result.error,
+          error: normalizedError,
           detectedAt: result.checkedAt,
           appBaseUrl: APP_BASE_URL,
         }));
@@ -253,19 +271,23 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
             data: { status: "CLOSED", resolvedAt: result.checkedAt },
           });
           const downMinutes = Math.max(0, Math.round((result.checkedAt.getTime() - incident.detectedAt.getTime()) / 60_000));
-          await notifyCompany(routes, link.company.id, networkRecoveredMessage({
-            incidentId: incident.id,
-            carrier: agent.carrier,
-            agentName: agent.name,
-            company: link.company.name,
-            room: link.lineGroup?.name,
-            name: link.name,
-            url: link.url,
-            downMinutes,
-            slow: result.status === "SLOW",
-            responseMs: result.responseMs,
-            appBaseUrl: APP_BASE_URL,
-          }));
+          // เคส timeout เดิมเป็น false positive: ปิดสถานะ แต่ไม่ยิงข้อความ
+          // "กลับมาแล้ว" หลายสิบรายการไปรบกวนกลุ่ม Telegram
+          if (!isInconclusiveMobileTimeout(incident.error)) {
+            await notifyCompany(routes, link.company.id, networkRecoveredMessage({
+              incidentId: incident.id,
+              carrier: agent.carrier,
+              agentName: agent.name,
+              company: link.company.name,
+              room: link.lineGroup?.name,
+              name: link.name,
+              url: link.url,
+              downMinutes,
+              slow: probeStatus === "SLOW",
+              responseMs: result.responseMs,
+              appBaseUrl: APP_BASE_URL,
+            }));
+          }
           recovered++;
         }
       }

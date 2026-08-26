@@ -20,6 +20,7 @@ export type ShiftReport = {
 export type DailyReport = {
   date: string; // YYYY-MM-DD
   dateLabel: string;
+  scopeLabel?: string;
   isToday: boolean; // true = ตัวเลขสถานะสด (ล่มตอนนี้/OA) ใช้ได้จริง; false = ดูย้อนหลัง อย่าโชว์สถานะสด
   activeLinks: number;
   upNow: number;
@@ -108,7 +109,12 @@ export function shiftDate(dateStr: string, deltaDays: number): string {
   return d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
 }
 
-export async function getDailyReport(dateStr: string): Promise<DailyReport> {
+export async function getDailyReport(
+  dateStr: string,
+  options?: { companyIds?: string[]; scopeLabel?: string }
+): Promise<DailyReport> {
+  const companyIds = options?.companyIds?.filter(Boolean);
+  const scoped = Boolean(companyIds?.length);
   const dayStart = new Date(`${dateStr}T06:00:00+07:00`);
   const bounds = [
     { key: "morning", label: "รอบเช้า", time: "06:00–14:00", start: dayStart, end: new Date(dayStart.getTime() + 8 * H) },
@@ -117,21 +123,27 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
   ];
   const dayEnd = new Date(dayStart.getTime() + 24 * H);
 
-  const [incs, activeLinks, upNow, slowNow, downLinksNow, openIncidentsNow, oaIssues, mobileAgentRows] = await Promise.all([
+  const [incs, activeLinks, upNow, slowNow, downLinksNow, openIncidentsNow, oaIssues, mobileAgentRows, scopedUrlRows] = await Promise.all([
     prisma.incident.findMany({
-      where: { detectedAt: { gte: dayStart, lt: dayEnd } },
+      where: {
+        detectedAt: { gte: dayStart, lt: dayEnd },
+        ...(scoped ? { link: { companyId: { in: companyIds } } } : {}),
+      },
       include: { link: { include: { company: true } } },
       orderBy: { detectedAt: "asc" },
     }),
-    prisma.link.count({ where: { isActive: true } }),
-    prisma.link.count({ where: { isActive: true, lastStatus: "UP" } }),
-    prisma.link.count({ where: { isActive: true, lastStatus: "SLOW" } }),
+    prisma.link.count({ where: { isActive: true, ...(scoped ? { companyId: { in: companyIds } } : {}) } }),
+    prisma.link.count({ where: { isActive: true, lastStatus: "UP", ...(scoped ? { companyId: { in: companyIds } } : {}) } }),
+    prisma.link.count({ where: { isActive: true, lastStatus: "SLOW", ...(scoped ? { companyId: { in: companyIds } } : {}) } }),
     prisma.link.findMany({
-      where: { isActive: true, lastStatus: "DOWN" },
+      where: { isActive: true, lastStatus: "DOWN", ...(scoped ? { companyId: { in: companyIds } } : {}) },
       select: { companyId: true, url: true },
     }),
     prisma.incident.findMany({
-      where: { status: { not: "CLOSED" } },
+      where: {
+        status: { not: "CLOSED" },
+        ...(scoped ? { link: { companyId: { in: companyIds } } } : {}),
+      },
       orderBy: { detectedAt: "asc" },
       include: {
         link: { include: { company: true, lineGroup: true } },
@@ -140,6 +152,7 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
     prisma.lineGroup.count({
       where: {
         isActive: true,
+        ...(scoped ? { companyId: { in: companyIds } } : {}),
         NOT: { channelAccessToken: null },
         oaStatus: { notIn: ["OK", "UNKNOWN"] },
       },
@@ -150,6 +163,7 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
         urlStatuses: true,
         networkIncidents: {
           where: {
+            ...(scoped ? { link: { companyId: { in: companyIds } } } : {}),
             OR: [
               { status: { not: "CLOSED" } },
               { detectedAt: { gte: dayStart, lt: dayEnd } },
@@ -167,7 +181,12 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
         },
       },
     }),
+    prisma.link.findMany({
+      where: { isActive: true, ...(scoped ? { companyId: { in: companyIds } } : {}) },
+      select: { url: true },
+    }),
   ]);
+  const scopedUrls = new Set(scopedUrlRows.map((link) => normalizeReportUrl(link.url)));
   const downNow = downLinksNow.length;
   const downNowUnique = countUniqueCompanyUrls(downLinksNow);
   const currentOpenIncidents = openIncidentsNow.length;
@@ -187,9 +206,10 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
   }));
 
   const mobileAgents = mobileAgentRows.map((agent) => {
+    const urlStatuses = agent.urlStatuses.filter((item) => scopedUrls.has(normalizeReportUrl(item.url)));
     const count = (status: "UP" | "SLOW" | "DOWN" | "UNKNOWN") =>
-      agent.urlStatuses.filter((item) => item.status === status).length;
-    const latestCheck = agent.urlStatuses.reduce<Date | null>((latest, item) =>
+      urlStatuses.filter((item) => item.status === status).length;
+    const latestCheck = urlStatuses.reduce<Date | null>((latest, item) =>
       !latest || item.checkedAt > latest ? item.checkedAt : latest, null);
     return {
       id: agent.id,
@@ -202,7 +222,7 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
       online: Boolean(agent.isActive && agent.lastSeenAt && reportNow.getTime() - agent.lastSeenAt.getTime() < 12 * 60_000),
       lastSeenAt: agent.lastSeenAt?.toISOString() || null,
       lastCheckedAt: latestCheck?.toISOString() || null,
-      totalUrls: agent.urlStatuses.length,
+      totalUrls: urlStatuses.length,
       up: count("UP"),
       slow: count("SLOW"),
       down: count("DOWN"),
@@ -282,6 +302,7 @@ export async function getDailyReport(dateStr: string): Promise<DailyReport> {
   return {
     date: dateStr,
     dateLabel,
+    scopeLabel: options?.scopeLabel,
     isToday,
     activeLinks,
     upNow,

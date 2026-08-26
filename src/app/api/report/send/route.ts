@@ -44,31 +44,48 @@ async function handle(req: NextRequest) {
         : todayBangkok();
   }
 
-  const report = await getDailyReport(date);
-  const msg = dailyReportMessage(report, resolvePublicBaseUrl(new URL(req.url).origin));
+  const appBaseUrl = resolvePublicBaseUrl(new URL(req.url).origin);
 
-  // ส่งเข้ากลุ่ม Telegram ที่ตั้งไว้ต่อบริษัท (รวมกลุ่มที่ซ้ำกันให้เหลือส่งครั้งเดียว)
+  // รวมบริษัทที่ใช้ Telegram กลุ่มเดียวกัน แล้วสร้างรายงานเฉพาะบริษัทในกลุ่มนั้น
   const companies = await prisma.company.findMany({
-    select: { tgBotToken: true, tgChatId: true },
+    select: { id: true, name: true, tgBotToken: true, tgChatId: true },
   });
-  const seen = new Set<string>();
+  const routes = new Map<string, {
+    botToken: string;
+    chatId: string;
+    companyIds: string[];
+    companyNames: string[];
+  }>();
+  for (const company of companies) {
+    const botToken = (company.tgBotToken || "").trim();
+    const chatId = (company.tgChatId || "").trim();
+    if (!botToken || !chatId) continue;
+    const key = `${botToken}|${chatId}`;
+    const route = routes.get(key) || { botToken, chatId, companyIds: [], companyNames: [] };
+    route.companyIds.push(company.id);
+    route.companyNames.push(company.name);
+    routes.set(key, route);
+  }
+
   let sent = 0;
-  let groups = 0;
-  for (const c of companies) {
-    const bt = (c.tgBotToken || "").trim();
-    const ci = (c.tgChatId || "").trim();
-    if (!bt || !ci) continue;
-    const key = `${bt}|${ci}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const r = await sendTelegramTo(bt, ci, msg);
+  const groups = routes.size;
+  for (const route of routes.values()) {
+    const report = await getDailyReport(date, {
+      companyIds: route.companyIds,
+      scopeLabel: route.companyNames.join(", "),
+    });
+    const r = await sendTelegramTo(
+      route.botToken,
+      route.chatId,
+      dailyReportMessage(report, appBaseUrl)
+    );
     sent += r.sent;
-    groups++;
   }
 
   // ไม่มีกลุ่มต่อบริษัทเลย -> ใช้กลุ่มกลาง (env)
   if (groups === 0) {
-    const r = await sendTelegram(msg, "all");
+    const report = await getDailyReport(date);
+    const r = await sendTelegram(dailyReportMessage(report, appBaseUrl), "all");
     sent += r.sent;
     if (!r.ok) {
       return NextResponse.json(

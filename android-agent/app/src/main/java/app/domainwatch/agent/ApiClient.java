@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -63,6 +64,14 @@ public final class ApiClient {
             result.put("httpCode", code);
             result.put("responseMs", responseMs);
             if (!alive) result.put("error", "HTTP " + code + " จากเครือข่ายมือถือ");
+        } catch (SocketTimeoutException error) {
+            try {
+                result.put("url", job.optString("url"));
+                result.put("urlHash", job.optString("urlHash"));
+                result.put("status", "SLOW");
+                result.put("responseMs", System.currentTimeMillis() - started);
+                result.put("error", "ตอบกลับช้าหรือหมดเวลาตรวจ (ยังไม่ยืนยันว่าเว็บล่ม)");
+            } catch (Exception ignored) { }
         } catch (Exception error) {
             try {
                 result.put("url", job.optString("url"));
