@@ -75,6 +75,7 @@ export default function IncidentsClient({
   // ลิงก์จาก Telegram อาจชี้มายังเคสที่บอทปิดอัตโนมัติแล้ว
   // เปิดประวัติทั้งหมดทันทีเพื่อไม่ให้เคสดังกล่าวดูเหมือนหายไปจากระบบ
   const [filter, setFilter] = useState<"open" | "all">(initialIncidentId ? "all" : "open");
+  const [source, setSource] = useState<"ALL" | "SYSTEM" | "MOBILE">("ALL");
   const [selected, setSelected] = useState<Incident | null>(
     initial.find((incident) => incident.id === initialIncidentId) || null
   );
@@ -82,8 +83,10 @@ export default function IncidentsClient({
     mobileInitial.find((incident) => incident.id === initialIncidentId) || null
   );
 
-  const openCount = initial.filter((incident) => incident.status !== "CLOSED").length
-    + mobileInitial.filter((incident) => incident.status !== "CLOSED").length;
+  const systemOpen = initial.filter((incident) => incident.status !== "CLOSED").length;
+  const mobileOpen = mobileInitial.filter((incident) => incident.status !== "CLOSED").length;
+  const openCount = source === "SYSTEM" ? systemOpen : source === "MOBILE" ? mobileOpen : systemOpen + mobileOpen;
+  const totalCount = source === "SYSTEM" ? initial.length : source === "MOBILE" ? mobileInitial.length : initial.length + mobileInitial.length;
 
   const list = filter === "open"
     ? initial.filter((incident) => incident.status !== "CLOSED")
@@ -91,6 +94,8 @@ export default function IncidentsClient({
   const mobileList = filter === "open"
     ? mobileInitial.filter((incident) => incident.status !== "CLOSED")
     : mobileInitial;
+  const showSystem = source !== "MOBILE";
+  const showMobile = source !== "SYSTEM";
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
@@ -101,6 +106,19 @@ export default function IncidentsClient({
           <div className="flex flex-wrap items-center gap-3">
             <CompanyFilter companies={companies} value={currentCompany} />
             <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
+              {([
+                ["ALL", "ทั้งหมด"],
+                ["SYSTEM", "🖥️ ระบบกลาง"],
+                ["MOBILE", "📱 เครือข่ายซิม"],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() => setSource(value)}
+                  className={`px-3 py-1.5 text-sm rounded-md ${source === value ? "bg-white shadow text-brand-700 font-medium" : "text-slate-500"}`}
+                >{label}</button>
+              ))}
+            </div>
+            <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
               {(["open", "all"] as const).map((f) => (
                 <button
                   key={f}
@@ -109,7 +127,7 @@ export default function IncidentsClient({
                 >
                   {f === "open"
                     ? `เปิดค้าง (${openCount})`
-                    : `ประวัติทั้งหมด (${initial.length + mobileInitial.length})`}
+                    : `ประวัติทั้งหมด (${totalCount})`}
                 </button>
               ))}
             </div>
@@ -117,7 +135,7 @@ export default function IncidentsClient({
         }
       />
 
-      {mobileList.length > 0 && (
+      {showMobile && mobileList.length > 0 && (
         <div className="mb-6">
           <div className="mb-3 flex items-center gap-2">
             <h2 className="font-semibold text-slate-800">📱 ปัญหาที่ตรวจจากซิมมือถือ</h2>
@@ -156,13 +174,13 @@ export default function IncidentsClient({
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {list.length === 0 && mobileList.length === 0 && (
+      {showSystem && <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {list.length === 0 && (!showMobile || mobileList.length === 0) && (
           <div className="card p-10 text-center text-slate-400 lg:col-span-2">
             <div>ไม่มีเหตุการณ์เปิดค้าง</div>
-            {filter === "open" && initial.length + mobileInitial.length > 0 && (
+            {filter === "open" && totalCount > 0 && (
               <button className="btn-ghost text-xs mt-3" onClick={() => setFilter("all")}>
-                ดูประวัติที่ปิดแล้ว {initial.length + mobileInitial.length} เคส
+                ดูประวัติที่ปิดแล้ว {totalCount} เคส
               </button>
             )}
           </div>
@@ -214,7 +232,11 @@ export default function IncidentsClient({
             </div>
           </div>
         ))}
-      </div>
+      </div>}
+
+      {!showSystem && mobileList.length === 0 && (
+        <div className="card p-10 text-center text-slate-400">ไม่มีเหตุการณ์จากเครือข่ายซิมตามเงื่อนไข</div>
+      )}
 
       {selected && (
         <IncidentPanel

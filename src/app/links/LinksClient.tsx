@@ -7,6 +7,11 @@ import { fmtDateTime } from "@/lib/format";
 
 type LineGroup = { id: string; name: string };
 type Company = { id: string; name: string; lineGroups: LineGroup[] };
+type MobileAgentOption = { id: string; name: string; carrier: string; reportedCarrier: string | null; isActive: boolean };
+type MobileCheck = {
+  agentId: string; agentName: string; carrier: string; agentActive: boolean;
+  status: string; checkedAt: string; responseMs: number | null; httpCode: number | null; error: string | null;
+};
 
 type LinkRow = {
   id: string;
@@ -21,8 +26,10 @@ type LinkRow = {
   lastStatus: string;
   lastCheckedAt: string | null;
   lastResponseMs: number | null;
+  lastHttpCode: number | null;
   company: { id: string; name: string };
   lineGroup: { id: string; name: string } | null;
+  mobileChecks: MobileCheck[];
 };
 
 type Form = {
@@ -54,12 +61,14 @@ const emptyForm = (companyId: string): Form => ({
 export default function LinksClient({
   initialLinks,
   companies,
+  mobileAgents,
   currentCompany,
   focusId,
   capabilities,
 }: {
   initialLinks: LinkRow[];
   companies: Company[];
+  mobileAgents: MobileAgentOption[];
   currentCompany?: string;
   focusId?: string;
   capabilities: { create: boolean; edit: boolean; delete: boolean; editBackup: boolean; manageStructure: boolean };
@@ -73,6 +82,8 @@ export default function LinksClient({
   const [fCategory, setFCategory] = useState("");
   const [fStatus, setFStatus] = useState("");
   const [fActive, setFActive] = useState("");
+  const [fSource, setFSource] = useState<"SYSTEM" | "MOBILE">("SYSTEM");
+  const [fAgent, setFAgent] = useState("");
 
   const [modal, setModal] = useState<Form | null>(null);
   const [customCat, setCustomCat] = useState(false);
@@ -115,6 +126,38 @@ export default function LinksClient({
     return list;
   }, [companies, fCompany]);
 
+  const statusFor = (link: LinkRow) => {
+    if (fSource === "SYSTEM") {
+      return {
+        status: link.lastStatus,
+        checkedAt: link.lastCheckedAt,
+        responseMs: link.lastResponseMs,
+        httpCode: link.lastHttpCode,
+        detail: "ตัวตรวจระบบกลาง",
+        error: null as string | null,
+      };
+    }
+    const checks = link.mobileChecks.filter((check) =>
+      fAgent ? check.agentId === fAgent : check.agentActive
+    );
+    if (checks.length === 0) {
+      return { status: "UNKNOWN", checkedAt: null, responseMs: null, httpCode: null, detail: "ยังไม่มีผลจากซิม", error: null as string | null };
+    }
+    const priority: Record<string, number> = { DOWN: 4, SLOW: 3, UNKNOWN: 2, UP: 1 };
+    const selected = [...checks].sort((a, b) =>
+      (priority[b.status] || 0) - (priority[a.status] || 0)
+      || new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime()
+    )[0];
+    return {
+      status: selected.status,
+      checkedAt: selected.checkedAt,
+      responseMs: selected.responseMs,
+      httpCode: selected.httpCode,
+      detail: fAgent ? `${selected.carrier} · ${selected.agentName}` : `รวม ${checks.length} เครื่อง`,
+      error: selected.error,
+    };
+  };
+
   const filtered = initialLinks.filter((l) => {
     if (fCompany && l.companyId !== fCompany) return false;
     if (fRoom) {
@@ -123,7 +166,7 @@ export default function LinksClient({
       } else if (l.lineGroupId !== fRoom) return false;
     }
     if (fCategory && (l.category || "") !== fCategory) return false;
-    if (fStatus && l.lastStatus !== fStatus) return false;
+    if (fStatus && statusFor(l).status !== fStatus) return false;
     if (fActive === "active" && !l.isActive) return false;
     if (fActive === "inactive" && l.isActive) return false;
     const s = q.trim().toLowerCase();
@@ -143,9 +186,9 @@ export default function LinksClient({
     return true;
   });
 
-  const anyFilter = !!(q || fCompany || fRoom || fCategory || fStatus || fActive);
+  const anyFilter = !!(q || fCompany || fRoom || fCategory || fStatus || fActive || fSource !== "SYSTEM" || fAgent);
   function clearFilters() {
-    setQ(""); setFCompany(""); setFRoom(""); setFCategory(""); setFStatus(""); setFActive("");
+    setQ(""); setFCompany(""); setFRoom(""); setFCategory(""); setFStatus(""); setFActive(""); setFSource("SYSTEM"); setFAgent("");
   }
 
   const modalGroups =
@@ -205,7 +248,9 @@ export default function LinksClient({
     router.refresh();
   }
 
-  const renderRow = (l: LinkRow) => (
+  const renderRow = (l: LinkRow) => {
+    const view = statusFor(l);
+    return (
     <tr key={l.id} className="border-t border-slate-50 hover:bg-slate-50/50">
       <td className="py-3 px-4 pl-8">
         <div className="font-medium text-slate-700">{l.name}</div>
@@ -215,10 +260,15 @@ export default function LinksClient({
         {l.backupUrl && <div className="text-xs text-slate-400 break-all">สำรอง: {l.backupUrl}</div>}
       </td>
       <td className="py-3 px-4 text-slate-600">{l.category || "-"}</td>
-      <td className="py-3 px-4"><StatusBadge status={l.lastStatus} /></td>
+      <td className="py-3 px-4">
+        <StatusBadge status={view.status} />
+        <div className="mt-1 text-[11px] text-slate-400">{view.detail}</div>
+        {view.error && <div className="mt-1 max-w-[220px] text-[11px] text-red-500 line-clamp-2">{view.error}</div>}
+      </td>
       <td className="py-3 px-4 text-slate-500 text-xs">
-        <div>{fmtDateTime(l.lastCheckedAt)}</div>
-        {l.lastResponseMs !== null && <div className={l.lastStatus === "SLOW" ? "text-amber-600" : "text-slate-400"}>{(l.lastResponseMs / 1000).toFixed(1)} วินาที</div>}
+        <div>{fmtDateTime(view.checkedAt)}</div>
+        {view.httpCode !== null && <div className="text-slate-400">HTTP {view.httpCode}</div>}
+        {view.responseMs !== null && <div className={view.status === "SLOW" ? "text-amber-600" : "text-slate-400"}>{(view.responseMs / 1000).toFixed(1)} วินาที</div>}
       </td>
       <td className="py-3 px-4">
         <button disabled={!capabilities.edit} onClick={() => toggleActive(l)} className={`badge disabled:cursor-default ${l.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
@@ -231,7 +281,8 @@ export default function LinksClient({
         {capabilities.delete && <button className="text-red-500 hover:underline text-xs" onClick={() => remove(l.id, l.name)}>ลบ</button>}
       </td>
     </tr>
-  );
+    );
+  };
 
   async function save() {
     if (!modal) return;
@@ -296,7 +347,7 @@ export default function LinksClient({
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
       <PageHeader
         title="Master Data ลิงก์"
-        subtitle="คลังข้อมูลลิงก์ทั้งหมด — เพิ่ม/แก้ไขได้ที่นี่ (อัปเดตผ่านระบบ) และกรองดูตามบริษัท ห้อง หมวด หรือสถานะ"
+        subtitle="คลังข้อมูลลิงก์ทั้งหมด — แยกดูผลจากระบบกลางและผลจากเครือข่ายซิมได้ชัดเจน"
         action={
           <div className="flex flex-wrap items-center gap-2">
             {capabilities.create && <button className="btn-ghost" disabled={noCompany} onClick={() => setImportOpen(true)}>
@@ -317,6 +368,26 @@ export default function LinksClient({
 
       {/* แถบฟิลเตอร์ */}
       <div className="card p-4 mb-4">
+        <div className="mb-3 flex flex-wrap gap-2">
+          <button
+            className={`rounded-lg px-4 py-2 text-sm font-medium ${fSource === "SYSTEM" ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600"}`}
+            onClick={() => { setFSource("SYSTEM"); setFAgent(""); setFStatus(""); }}
+          >🖥️ ตรวจจากระบบกลาง</button>
+          <button
+            className={`rounded-lg px-4 py-2 text-sm font-medium ${fSource === "MOBILE" ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600"}`}
+            onClick={() => { setFSource("MOBILE"); setFStatus(""); }}
+          >📱 ตรวจจากเครือข่ายซิม</button>
+          {fSource === "MOBILE" && (
+            <select className="input w-auto min-w-[220px]" value={fAgent} onChange={(event) => { setFAgent(event.target.value); setFStatus(""); }}>
+              <option value="">ทุกเครื่อง / ทุกค่าย (แสดงสถานะที่แย่ที่สุด)</option>
+              {mobileAgents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.reportedCarrier || agent.carrier} · {agent.name}{agent.isActive ? "" : " (ปิดใช้งาน)"}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
           <select className="input" value={fCompany} onChange={(e) => { setFCompany(e.target.value); setFRoom(""); }}>
             <option value="">ทุกบริษัท</option>
@@ -346,7 +417,10 @@ export default function LinksClient({
           <input className="input" placeholder="ค้นหา ชื่อ/URL..." value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="flex items-center justify-between mt-2.5">
-          <div className="text-xs text-slate-400">พบ {filtered.length} ลิงก์ จากทั้งหมด {initialLinks.length}</div>
+          <div className="text-xs text-slate-400">
+            มุมมอง: {fSource === "SYSTEM" ? "ระบบกลาง" : fAgent ? "เครื่องตรวจเครือข่ายที่เลือก" : "เครือข่ายซิมทุกเครื่อง"}
+            {` · พบ ${filtered.length} ลิงก์ จากทั้งหมด ${initialLinks.length}`}
+          </div>
           {anyFilter && (
             <button className="text-xs text-brand-600 hover:underline" onClick={clearFilters}>ล้างฟิลเตอร์</button>
           )}
@@ -363,9 +437,9 @@ export default function LinksClient({
       <div className="space-y-5">
         {visibleCompanies.map((c) => {
           const cl = filtered.filter((l) => l.companyId === c.id);
-          const up = cl.filter((l) => l.lastStatus === "UP").length;
-          const slow = cl.filter((l) => l.lastStatus === "SLOW").length;
-          const down = cl.filter((l) => l.lastStatus === "DOWN").length;
+          const up = cl.filter((l) => statusFor(l).status === "UP").length;
+          const slow = cl.filter((l) => statusFor(l).status === "SLOW").length;
+          const down = cl.filter((l) => statusFor(l).status === "DOWN").length;
           return (
             <div key={c.id} className="card overflow-hidden">
               <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 bg-brand-600 text-white">
@@ -373,6 +447,7 @@ export default function LinksClient({
                   <span className="text-lg">🏢</span>
                   <span className="font-semibold">{c.name}</span>
                   <span className="text-xs text-brand-100">{cl.length} ลิงก์</span>
+                  <span className="badge bg-white/20 text-white">{fSource === "SYSTEM" ? "ระบบกลาง" : "เครือข่ายซิม"}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="badge bg-white/20 text-white">ใช้ได้ {up}</span>
