@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { PageHeader } from "@/components/ui";
@@ -25,6 +25,25 @@ type Agent = {
   urlStatuses: UrlStatus[]; networkIncidents: NetworkIncident[];
 };
 type Enrollment = { enrollmentUrl: string; expiresAt: string; qrDataUrl: string };
+type LinkContext = { id: string; name: string; company: string; room: string | null };
+type ResultFilter = "ALL" | "UP" | "SLOW" | "DOWN";
+
+const FILTER_LABEL: Record<ResultFilter, string> = {
+  ALL: "ผลตรวจทั้งหมด",
+  UP: "ใช้งานได้",
+  SLOW: "โหลดช้า",
+  DOWN: "ใช้ไม่ได้",
+};
+
+function normalizeResultUrl(value: string) {
+  try {
+    const url = new URL(value.trim());
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return value.trim();
+  }
+}
 
 function since(value: string | null) {
   if (!value) return "ยังไม่เคยเชื่อมต่อ";
@@ -34,7 +53,15 @@ function since(value: string | null) {
   return `${Math.floor(seconds / 3600)} ชั่วโมงที่แล้ว`;
 }
 
-export default function AgentsClient({ initial, canManage }: { initial: Agent[]; canManage: boolean }) {
+export default function AgentsClient({
+  initial,
+  canManage,
+  linkContexts,
+}: {
+  initial: Agent[];
+  canManage: boolean;
+  linkContexts: Record<string, LinkContext[]>;
+}) {
   const router = useRouter();
   const [name, setName] = useState("เครื่องตรวจ TRUE 1");
   const [busy, setBusy] = useState(false);
@@ -42,7 +69,30 @@ export default function AgentsClient({ initial, canManage }: { initial: Agent[];
   const [selectedId, setSelectedId] = useState(initial[0]?.id || "");
   const [renamingId, setRenamingId] = useState("");
   const [renameValue, setRenameValue] = useState("");
+  const [resultFilter, setResultFilter] = useState<ResultFilter>("ALL");
+  const [visibleResults, setVisibleResults] = useState(50);
+  const resultSectionRef = useRef<HTMLDivElement>(null);
   const selected = useMemo(() => initial.find((item) => item.id === selectedId) || initial[0], [initial, selectedId]);
+  const resultCounts = useMemo(() => ({
+    all: selected?.urlStatuses.length || 0,
+    up: selected?.urlStatuses.filter((row) => row.status === "UP").length || 0,
+    slow: selected?.urlStatuses.filter((row) => row.status === "SLOW").length || 0,
+    down: selected?.urlStatuses.filter((row) => row.status === "DOWN").length || 0,
+    unknown: selected?.urlStatuses.filter((row) => row.status === "UNKNOWN").length || 0,
+  }), [selected]);
+  const filteredResults = useMemo(() => selected?.urlStatuses.filter((row) => resultFilter === "ALL" || row.status === resultFilter) || [], [selected, resultFilter]);
+
+  function selectAgent(agentId: string) {
+    setSelectedId(agentId);
+    setResultFilter("ALL");
+    setVisibleResults(50);
+  }
+
+  function showResultDetails(filter: ResultFilter) {
+    setResultFilter(filter);
+    setVisibleResults(50);
+    window.setTimeout(() => resultSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
 
   async function createAgent() {
     if (!name.trim()) return alert("กรุณาระบุชื่อเครื่อง");
@@ -180,7 +230,7 @@ export default function AgentsClient({ initial, canManage }: { initial: Agent[];
               const online = Boolean(agent.isActive && agent.hasEnrollment && agent.lastSeenAt && Date.now() - new Date(agent.lastSeenAt).getTime() < 12 * 60_000);
               const open = agent.networkIncidents.filter((item) => item.status !== "CLOSED").length;
               return (
-                <button key={agent.id} onClick={() => setSelectedId(agent.id)} className={`card w-full p-4 text-left transition ${selected?.id === agent.id ? "ring-2 ring-brand-500" : "hover:border-brand-200"}`}>
+                <button key={agent.id} onClick={() => selectAgent(agent.id)} className={`card w-full p-4 text-left transition ${selected?.id === agent.id ? "ring-2 ring-brand-500" : "hover:border-brand-200"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div><div className="font-semibold text-slate-800">📱 {agent.name}</div><div className="text-xs text-slate-400 mt-1">ซิม {agent.carrier} · {since(agent.lastSeenAt)}</div></div>
                     <span className={`badge ${online ? "bg-emerald-50 text-emerald-700" : agent.isActive ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-400"}`}>{online ? "ออนไลน์" : agent.isActive && !agent.hasEnrollment ? "รอผูก QR ใหม่" : agent.isActive ? "ขาดการเชื่อมต่อ" : "ปิดใช้งาน"}</span>
@@ -233,21 +283,48 @@ export default function AgentsClient({ initial, canManage }: { initial: Agent[];
                   </div>}
                 </div>
                 <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                  <div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">ตรวจล่าสุด</div><div className="font-medium text-slate-700 mt-1">{since(selected.lastSeenAt)}</div></div>
-                  <div className="rounded-xl bg-emerald-50 p-3"><div className="text-xs text-emerald-600">ใช้งานได้</div><div className="font-semibold text-emerald-700 mt-1">{selected.urlStatuses.filter((x) => x.status === "UP").length}</div></div>
-                  <div className="rounded-xl bg-amber-50 p-3"><div className="text-xs text-amber-600">โหลดช้า</div><div className="font-semibold text-amber-700 mt-1">{selected.urlStatuses.filter((x) => x.status === "SLOW").length}</div></div>
-                  <div className="rounded-xl bg-red-50 p-3"><div className="text-xs text-red-600">ใช้ไม่ได้</div><div className="font-semibold text-red-700 mt-1">{selected.urlStatuses.filter((x) => x.status === "DOWN").length}</div></div>
+                  <button type="button" aria-pressed={resultFilter === "ALL"} onClick={() => showResultDetails("ALL")} className={`rounded-xl bg-slate-50 p-3 text-left transition hover:ring-2 hover:ring-slate-200 ${resultFilter === "ALL" ? "ring-2 ring-slate-300" : ""}`}>
+                    <div className="text-xs text-slate-400">ตรวจล่าสุด</div><div className="font-medium text-slate-700 mt-1">{since(selected.lastSeenAt)}</div><div className="mt-1 text-[11px] text-brand-600">ดูทั้งหมด {resultCounts.all} URL →</div>
+                  </button>
+                  <button type="button" aria-pressed={resultFilter === "UP"} onClick={() => showResultDetails("UP")} className={`rounded-xl bg-emerald-50 p-3 text-left transition hover:ring-2 hover:ring-emerald-200 ${resultFilter === "UP" ? "ring-2 ring-emerald-300" : ""}`}>
+                    <div className="text-xs text-emerald-600">ใช้งานได้</div><div className="font-semibold text-emerald-700 mt-1">{resultCounts.up}</div><div className="mt-1 text-[11px] text-emerald-700">ดูรายละเอียด →</div>
+                  </button>
+                  <button type="button" aria-pressed={resultFilter === "SLOW"} onClick={() => showResultDetails("SLOW")} className={`rounded-xl bg-amber-50 p-3 text-left transition hover:ring-2 hover:ring-amber-200 ${resultFilter === "SLOW" ? "ring-2 ring-amber-300" : ""}`}>
+                    <div className="text-xs text-amber-600">โหลดช้า</div><div className="font-semibold text-amber-700 mt-1">{resultCounts.slow}</div><div className="mt-1 text-[11px] text-amber-700">ดูรายละเอียด →</div>
+                  </button>
+                  <button type="button" aria-pressed={resultFilter === "DOWN"} onClick={() => showResultDetails("DOWN")} className={`rounded-xl bg-red-50 p-3 text-left transition hover:ring-2 hover:ring-red-200 ${resultFilter === "DOWN" ? "ring-2 ring-red-300" : ""}`}>
+                    <div className="text-xs text-red-600">ใช้ไม่ได้</div><div className="font-semibold text-red-700 mt-1">{resultCounts.down}</div><div className="mt-1 text-[11px] text-red-700">ดูรายละเอียด →</div>
+                  </button>
                 </div>
               </div>
 
-              <div className="card overflow-hidden">
-                <div className="p-4 border-b border-slate-100 font-semibold text-slate-700">ผลตรวจล่าสุด (ตัวอย่าง 8 URL)</div>
-                {selected.urlStatuses.length === 0 ? <div className="p-6 text-sm text-slate-400">รอแอปส่งผลตรวจรอบแรก</div> : selected.urlStatuses.map((row) => (
+              <div ref={resultSectionRef} id="agent-result-report" className="card overflow-hidden scroll-mt-5">
+                <div className="border-b border-slate-100 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="font-semibold text-slate-700">สรุปและรายละเอียด — {FILTER_LABEL[resultFilter]}</div>
+                      <div className="mt-1 text-xs text-slate-400">{selected.name} · {(selected.reportedCarrier || selected.carrier)} · พบ {filteredResults.length} จากทั้งหมด {resultCounts.all} URL</div>
+                    </div>
+                    {resultFilter !== "ALL" && <button type="button" className="btn-ghost text-xs" onClick={() => showResultDetails("ALL")}>ดูผลทั้งหมด</button>}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                    <span className="badge bg-emerald-50 text-emerald-700">ใช้ได้ {resultCounts.up}</span>
+                    <span className="badge bg-amber-50 text-amber-700">ช้า {resultCounts.slow}</span>
+                    <span className="badge bg-red-50 text-red-700">ใช้ไม่ได้ {resultCounts.down}</span>
+                    {resultCounts.unknown > 0 && <span className="badge bg-slate-100 text-slate-500">ยังไม่ทราบ {resultCounts.unknown}</span>}
+                    <span className="badge bg-slate-100 text-slate-600">เคสค้าง {selected.networkIncidents.filter((item) => item.status !== "CLOSED").length}</span>
+                  </div>
+                </div>
+                {filteredResults.length === 0 ? <div className="p-6 text-sm text-slate-400">{selected.urlStatuses.length === 0 ? "รอแอปส่งผลตรวจรอบแรก" : `ไม่มี URL สถานะ${FILTER_LABEL[resultFilter]}`}</div> : filteredResults.slice(0, visibleResults).map((row) => {
+                  const contexts = linkContexts[normalizeResultUrl(row.url)] || [];
+                  return (
                   <div key={row.id} className="p-4 border-b border-slate-50 last:border-0 flex gap-3">
                     <span>{row.failureStreak > 0 && row.status !== "DOWN" ? "🟠" : row.status === "UP" ? "🟢" : row.status === "SLOW" ? "🟡" : row.status === "DOWN" ? "🔴" : "⚪"}</span>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm text-slate-700">{row.url}</div>
+                      <a href={row.url} target="_blank" rel="noreferrer" className="block truncate text-sm text-brand-600 hover:underline">{row.url} ↗</a>
+                      {contexts.length > 0 && <div className="mt-1 flex flex-wrap gap-1.5">{contexts.map((context) => <span key={context.id} className="badge bg-brand-50 text-brand-700">{context.name} · {context.company}{context.room ? ` · ${context.room}` : ""}</span>)}</div>}
                       <div className="mt-1 text-xs text-slate-400">HTTP {row.httpCode ?? "-"} · {row.responseMs ?? "-"} ms · {since(row.checkedAt)}{row.failureStreak > 0 ? ` · รอยืนยัน ${row.failureStreak}/2` : ""}</div>
+                      {row.error && <div className="mt-1 break-words text-xs text-red-600">สาเหตุ: {row.error}</div>}
                       {row.redirectCount > 0 && row.finalUrl && (
                         <div className={`mt-2 rounded-lg p-2 text-xs ${row.redirectType === "NETWORK_BLOCK" && row.status === "DOWN" ? "bg-red-50 text-red-700" : row.redirectType === "NETWORK_BLOCK" || row.redirectType === "POSSIBLE_DOMAIN_MOVE" ? "bg-amber-50 text-amber-700" : "bg-sky-50 text-sky-700"}`}>
                           <div className="font-medium">↪️ {row.redirectType === "NETWORK_BLOCK" ? "Redirect ไปหน้าปิดกั้นเครือข่าย" : row.redirectType === "POSSIBLE_DOMAIN_MOVE" ? "อาจย้ายโดเมน — รอแอดมินยืนยัน" : "Redirect ปกติ"} · {row.redirectCount} ครั้ง</div>
@@ -257,7 +334,8 @@ export default function AgentsClient({ initial, canManage }: { initial: Agent[];
                       )}
                     </div>
                   </div>
-                ))}
+                );})}
+                {visibleResults < filteredResults.length && <div className="border-t border-slate-100 p-4 text-center"><button type="button" className="btn-ghost text-sm" onClick={() => setVisibleResults((count) => count + 50)}>แสดงเพิ่มอีก {Math.min(50, filteredResults.length - visibleResults)} รายการ</button></div>}
               </div>
 
               <div className="card overflow-hidden">
