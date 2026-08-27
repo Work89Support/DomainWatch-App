@@ -41,6 +41,12 @@ type MobileIncident = {
   httpCode: number | null;
   responseMs: number | null;
   error: string | null;
+  finalUrl: string | null;
+  redirectCount: number;
+  redirectType: string | null;
+  redirectChain: string[] | null;
+  pageTitle: string | null;
+  blockPageDetected: boolean;
   agent: {
     id: string;
     name: string;
@@ -164,6 +170,11 @@ export default function IncidentsClient({
                       {incident.responseMs ? ` · ${(incident.responseMs / 1000).toFixed(1)} วินาที` : ""}
                     </div>
                     {incident.error && <div className="mt-2 rounded-lg bg-red-50 p-2 text-xs text-red-700">สาเหตุ: {incident.error}</div>}
+                    {incident.redirectCount > 0 && incident.finalUrl && (
+                      <div className="mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-700 break-all">
+                        ↪️ {incident.redirectType === "NETWORK_BLOCK" ? "หน้าปิดกั้นของเครือข่าย" : "ปลายทาง Redirect"}: {incident.finalUrl}
+                      </div>
+                    )}
                   </div>
                   <IncidentStatusBadge status={incident.status} />
                 </div>
@@ -274,6 +285,12 @@ function MobileIncidentPanel({ incident, onClose }: { incident: MobileIncident; 
           <Detail label="ตรวจพบ" value={fmtDateTime(incident.detectedAt)} />
           <Detail label="ผลตอบกลับ" value={`HTTP ${incident.httpCode ?? "-"} · ${incident.responseMs ? `${(incident.responseMs / 1000).toFixed(1)} วินาที` : "ไม่ทราบเวลา"}`} />
           <Detail label="สาเหตุจากเครื่อง" value={incident.error || "ไม่ระบุ"} danger />
+          {incident.redirectCount > 0 && incident.finalUrl && <>
+            <Detail label="ประเภท Redirect" value={incident.redirectType === "NETWORK_BLOCK" ? "หน้าปิดกั้นจากเครือข่ายมือถือ" : incident.redirectType === "POSSIBLE_DOMAIN_MOVE" ? "อาจมีการย้ายโดเมน — ยังไม่ได้เปลี่ยน Master Data" : "Redirect ปกติ"} danger={incident.redirectType === "NETWORK_BLOCK"} />
+            <Detail label="URL ปลายทาง" value={incident.finalUrl} />
+            <Detail label="จำนวน / เส้นทาง" value={`${incident.redirectCount} ครั้ง${Array.isArray(incident.redirectChain) ? ` · ${incident.redirectChain.join(" → ")}` : ""}`} />
+            {incident.pageTitle && <Detail label="ชื่อหน้าปลายทาง" value={incident.pageTitle} />}
+          </>}
           <div>
             <div className="text-xs text-slate-400">ลิงก์ที่ตรวจ</div>
             <a href={incident.link.url} target="_blank" rel="noreferrer" className="text-brand-600 break-all hover:underline">{incident.link.url} ↗</a>

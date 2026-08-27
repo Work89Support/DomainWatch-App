@@ -154,6 +154,7 @@ export default async function ReportPage({ searchParams }: { searchParams: { dat
                     <span className="text-slate-500">· {incident.name} · {incident.company}{incident.room ? ` · ห้อง ${incident.room}` : ""}</span>
                   </div>
                   <div className="mt-1 text-xs text-red-600">เคส #{incident.id.slice(-8).toUpperCase()} · ค้างตั้งแต่ {fmtDateTime(incident.detectedAt)} · {fmtMinutes(incident.openMinutes)}</div>
+                  {incident.finalUrl && incident.finalUrl !== incident.url && <div className="mt-1 break-all text-xs text-amber-700">↪️ {incident.redirectType === "NETWORK_BLOCK" ? "หน้าปิดกั้นเครือข่าย" : "ปลายทาง Redirect"}: {incident.finalUrl} ({incident.redirectCount} ครั้ง)</div>}
                 </div>
               ))}
             </div>

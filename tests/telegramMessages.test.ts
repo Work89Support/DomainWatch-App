@@ -80,13 +80,18 @@ test("mobile carrier outage message identifies TRUE and the exact room", () => {
     room: "Room A",
     name: "Login",
     url: "https://example.com/login",
-    error: "HTTP 503 จากเครือข่ายมือถือ",
+    finalUrl: "https://blockpage.true.example/notice",
+    redirectType: "NETWORK_BLOCK",
+    redirectCount: 2,
+    error: "ถูก Redirect ไปหน้าปิดกั้นของเครือข่ายมือถือ",
     detectedAt: new Date("2026-08-26T00:00:00Z"),
     appBaseUrl: "https://watch.example.com",
   });
   assert.match(message.text, /TRUE เปิดลิงก์ไม่ได้/);
   assert.match(message.text, /Room A/);
   assert.match(message.text, /ยืนยันจากซิม 2 รอบ/);
+  assert.match(message.text, /blockpage\.true\.example/);
+  assert.match(message.text, /หน้าปิดกั้นเครือข่าย/);
 });
 
 test("mobile slow recovery is clearly reported", () => {

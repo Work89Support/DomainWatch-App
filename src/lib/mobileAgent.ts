@@ -96,8 +96,45 @@ type MobileResultInput = {
   httpCode?: number | null;
   responseMs?: number | null;
   error?: string | null;
+  finalUrl?: string | null;
+  redirectCount?: number;
+  redirectChain?: string[];
+  pageTitle?: string | null;
+  blockPageDetected?: boolean;
   checkedAt: Date;
 };
+
+export type MobileRedirectType = "NONE" | "NORMAL" | "NETWORK_BLOCK" | "POSSIBLE_DOMAIN_MOVE";
+
+const SHORTENER_HOSTS = new Set([
+  "bit.ly", "cutt.ly", "tinyurl.com", "t.co", "rebrand.ly", "shorturl.at", "is.gd", "v.gd",
+]);
+
+function hostname(value?: string | null): string {
+  try { return new URL(value || "").hostname.toLowerCase().replace(/^www\./, ""); }
+  catch { return ""; }
+}
+
+export function classifyMobileRedirect(input: {
+  requestedUrl: string;
+  finalUrl?: string | null;
+  redirectCount?: number;
+  httpCode?: number | null;
+  blockPageDetected?: boolean;
+}): MobileRedirectType {
+  const requested = normalizeUrl(input.requestedUrl);
+  const finalUrl = normalizeUrl(input.finalUrl || input.requestedUrl);
+  const count = Math.max(0, input.redirectCount || 0);
+  if (count === 0 || requested === finalUrl) return "NONE";
+
+  const from = hostname(requested);
+  const to = hostname(finalUrl);
+  const suspicious = /(block|blocked|deny|denied|forbidden|suspend|ระงับ|ปิดกั้น)/i.test(finalUrl);
+  if (input.blockPageDetected || input.httpCode === 451 || suspicious) return "NETWORK_BLOCK";
+  if (SHORTENER_HOSTS.has(from)) return "NORMAL";
+  if (from && to && (from === to || from.endsWith(`.${to}`) || to.endsWith(`.${from}`))) return "NORMAL";
+  return "POSSIBLE_DOMAIN_MOVE";
+}
 
 type TelegramRoute = { botToken: string; chatId: string };
 
@@ -174,10 +211,23 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
       where: { agentId_urlHash: { agentId, urlHash: result.urlHash } },
     });
     if (previous && result.checkedAt <= previous.checkedAt) continue;
-    const probeStatus = normalizeMobileProbeStatus(result.status, result.error);
+    const finalUrl = result.finalUrl ? normalizeUrl(result.finalUrl) : normalized;
+    const redirectCount = Math.max(0, result.redirectCount || 0);
+    const redirectChain = (result.redirectChain || []).slice(0, 12);
+    const redirectType = classifyMobileRedirect({
+      requestedUrl: normalized,
+      finalUrl,
+      redirectCount,
+      httpCode: result.httpCode,
+      blockPageDetected: result.blockPageDetected,
+    });
+    const rawProbeStatus = redirectType === "NETWORK_BLOCK" ? "DOWN" : result.status;
+    const probeStatus = normalizeMobileProbeStatus(rawProbeStatus, result.error);
     const normalizedError = probeStatus === "SLOW" && result.status === "DOWN"
       ? "ตอบกลับช้าหรือหมดเวลาตรวจ (ยังไม่ยืนยันว่าเว็บล่ม)"
-      : result.error ?? null;
+      : redirectType === "NETWORK_BLOCK"
+        ? "ถูก Redirect ไปหน้าปิดกั้นของเครือข่ายมือถือ"
+        : result.error ?? null;
     const next = nextMobileState(previous, probeStatus);
 
     await prisma.mobileUrlStatus.upsert({
@@ -190,6 +240,12 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
         httpCode: result.httpCode ?? null,
         responseMs: result.responseMs ?? null,
         error: normalizedError,
+        finalUrl,
+        redirectCount,
+        redirectType,
+        redirectChain,
+        pageTitle: result.pageTitle ?? null,
+        blockPageDetected: redirectType === "NETWORK_BLOCK",
         failureStreak: next.failureStreak,
         recoveryStreak: next.recoveryStreak,
         checkedAt: result.checkedAt,
@@ -200,6 +256,12 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
         httpCode: result.httpCode ?? null,
         responseMs: result.responseMs ?? null,
         error: normalizedError,
+        finalUrl,
+        redirectCount,
+        redirectType,
+        redirectChain,
+        pageTitle: result.pageTitle ?? null,
+        blockPageDetected: redirectType === "NETWORK_BLOCK",
         failureStreak: next.failureStreak,
         recoveryStreak: next.recoveryStreak,
         checkedAt: result.checkedAt,
@@ -216,11 +278,16 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
           httpCode: result.httpCode ?? null,
           responseMs: result.responseMs ?? null,
           error: normalizedError,
+          finalUrl,
+          redirectCount,
+          redirectType,
+          redirectChain,
+          pageTitle: result.pageTitle ?? null,
+          blockPageDetected: redirectType === "NETWORK_BLOCK",
           checkedAt: result.checkedAt,
         },
       });
     }
-
     if (!next.opened && !next.recovered) continue;
     const candidateLinks = await prisma.link.findMany({
       where: { isActive: true },
@@ -245,6 +312,12 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
             httpCode: result.httpCode ?? null,
             responseMs: result.responseMs ?? null,
             error: normalizedError,
+            finalUrl,
+            redirectCount,
+            redirectType,
+            redirectChain,
+            pageTitle: result.pageTitle ?? null,
+            blockPageDetected: redirectType === "NETWORK_BLOCK",
           },
         });
         await notifyCompany(routes, link.company.id, networkDownMessage({
@@ -257,6 +330,9 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
           url: link.url,
           httpCode: result.httpCode,
           error: normalizedError,
+          finalUrl,
+          redirectType,
+          redirectCount,
           detectedAt: result.checkedAt,
           appBaseUrl: APP_BASE_URL,
         }));

@@ -26,6 +26,13 @@ export async function POST(req: NextRequest) {
       httpCode: typeof item.httpCode === "number" ? Math.trunc(item.httpCode) : null,
       responseMs: typeof item.responseMs === "number" ? Math.max(0, Math.trunc(item.responseMs)) : null,
       error: typeof item.error === "string" ? item.error.slice(0, 1000) : null,
+      finalUrl: typeof item.finalUrl === "string" ? item.finalUrl.slice(0, 3000) : null,
+      redirectCount: typeof item.redirectCount === "number" ? Math.min(10, Math.max(0, Math.trunc(item.redirectCount))) : 0,
+      redirectChain: Array.isArray(item.redirectChain)
+        ? item.redirectChain.filter((url): url is string => typeof url === "string").slice(0, 12).map((url) => url.slice(0, 3000))
+        : [],
+      pageTitle: typeof item.pageTitle === "string" ? item.pageTitle.slice(0, 200) : null,
+      blockPageDetected: item.blockPageDetected === true,
       checkedAt,
     }];
   });

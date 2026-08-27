@@ -77,6 +77,9 @@ export type DailyReport = {
     company: string;
     room: string | null;
     url: string;
+    finalUrl?: string | null;
+    redirectType?: string | null;
+    redirectCount?: number;
     detectedAt: string;
     openMinutes: number;
   }[];
@@ -244,6 +247,9 @@ export async function getDailyReport(
         company: incident.link.company.name,
         room: incident.link.lineGroup?.name || null,
         url: incident.link.url,
+        finalUrl: incident.finalUrl,
+        redirectType: incident.redirectType,
+        redirectCount: incident.redirectCount,
         detectedAt: incident.detectedAt.toISOString(),
         openMinutes: Math.max(1, Math.round((reportNow.getTime() - incident.detectedAt.getTime()) / 60000)),
       }))

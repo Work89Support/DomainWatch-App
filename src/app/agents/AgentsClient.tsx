@@ -9,9 +9,12 @@ type UrlStatus = {
   id: string; url: string; status: "UP" | "SLOW" | "DOWN" | "UNKNOWN";
   httpCode: number | null; responseMs: number | null; error: string | null; checkedAt: string;
   failureStreak: number;
+  finalUrl: string | null; redirectCount: number; redirectType: string | null;
+  redirectChain: string[] | null; pageTitle: string | null; blockPageDetected: boolean;
 };
 type NetworkIncident = {
   id: string; status: string; detectedAt: string; resolvedAt: string | null;
+  finalUrl: string | null; redirectCount: number; redirectType: string | null;
   link: { name: string; url: string; company: { name: string }; lineGroup: { name: string } | null };
 };
 type Agent = {
@@ -145,8 +148,8 @@ export default function AgentsClient({ initial, canManage }: { initial: Agent[];
       />
 
       <div className="card mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border-brand-100 bg-brand-50/40">
-        <div><div className="font-semibold text-slate-700">1) ติดตั้งแอปบนโทรศัพท์ก่อน</div><div className="mt-1 text-xs text-slate-500">รองรับ Android 8 ขึ้นไป · รุ่น 1.0.3 · แจ้งชัดเมื่อสิทธิ์หมดและต้องผูก QR ใหม่</div></div>
-        <a className="btn-primary whitespace-nowrap" href="/downloads/DomainWatch-Agent-v1.0.3.apk" download>⬇️ ดาวน์โหลด APK</a>
+        <div><div className="font-semibold text-slate-700">1) ติดตั้งแอปบนโทรศัพท์ก่อน</div><div className="mt-1 text-xs text-slate-500">รองรับ Android 8 ขึ้นไป · รุ่น 1.0.4 · บันทึก Redirect และแยกหน้าปิดกั้นของเครือข่าย</div></div>
+        <a className="btn-primary whitespace-nowrap" href="/downloads/DomainWatch-Agent-v1.0.4.apk" download>⬇️ ดาวน์โหลด APK</a>
       </div>
 
       {canManage && <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
@@ -241,8 +244,18 @@ export default function AgentsClient({ initial, canManage }: { initial: Agent[];
                 <div className="p-4 border-b border-slate-100 font-semibold text-slate-700">ผลตรวจล่าสุด (ตัวอย่าง 8 URL)</div>
                 {selected.urlStatuses.length === 0 ? <div className="p-6 text-sm text-slate-400">รอแอปส่งผลตรวจรอบแรก</div> : selected.urlStatuses.map((row) => (
                   <div key={row.id} className="p-4 border-b border-slate-50 last:border-0 flex gap-3">
-                    <span>{row.status === "UP" ? "🟢" : row.status === "SLOW" ? "🟡" : row.status === "DOWN" ? "🔴" : "⚪"}</span>
-                    <div className="min-w-0 flex-1"><div className="truncate text-sm text-slate-700">{row.url}</div><div className="mt-1 text-xs text-slate-400">HTTP {row.httpCode ?? "-"} · {row.responseMs ?? "-"} ms · {since(row.checkedAt)}{row.failureStreak > 0 ? ` · รอยืนยัน ${row.failureStreak}/2` : ""}</div></div>
+                    <span>{row.failureStreak > 0 && row.status !== "DOWN" ? "🟠" : row.status === "UP" ? "🟢" : row.status === "SLOW" ? "🟡" : row.status === "DOWN" ? "🔴" : "⚪"}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm text-slate-700">{row.url}</div>
+                      <div className="mt-1 text-xs text-slate-400">HTTP {row.httpCode ?? "-"} · {row.responseMs ?? "-"} ms · {since(row.checkedAt)}{row.failureStreak > 0 ? ` · รอยืนยัน ${row.failureStreak}/2` : ""}</div>
+                      {row.redirectCount > 0 && row.finalUrl && (
+                        <div className={`mt-2 rounded-lg p-2 text-xs ${row.redirectType === "NETWORK_BLOCK" && row.status === "DOWN" ? "bg-red-50 text-red-700" : row.redirectType === "NETWORK_BLOCK" || row.redirectType === "POSSIBLE_DOMAIN_MOVE" ? "bg-amber-50 text-amber-700" : "bg-sky-50 text-sky-700"}`}>
+                          <div className="font-medium">↪️ {row.redirectType === "NETWORK_BLOCK" ? "Redirect ไปหน้าปิดกั้นเครือข่าย" : row.redirectType === "POSSIBLE_DOMAIN_MOVE" ? "อาจย้ายโดเมน — รอแอดมินยืนยัน" : "Redirect ปกติ"} · {row.redirectCount} ครั้ง</div>
+                          <div className="mt-1 break-all">ปลายทาง: {row.finalUrl}</div>
+                          {row.pageTitle && <div className="mt-1 text-slate-500">ชื่อหน้า: {row.pageTitle}</div>}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -253,6 +266,7 @@ export default function AgentsClient({ initial, canManage }: { initial: Agent[];
                   <div key={incident.id} className="p-4 border-b border-slate-50 last:border-0">
                     <div className="flex items-center justify-between gap-3"><div className="font-medium text-slate-700">{incident.link.name} · {incident.link.company.name}</div><span className={`badge ${incident.status === "CLOSED" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{incident.status === "CLOSED" ? "กลับมาปกติ" : "ยังมีปัญหา"}</span></div>
                     <div className="mt-1 text-xs text-slate-400">{incident.link.lineGroup?.name || "ไม่ระบุห้อง"} · #{incident.id.slice(-8).toUpperCase()} · เริ่ม {new Date(incident.detectedAt).toLocaleString("th-TH")}</div>
+                    {incident.redirectCount > 0 && incident.finalUrl && <div className="mt-2 text-xs text-red-600 break-all">↪️ {incident.redirectType === "NETWORK_BLOCK" ? "หน้าปิดกั้นเครือข่าย" : "ปลายทาง Redirect"}: {incident.finalUrl}</div>}
                   </div>
                 ))}
               </div>

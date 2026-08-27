@@ -274,7 +274,7 @@ def build_doc():
     r=p.add_run("คู่มือส่งมอบ\nเครื่องตรวจเครือข่ายมือถือ TRUE"); r.bold=True; r.font.size=Pt(29); r.font.color.rgb=RGBColor.from_string(NAVY)
     p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER; r=p.add_run("ติดตั้ง • ผูกเครื่องด้วย QR • ตรวจตลอดเวลา • ย้ายเครื่องได้"); r.font.size=Pt(13); r.font.color.rgb=RGBColor.from_string(MUTED)
     doc.add_picture(str(phone),width=Cm(5.8)); doc.paragraphs[-1].alignment=WD_ALIGN_PARAGRAPH.CENTER
-    p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER; r=p.add_run("เวอร์ชันเอกสาร 1.0  |  แอป Android 1.0.3  |  26 สิงหาคม 2569"); r.font.size=Pt(9); r.font.color.rgb=RGBColor.from_string(MUTED)
+    p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER; r=p.add_run("เวอร์ชันเอกสาร 1.0  |  แอป Android 1.0.4  |  27 สิงหาคม 2569"); r.font.size=Pt(9); r.font.color.rgb=RGBColor.from_string(MUTED)
 
     add_page(doc,"เริ่มใช้งานแบบเร็ว","ใช้เวลาโดยประมาณ 10–15 นาที เมื่อโทรศัพท์มีซิม TRUE และอินเทอร์เน็ตพร้อม")
     add_callout(doc,"สิ่งที่ได้รับ","APK ที่ลงนามแล้ว, หน้าเมนูเครื่องตรวจเครือข่าย, QR ใช้ครั้งเดียว, ประวัติผลตรวจจากซิม และการแจ้งเตือน Telegram แยกตาม URL/ห้อง LINE")
@@ -311,12 +311,12 @@ def build_doc():
 
     add_page(doc,"ติดตั้ง APK บนโทรศัพท์ Android","ไม่ต้องใช้ Termux, Termux:Boot หรือ Termux:API")
     add_steps(doc,[
-        ("ดาวน์โหลด APK","จากหน้า /agents กด ดาวน์โหลด APK หรือใช้ไฟล์ DomainWatch-Agent-v1.0.3.apk ในชุดส่งมอบ"),
+        ("ดาวน์โหลด APK","จากหน้า /agents กด ดาวน์โหลด APK หรือใช้ไฟล์ DomainWatch-Agent-v1.0.4.apk ในชุดส่งมอบ"),
         ("อนุญาตติดตั้งแอปไม่รู้จัก","หาก Android ถาม ให้เปิดอนุญาตเฉพาะเบราว์เซอร์/แอปไฟล์ที่ใช้ติดตั้ง แล้วปิดสิทธิ์นี้ภายหลังได้"),
         ("ติดตั้ง","กด ติดตั้ง และเปิด DomainWatch Agent เมื่อเสร็จ"),
         ("อนุญาตแจ้งเตือน","ต้องอนุญาตเพื่อให้บริการเบื้องหลังแสดงสถานะต่อเนื่อง"),
     ])
-    add_callout(doc,"ตรวจลายเซ็นไฟล์","SHA‑256 ของ APK รุ่น 1.0.3: b391387233ad697b7d3f1192aa69069e1534fb5a541e8e9866fcc353f0d4d9f8","F0FDF4")
+    add_callout(doc,"ตรวจลายเซ็นไฟล์","SHA‑256 ของ APK รุ่น 1.0.4: 6b0699fbc67f2b6bb861db281ece89062255ba267cefa474af354353bd7dc68f","F0FDF4")
     doc.add_heading("ถ้าติดตั้งไม่ได้",1)
     add_checklist(doc,["ลบ APK ที่ดาวน์โหลดไม่ครบแล้วดาวน์โหลดใหม่","ตรวจพื้นที่ว่างอย่างน้อย 300 MB","หากมีแอปรุ่นทดสอบคนละลายเซ็น ให้ถอนรุ่นทดสอบก่อน","อย่าแชร์ APK ผ่านแอปที่บีบอัดหรือเปลี่ยนชื่อไฟล์"])
 
@@ -384,7 +384,7 @@ def build_doc():
     table=doc.add_table(rows=1,cols=3); table.style='Table Grid'; table.alignment=WD_TABLE_ALIGNMENT.CENTER
     for i,h in enumerate(["ไฟล์/ตำแหน่ง","วัตถุประสงค์","การเก็บ"]): set_cell_shading(table.rows[0].cells[i],NAVY); rr=table.rows[0].cells[i].paragraphs[0].add_run(h); rr.bold=True; rr.font.color.rgb=RGBColor(255,255,255)
     rows=[
-        ("deliverables/public/DomainWatch-Agent-v1.0.3.apk","ติดตั้งบนโทรศัพท์","แชร์ให้ทีมติดตั้งได้"),
+        ("deliverables/public/DomainWatch-Agent-v1.0.4.apk","ติดตั้งบนโทรศัพท์","แชร์ให้ทีมติดตั้งได้"),
         ("android-agent/","ซอร์ส Android สำหรับพัฒนาต่อ","GitHub"),
         ("deliverables/private/*.jks","กุญแจเซ็นอัปเดต APK","Password manager/สื่อเข้ารหัส"),
         ("deliverables/private/SIGNING-KEY-README.txt","ชื่อ alias และขั้นตอนเซ็น","เก็บคู่กับ key แบบจำกัดสิทธิ์"),

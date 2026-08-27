@@ -279,6 +279,9 @@ export function networkDownMessage(opts: {
   url: string;
   httpCode?: number | null;
   error?: string | null;
+  finalUrl?: string | null;
+  redirectType?: string | null;
+  redirectCount?: number;
   detectedAt: Date;
   appBaseUrl: string;
 }): TgMessage {
@@ -294,6 +297,10 @@ export function networkDownMessage(opts: {
       ...(opts.room ? [`💬 ห้อง: ${escapeHtml(opts.room)}`] : []),
       `📄 <b>${escapeHtml(opts.name)}</b>`,
       `🔗 ${escapeHtml(opts.url)}`,
+      ...(opts.finalUrl && opts.finalUrl !== opts.url ? [
+        `↪️ ปลายทาง: ${escapeHtml(opts.finalUrl)}`,
+        `🧭 Redirect: ${opts.redirectCount || 1} ครั้ง${opts.redirectType === "NETWORK_BLOCK" ? " · หน้าปิดกั้นเครือข่าย" : ""}`,
+      ] : []),
       `⚠️ สาเหตุ: ${escapeHtml(reason)}`,
       `🕒 ตรวจพบ: ${detected}`,
     ].join("\n"),
@@ -414,7 +421,10 @@ export function mobileAgentReportLines(
       const room = incident.room ? ` · ห้อง ${escapeHtml(incident.room)}` : "";
       lines.push(
         `🔴 #${incident.id.slice(-8).toUpperCase()} ${escapeHtml(incident.carrier)}/${escapeHtml(incident.agentName)}`,
-        `  ${escapeHtml(incident.name)} · ${escapeHtml(incident.company)}${room} · ${fmtMinutes(incident.openMinutes)}`
+        `  ${escapeHtml(incident.name)} · ${escapeHtml(incident.company)}${room} · ${fmtMinutes(incident.openMinutes)}`,
+        ...(incident.finalUrl && incident.finalUrl !== incident.url
+          ? [`  ↪️ ${incident.redirectType === "NETWORK_BLOCK" ? "หน้าปิดกั้นเครือข่าย" : "ปลายทาง"}: ${escapeHtml(incident.finalUrl)}`]
+          : [])
       );
     }
     if (r.mobileOpenDetails.length > 5) lines.push(`…และอีก ${r.mobileOpenDetails.length - 5} ปัญหาจากซิม ดูต่อในระบบ`);

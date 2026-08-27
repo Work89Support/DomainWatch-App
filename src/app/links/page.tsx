@@ -72,6 +72,10 @@ export default async function LinksPage({
             httpCode: true,
             error: true,
             failureStreak: true,
+            finalUrl: true,
+            redirectCount: true,
+            redirectType: true,
+            pageTitle: true,
           },
         },
       },
@@ -80,6 +84,7 @@ export default async function LinksPage({
   const checksByUrl = new Map<string, Array<{
     agentId: string; agentName: string; carrier: string; agentActive: boolean;
     status: string; checkedAt: Date; responseMs: number | null; httpCode: number | null; error: string | null; failureStreak: number;
+    finalUrl: string | null; redirectCount: number; redirectType: string | null; pageTitle: string | null;
   }>>();
   for (const agent of mobileAgents) {
     for (const status of agent.urlStatuses) {
@@ -96,6 +101,10 @@ export default async function LinksPage({
         httpCode: status.httpCode,
         error: status.error,
         failureStreak: status.failureStreak,
+        finalUrl: status.finalUrl,
+        redirectCount: status.redirectCount,
+        redirectType: status.redirectType,
+        pageTitle: status.pageTitle,
       });
       checksByUrl.set(key, rows);
     }

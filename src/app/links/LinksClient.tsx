@@ -11,6 +11,7 @@ type MobileAgentOption = { id: string; name: string; carrier: string; reportedCa
 type MobileCheck = {
   agentId: string; agentName: string; carrier: string; agentActive: boolean;
   status: string; checkedAt: string; responseMs: number | null; httpCode: number | null; error: string | null; failureStreak: number;
+  finalUrl: string | null; redirectCount: number; redirectType: string | null; pageTitle: string | null;
 };
 
 type LinkRow = {
@@ -136,13 +137,17 @@ export default function LinksClient({
         detail: "ตัวตรวจระบบกลาง",
         error: null as string | null,
         failureStreak: 0,
+        finalUrl: null as string | null,
+        redirectCount: 0,
+        redirectType: null as string | null,
+        pageTitle: null as string | null,
       };
     }
     const checks = link.mobileChecks.filter((check) =>
       fAgent ? check.agentId === fAgent : check.agentActive
     );
     if (checks.length === 0) {
-      return { status: "UNKNOWN", checkedAt: null, responseMs: null, httpCode: null, detail: "ยังไม่มีผลจากซิม", error: null as string | null, failureStreak: 0 };
+      return { status: "UNKNOWN", checkedAt: null, responseMs: null, httpCode: null, detail: "ยังไม่มีผลจากซิม", error: null as string | null, failureStreak: 0, finalUrl: null as string | null, redirectCount: 0, redirectType: null as string | null, pageTitle: null as string | null };
     }
     const priority: Record<string, number> = { DOWN: 4, SLOW: 3, UNKNOWN: 2, UP: 1 };
     const selected = [...checks].sort((a, b) =>
@@ -157,6 +162,10 @@ export default function LinksClient({
       detail: fAgent ? `${selected.carrier} · ${selected.agentName}` : `รวม ${checks.length} เครื่อง`,
       error: selected.error,
       failureStreak: selected.failureStreak,
+      finalUrl: selected.finalUrl,
+      redirectCount: selected.redirectCount,
+      redirectType: selected.redirectType,
+      pageTitle: selected.pageTitle,
     };
   };
 
@@ -263,11 +272,16 @@ export default function LinksClient({
       </td>
       <td className="py-3 px-4 text-slate-600">{l.category || "-"}</td>
       <td className="py-3 px-4">
-        {view.status === "UNKNOWN" && view.failureStreak > 0
+        {view.failureStreak > 0 && view.status !== "DOWN"
           ? <span className="badge bg-amber-50 text-amber-700">● รอยืนยัน {view.failureStreak}/2</span>
           : <StatusBadge status={view.status} />}
         <div className="mt-1 text-[11px] text-slate-400">{view.detail}</div>
         {view.error && <div className={`mt-1 max-w-[220px] text-[11px] line-clamp-2 ${view.status === "DOWN" ? "text-red-500" : "text-amber-600"}`}>{view.error}</div>}
+        {fSource === "MOBILE" && view.redirectCount > 0 && view.finalUrl && (
+          <div className={`mt-1 max-w-[260px] text-[11px] break-all ${view.redirectType === "NETWORK_BLOCK" ? "text-red-600" : view.redirectType === "POSSIBLE_DOMAIN_MOVE" ? "text-amber-600" : "text-sky-600"}`}>
+            ↪️ {view.redirectType === "NETWORK_BLOCK" ? "หน้าปิดกั้นเครือข่าย" : view.redirectType === "POSSIBLE_DOMAIN_MOVE" ? "อาจย้ายโดเมน (ยังไม่เปลี่ยนลิงก์หลัก)" : "Redirect ปกติ"}: {view.finalUrl}
+          </div>
+        )}
       </td>
       <td className="py-3 px-4 text-slate-500 text-xs">
         <div>{fmtDateTime(view.checkedAt)}</div>

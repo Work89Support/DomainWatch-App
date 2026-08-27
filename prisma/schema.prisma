@@ -140,6 +140,12 @@ model MobileUrlStatus {
   httpCode       Int?
   responseMs     Int?
   error          String?
+  finalUrl       String?
+  redirectCount Int        @default(0)
+  redirectType  String?
+  redirectChain Json?
+  pageTitle      String?
+  blockPageDetected Boolean @default(false)
   failureStreak  Int        @default(0)
   recoveryStreak Int        @default(0)
   checkedAt      DateTime
@@ -160,6 +166,12 @@ model MobileCheckLog {
   httpCode   Int?
   responseMs Int?
   error      String?
+  finalUrl   String?
+  redirectCount Int     @default(0)
+  redirectType String?
+  redirectChain Json?
+  pageTitle  String?
+  blockPageDetected Boolean @default(false)
   checkedAt  DateTime
   createdAt  DateTime   @default(now())
 
@@ -180,6 +192,12 @@ model NetworkIncident {
   httpCode   Int?
   responseMs Int?
   error      String?
+  finalUrl   String?
+  redirectCount Int     @default(0)
+  redirectType String?
+  redirectChain Json?
+  pageTitle  String?
+  blockPageDetected Boolean @default(false)
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mobileUrlHash, nextMobileState, normalizeMobileProbeStatus, normalizeUrl, resolvePublicBaseUrl } from "../src/lib/mobileAgent";
+import { classifyMobileRedirect, mobileUrlHash, nextMobileState, normalizeMobileProbeStatus, normalizeUrl, resolvePublicBaseUrl } from "../src/lib/mobileAgent";
 
 test("mobile URL hash ignores fragments but keeps a stable normalized URL", () => {
   assert.equal(normalizeUrl("https://example.com/path#section"), "https://example.com/path");
@@ -53,4 +53,28 @@ test("mobile timeout is inconclusive/slow and must not open a false outage", () 
   const first = nextMobileState(null, normalizeMobileProbeStatus("DOWN", "Read timed out"));
   assert.equal(first.status, "SLOW");
   assert.equal(first.opened, false);
+});
+
+test("mobile redirects are classified without changing the requested master URL", () => {
+  assert.equal(classifyMobileRedirect({
+    requestedUrl: "https://example.com",
+    finalUrl: "https://example.com/login",
+    redirectCount: 1,
+  }), "NORMAL");
+  assert.equal(classifyMobileRedirect({
+    requestedUrl: "https://cutt.ly/abc",
+    finalUrl: "https://new-domain.example/login",
+    redirectCount: 2,
+  }), "NORMAL");
+  assert.equal(classifyMobileRedirect({
+    requestedUrl: "https://old-domain.example",
+    finalUrl: "https://new-domain.example",
+    redirectCount: 1,
+  }), "POSSIBLE_DOMAIN_MOVE");
+  assert.equal(classifyMobileRedirect({
+    requestedUrl: "https://old-domain.example",
+    finalUrl: "https://blockpage.true.example/notice",
+    redirectCount: 1,
+    blockPageDetected: true,
+  }), "NETWORK_BLOCK");
 });

@@ -228,7 +228,7 @@ domainwatch/
 - กด **สร้าง QR / ย้ายเครื่อง** เพื่อผูกโทรศัพท์ใหม่ เมื่อผูกสำเร็จ token ของเครื่องเดิมจะใช้ไม่ได้ทันที
 
 โค้ด Android อยู่ใน `android-agent/` (Java 17, minSdk 26, targetSdk 34) และ APK รุ่นส่งมอบอยู่ที่
-`public/downloads/DomainWatch-Agent-v1.0.3.apk` ผู้ใช้ดาวน์โหลดจากหน้าเครื่องตรวจได้โดยตรง
+`public/downloads/DomainWatch-Agent-v1.0.4.apk` ผู้ใช้ดาวน์โหลดจากหน้าเครื่องตรวจได้โดยตรง
 
 ### สร้าง APK รุ่นใหม่
 
