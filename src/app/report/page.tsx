@@ -227,8 +227,8 @@ export default async function ReportPage({ searchParams }: { searchParams: { dat
                     <td className="py-2.5 pr-4 text-slate-500">{SHIFT_ICON[i.shift]} {SHIFT_LABEL[i.shift]}</td>
                     <td className="py-2.5 pr-4 text-slate-500">{fmtDateTime(i.detectedAt)}</td>
                     <td className="py-2.5 pr-4">
-                      <span className={`badge text-[11px] ${i.status === "CLOSED" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                        {i.status === "CLOSED" ? "ปิดแล้ว" : "ยังค้าง"}
+                      <span className={`badge text-[11px] ${i.status === "CLOSED" ? "bg-emerald-50 text-emerald-700" : i.status === "PAUSED" ? "bg-slate-100 text-slate-600" : "bg-amber-50 text-amber-700"}`}>
+                        {i.status === "CLOSED" ? "ปิดแล้ว" : i.status === "PAUSED" ? "พักการเฝ้าดู" : "ยังค้าง"}
                       </span>
                     </td>
                     <td className="py-2.5 pr-4 text-slate-500">{fmtMinutes(i.adminResponseMin)}</td>

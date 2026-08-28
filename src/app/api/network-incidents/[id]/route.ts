@@ -81,6 +81,7 @@ export async function PATCH(
     note: typeof body.note === "string" ? body.note.trim() || null : body.note === null ? null : incident.link.note,
     isActive: typeof body.isActive === "boolean" ? body.isActive : incident.link.isActive,
   };
+  const nextIncidentStatus = linkData.isActive === false ? "PAUSED" : "ADMIN_UPDATED";
   if (result) {
     Object.assign(linkData, {
       lastStatus: status,
@@ -93,14 +94,21 @@ export async function PATCH(
   }
 
   if (!urlChanged) {
-    const [link] = await prisma.$transaction([
+    const operations: Prisma.PrismaPromise<unknown>[] = [
       prisma.link.update({ where: { id: incident.linkId }, data: linkData }),
       prisma.networkIncident.updateMany({
         where: { linkId: incident.linkId, status: { not: "CLOSED" } },
-        data: { status: "ADMIN_UPDATED", resolvedAt: null },
+        data: { status: nextIncidentStatus, resolvedAt: null },
       }),
-    ]);
-    return NextResponse.json({ ok: true, link, incidentStatus: "ADMIN_UPDATED", urlChanged: false });
+    ];
+    if (nextIncidentStatus === "PAUSED") {
+      operations.push(prisma.incident.updateMany({
+        where: { linkId: incident.linkId, status: { notIn: ["CLOSED", "PAUSED"] } },
+        data: { status: "PAUSED" },
+      }));
+    }
+    const [link] = await prisma.$transaction(operations);
+    return NextResponse.json({ ok: true, link, incidentStatus: nextIncidentStatus, urlChanged: false });
   }
 
   const otherLinks = await prisma.link.findMany({
@@ -127,12 +135,18 @@ export async function PATCH(
       where: { linkId: incident.linkId, status: { not: "CLOSED" } },
       // การเปิดได้จากตัวตรวจส่วนกลางยังไม่ยืนยันว่าเปิดได้ผ่านซิมจริง
       // ให้เครื่องซิมตรวจผ่านอีกครั้งก่อนจึงปิดเคสอัตโนมัติ
-      data: { status: "ADMIN_UPDATED", resolvedAt: null },
+      data: { status: nextIncidentStatus, resolvedAt: null },
     }),
   ];
   // ถ้าไม่มี Master Data รายการอื่นใช้ URL เก่าแล้ว ให้เอาผลค้างของ URL เก่าออกจากสรุปเครื่อง
   if (!oldUrlStillUsed) {
     operations.push(prisma.mobileUrlStatus.deleteMany({ where: { urlHash: mobileUrlHash(oldUrl) } }));
+  }
+  if (nextIncidentStatus === "PAUSED") {
+    operations.push(prisma.incident.updateMany({
+      where: { linkId: incident.linkId, status: { notIn: ["CLOSED", "PAUSED"] } },
+      data: { status: "PAUSED" },
+    }));
   }
   await prisma.$transaction(operations);
 
@@ -142,7 +156,7 @@ export async function PATCH(
     oldUrl,
     newUrl,
     status,
-    incidentStatus: "ADMIN_UPDATED",
+    incidentStatus: nextIncidentStatus,
     checkedAt,
     urlChanged: true,
   });

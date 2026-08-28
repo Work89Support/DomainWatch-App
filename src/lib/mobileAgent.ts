@@ -315,7 +315,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
     for (const link of links) {
       if (next.opened) {
         const existing = await prisma.networkIncident.findFirst({
-          where: { agentId, linkId: link.id, status: { not: "CLOSED" } },
+          where: { agentId, linkId: link.id, status: { notIn: ["CLOSED", "PAUSED"] } },
         });
         if (existing) continue;
         const incident = await prisma.networkIncident.create({
@@ -356,7 +356,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
           where: {
             agentId,
             linkId: link.id,
-            status: next.recovered ? { not: "CLOSED" } : "ADMIN_UPDATED",
+            status: next.recovered ? { notIn: ["CLOSED", "PAUSED"] } : "ADMIN_UPDATED",
           },
         });
         for (const incident of incidents) {

@@ -323,7 +323,7 @@ export async function runCheck(): Promise<CheckSummary> {
   const uniqueUrls = Array.from(new Set(links.map((link) => urlKey(link.url))));
   const results = new Map<string, ProbeResult>();
   const openIncidentsPromise = prisma.incident.findMany({
-    where: { linkId: { in: links.map((link) => link.id) }, status: { not: "CLOSED" } },
+    where: { linkId: { in: links.map((link) => link.id) }, status: { notIn: ["CLOSED", "PAUSED"] } },
     orderBy: { detectedAt: "desc" },
   });
   await forEachConcurrent(uniqueUrls, CONCURRENCY, async (url) => {

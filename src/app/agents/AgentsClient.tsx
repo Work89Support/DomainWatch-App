@@ -228,7 +228,7 @@ export default function AgentsClient({
           <div className="space-y-3">
             {initial.map((agent) => {
               const online = Boolean(agent.isActive && agent.hasEnrollment && agent.lastSeenAt && Date.now() - new Date(agent.lastSeenAt).getTime() < 12 * 60_000);
-              const open = agent.networkIncidents.filter((item) => item.status !== "CLOSED").length;
+              const open = agent.networkIncidents.filter((item) => item.status !== "CLOSED" && item.status !== "PAUSED").length;
               return (
                 <button key={agent.id} onClick={() => selectAgent(agent.id)} className={`card w-full p-4 text-left transition ${selected?.id === agent.id ? "ring-2 ring-brand-500" : "hover:border-brand-200"}`}>
                   <div className="flex items-start justify-between gap-2">
@@ -312,7 +312,7 @@ export default function AgentsClient({
                     <span className="badge bg-amber-50 text-amber-700">ช้า {resultCounts.slow}</span>
                     <span className="badge bg-red-50 text-red-700">ใช้ไม่ได้ {resultCounts.down}</span>
                     {resultCounts.unknown > 0 && <span className="badge bg-slate-100 text-slate-500">ยังไม่ทราบ {resultCounts.unknown}</span>}
-                    <span className="badge bg-slate-100 text-slate-600">เคสค้าง {selected.networkIncidents.filter((item) => item.status !== "CLOSED").length}</span>
+                    <span className="badge bg-slate-100 text-slate-600">เคสค้าง {selected.networkIncidents.filter((item) => item.status !== "CLOSED" && item.status !== "PAUSED").length}</span>
                   </div>
                 </div>
                 {filteredResults.length === 0 ? <div className="p-6 text-sm text-slate-400">{selected.urlStatuses.length === 0 ? "รอแอปส่งผลตรวจรอบแรก" : `ไม่มี URL สถานะ${FILTER_LABEL[resultFilter]}`}</div> : filteredResults.slice(0, visibleResults).map((row) => {
@@ -342,7 +342,7 @@ export default function AgentsClient({
                 <div className="p-4 border-b border-slate-100 font-semibold text-slate-700">ประวัติเหตุการณ์จากซิม</div>
                 {selected.networkIncidents.length === 0 ? <div className="p-6 text-sm text-slate-400">ยังไม่มีเหตุการณ์จากเครือข่ายนี้</div> : selected.networkIncidents.map((incident) => (
                   <div key={incident.id} className="p-4 border-b border-slate-50 last:border-0">
-                    <div className="flex items-center justify-between gap-3"><div className="font-medium text-slate-700">{incident.link.name} · {incident.link.company.name}</div><span className={`badge ${incident.status === "CLOSED" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{incident.status === "CLOSED" ? "กลับมาปกติ" : "ยังมีปัญหา"}</span></div>
+                    <div className="flex items-center justify-between gap-3"><div className="font-medium text-slate-700">{incident.link.name} · {incident.link.company.name}</div><span className={`badge ${incident.status === "CLOSED" ? "bg-emerald-50 text-emerald-700" : incident.status === "PAUSED" ? "bg-slate-100 text-slate-600" : "bg-red-50 text-red-700"}`}>{incident.status === "CLOSED" ? "กลับมาปกติ" : incident.status === "PAUSED" ? "พักการเฝ้าดู" : "ยังมีปัญหา"}</span></div>
                     <div className="mt-1 text-xs text-slate-400">{incident.link.lineGroup?.name || "ไม่ระบุห้อง"} · #{incident.id.slice(-8).toUpperCase()} · เริ่ม {new Date(incident.detectedAt).toLocaleString("th-TH")}</div>
                     {incident.redirectCount > 0 && incident.finalUrl && <div className="mt-2 text-xs text-red-600 break-all">↪️ {incident.redirectType === "NETWORK_BLOCK" ? "หน้าปิดกั้นเครือข่าย" : "ปลายทาง Redirect"}: {incident.finalUrl}</div>}
                   </div>

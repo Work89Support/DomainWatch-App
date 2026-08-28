@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const companyScope = me.role === "ADMIN_COMPANY" ? (companyId || { in: me.companyIds }) : companyId;
   const where: Prisma.IncidentWhereInput = {
-    ...(status === "open" ? { status: { not: "CLOSED" } } : {}),
+    ...(status === "open" ? { status: { notIn: ["CLOSED", "PAUSED"] } } : {}),
     ...(companyScope ? { link: { companyId: companyScope } } : {}),
   };
 

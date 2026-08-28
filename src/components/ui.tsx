@@ -63,6 +63,7 @@ export function IncidentStatusBadge({ status }: { status: string }) {
     OPEN: { text: "เปิด (รอจัดการ)", cls: "bg-red-50 text-red-600" },
     ADMIN_UPDATED: { text: "แอดมินอัพเดตแล้ว", cls: "bg-amber-50 text-amber-700" },
     IT_RESOLVED: { text: "IT ชี้แจงแล้ว", cls: "bg-brand-50 text-brand-700" },
+    PAUSED: { text: "พักการเฝ้าดู", cls: "bg-slate-100 text-slate-600" },
     CLOSED: { text: "ปิดเคส", cls: "bg-emerald-50 text-emerald-700" },
   };
   const s = map[status] || map.OPEN;

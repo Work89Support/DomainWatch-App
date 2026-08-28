@@ -75,6 +75,7 @@ type MobileLinkForm = {
 };
 
 const DEFAULT_CATEGORIES = ["ทางเข้า", "ริชเมนู", "โปรโมชัน", "ทั่วไป"];
+const isOpenIncidentStatus = (status: string) => status !== "CLOSED" && status !== "PAUSED";
 
 export default function IncidentsClient({
   initial,
@@ -110,18 +111,18 @@ export default function IncidentsClient({
   const [mobileUpdateBusy, setMobileUpdateBusy] = useState(false);
   const [mobileMarkBusyId, setMobileMarkBusyId] = useState<string | null>(null);
 
-  const systemOpen = initial.filter((incident) => incident.status !== "CLOSED").length;
-  const mobileOpen = mobileInitial.filter((incident) => incident.status !== "CLOSED").length;
+  const systemOpen = initial.filter((incident) => isOpenIncidentStatus(incident.status)).length;
+  const mobileOpen = mobileInitial.filter((incident) => isOpenIncidentStatus(incident.status)).length;
   const mobileWaitingAction = mobileInitial.filter((incident) => incident.status === "OPEN").length;
   const mobileWaitingVerification = mobileInitial.filter((incident) => incident.status === "ADMIN_UPDATED").length;
   const openCount = source === "SYSTEM" ? systemOpen : source === "MOBILE" ? mobileOpen : systemOpen + mobileOpen;
   const totalCount = source === "SYSTEM" ? initial.length : source === "MOBILE" ? mobileInitial.length : initial.length + mobileInitial.length;
 
   const list = filter === "open"
-    ? initial.filter((incident) => incident.status !== "CLOSED")
+    ? initial.filter((incident) => isOpenIncidentStatus(incident.status))
     : initial;
   const mobileList = filter === "open"
-    ? mobileInitial.filter((incident) => incident.status !== "CLOSED")
+    ? mobileInitial.filter((incident) => isOpenIncidentStatus(incident.status))
     : mobileInitial;
   const showSystem = source !== "MOBILE";
   const showMobile = source !== "SYSTEM";
@@ -458,6 +459,7 @@ function MobileLinkEditModal({
 function mobileIncidentCardTone(status: string) {
   if (status === "ADMIN_UPDATED") return "border-amber-200 bg-amber-50/20";
   if (status === "CLOSED") return "border-emerald-100";
+  if (status === "PAUSED") return "border-slate-200 bg-slate-50/50";
   return "border-red-100";
 }
 
@@ -466,6 +468,7 @@ function MobileIncidentStatusBadge({ status }: { status: string }) {
     OPEN: { text: "เปิด (รอจัดการ)", cls: "bg-red-50 text-red-600" },
     ADMIN_UPDATED: { text: "ปรับแก้แล้ว · รอตรวจยืนยัน", cls: "bg-amber-100 text-amber-800" },
     IT_RESOLVED: { text: "กำลังตรวจยืนยัน", cls: "bg-brand-50 text-brand-700" },
+    PAUSED: { text: "พักการเฝ้าดู", cls: "bg-slate-200 text-slate-700" },
     CLOSED: { text: "จัดการเรียบร้อย", cls: "bg-emerald-50 text-emerald-700" },
   };
   const value = map[status] || map.OPEN;
@@ -647,7 +650,7 @@ function IncidentPanel({
         </div>}
 
         <div className="flex justify-between gap-2 mt-4">
-          {canAdmin && incident.status !== "CLOSED" ? (
+          {canAdmin && isOpenIncidentStatus(incident.status) ? (
             <button className="btn-danger text-xs" disabled={busy} onClick={() => act("close")}>
               ปิดเคส (ลิงก์กลับมาใช้ได้)
             </button>

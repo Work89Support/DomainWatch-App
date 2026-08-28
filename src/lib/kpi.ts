@@ -88,7 +88,7 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
 
   // มิติแอดมิน: คิวลิงก์ที่ล่ม (เคสที่ยังไม่ปิด)
   const openQueueList = await prisma.incident.findMany({
-    where: { ...incWhere, status: { not: "CLOSED" } },
+    where: { ...incWhere, status: { notIn: ["CLOSED", "PAUSED"] } },
     orderBy: { detectedAt: "desc" },
     include: { link: { include: { company: true, lineGroup: true } } },
   });
@@ -143,7 +143,7 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
   // แยกตามบริษัท (เฉพาะเมื่อดูรวมทุกบริษัท จะได้เห็นภาพเทียบกัน)
   const openByCompany = new Map<string, number>();
   const openList = await prisma.incident.findMany({
-    where: { ...incWhere, status: { not: "CLOSED" } },
+    where: { ...incWhere, status: { notIn: ["CLOSED", "PAUSED"] } },
     select: { link: { select: { companyId: true, url: true } } },
   });
   for (const o of openList) {

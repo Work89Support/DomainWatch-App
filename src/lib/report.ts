@@ -144,7 +144,7 @@ export async function getDailyReport(
     }),
     prisma.incident.findMany({
       where: {
-        status: { not: "CLOSED" },
+        status: { notIn: ["CLOSED", "PAUSED"] },
         ...(scoped ? { link: { companyId: { in: companyIds } } } : {}),
       },
       orderBy: { detectedAt: "asc" },
@@ -168,7 +168,7 @@ export async function getDailyReport(
           where: {
             ...(scoped ? { link: { companyId: { in: companyIds } } } : {}),
             OR: [
-              { status: { not: "CLOSED" } },
+              { status: { notIn: ["CLOSED", "PAUSED"] } },
               { detectedAt: { gte: dayStart, lt: dayEnd } },
               { resolvedAt: { gte: dayStart, lt: dayEnd } },
             ],
@@ -232,12 +232,12 @@ export async function getDailyReport(
       unknown: count("UNKNOWN"),
       newIncidents: agent.networkIncidents.filter((item) => item.detectedAt >= dayStart && item.detectedAt < dayEnd).length,
       resolvedIncidents: agent.networkIncidents.filter((item) => item.resolvedAt && item.resolvedAt >= dayStart && item.resolvedAt < dayEnd).length,
-      openIncidents: agent.networkIncidents.filter((item) => item.status !== "CLOSED").length,
+      openIncidents: agent.networkIncidents.filter((item) => item.status !== "CLOSED" && item.status !== "PAUSED").length,
     };
   });
   const mobileOpenDetails = mobileAgentRows.flatMap((agent) =>
     agent.networkIncidents
-      .filter((incident) => incident.status !== "CLOSED")
+      .filter((incident) => incident.status !== "CLOSED" && incident.status !== "PAUSED")
       .map((incident) => ({
         id: incident.id,
         agentId: agent.id,

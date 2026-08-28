@@ -13,7 +13,7 @@ export async function PATCH(
 ) {
   const me = await getCurrentUser();
   if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const existing = await prisma.link.findUnique({ where: { id: params.id }, select: { companyId: true } });
+  const existing = await prisma.link.findUnique({ where: { id: params.id }, select: { companyId: true, isActive: true } });
   if (!existing) return NextResponse.json({ error: "ไม่พบลิงก์" }, { status: 404 });
   if (!canAccessCompany(me.role, me.companyIds, existing.companyId))
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -50,13 +50,36 @@ export async function PATCH(
     }
     data.lineGroupId = lineGroupId;
   }
+  const isPausing = "isActive" in body && !body.isActive;
+  const isResuming = "isActive" in body && !!body.isActive && !existing.isActive;
   if ("isActive" in body) data.isActive = !!body.isActive;
+  if (isResuming) {
+    data.lastStatus = "UNKNOWN";
+    data.lastCheckedAt = null;
+    data.lastHttpCode = null;
+    data.lastResponseMs = null;
+    data.failureStreak = 0;
+    data.recoveryStreak = 0;
+  }
 
   try {
-    const link = await prisma.link.update({
+    const updateLink = prisma.link.update({
       where: { id: params.id },
       data: data as unknown as Prisma.LinkUpdateInput,
     });
+    const link = isPausing
+      ? (await prisma.$transaction([
+          updateLink,
+          prisma.incident.updateMany({
+            where: { linkId: params.id, status: { notIn: ["CLOSED", "PAUSED"] } },
+            data: { status: "PAUSED" },
+          }),
+          prisma.networkIncident.updateMany({
+            where: { linkId: params.id, status: { notIn: ["CLOSED", "PAUSED"] } },
+            data: { status: "PAUSED" },
+          }),
+        ]))[0]
+      : await updateLink;
     return NextResponse.json(link);
   } catch (e) {
     return NextResponse.json(
