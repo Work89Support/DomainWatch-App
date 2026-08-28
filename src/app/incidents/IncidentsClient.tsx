@@ -23,15 +23,20 @@ type Incident = {
   itResponseMin: number | null;
   link: {
     id: string;
+    companyId: string;
+    lineGroupId: string | null;
     name: string;
     url: string;
     category: string | null;
+    backupUrl: string | null;
+    note: string | null;
+    isActive: boolean;
     company: { id: string; name: string };
     lineGroup: { id: string; name: string } | null;
   };
 };
 
-type Company = { id: string; name: string };
+type Company = { id: string; name: string; lineGroups: Array<{ id: string; name: string }> };
 
 type MobileIncident = {
   id: string;
@@ -57,6 +62,19 @@ type MobileIncident = {
   };
   link: Incident["link"];
 };
+
+type MobileLinkForm = {
+  companyId: string;
+  lineGroupId: string;
+  name: string;
+  url: string;
+  category: string;
+  backupUrl: string;
+  note: string;
+  isActive: boolean;
+};
+
+const DEFAULT_CATEGORIES = ["ทางเข้า", "ริชเมนู", "โปรโมชัน", "ทั่วไป"];
 
 export default function IncidentsClient({
   initial,
@@ -88,8 +106,7 @@ export default function IncidentsClient({
   const [selectedMobile, setSelectedMobile] = useState<MobileIncident | null>(
     mobileInitial.find((incident) => incident.id === initialIncidentId) || null
   );
-  const [editingMobileId, setEditingMobileId] = useState("");
-  const [mobileReplacementUrl, setMobileReplacementUrl] = useState("");
+  const [mobileLinkModal, setMobileLinkModal] = useState<{ incident: MobileIncident; form: MobileLinkForm } | null>(null);
   const [mobileUpdateBusy, setMobileUpdateBusy] = useState(false);
 
   const systemOpen = initial.filter((incident) => incident.status !== "CLOSED").length;
@@ -107,26 +124,45 @@ export default function IncidentsClient({
   const showMobile = source !== "SYSTEM";
 
   function beginMobileEdit(incident: MobileIncident) {
-    setEditingMobileId(incident.id);
-    setMobileReplacementUrl(incident.finalUrl && incident.redirectType === "POSSIBLE_DOMAIN_MOVE"
-      ? incident.finalUrl
-      : incident.link.url);
+    setMobileLinkModal({
+      incident,
+      form: {
+        companyId: incident.link.companyId,
+        lineGroupId: incident.link.lineGroupId || "",
+        name: incident.link.name,
+        url: incident.finalUrl && incident.redirectType === "POSSIBLE_DOMAIN_MOVE" ? incident.finalUrl : incident.link.url,
+        category: incident.link.category || "ทั่วไป",
+        backupUrl: incident.link.backupUrl || "",
+        note: incident.link.note || "",
+        isActive: incident.link.isActive,
+      },
+    });
   }
 
-  async function updateMobileIncidentLink(incident: MobileIncident) {
-    const url = mobileReplacementUrl.trim();
-    if (!url) return alert("กรุณาใส่ลิงก์ใหม่");
+  async function updateMobileIncidentLink() {
+    if (!mobileLinkModal) return;
+    const { incident, form } = mobileLinkModal;
+    if (!form.name.trim() || !form.url.trim() || !form.companyId) return alert("กรุณากรอกบริษัท ชื่อลิงก์ และ URL");
     setMobileUpdateBusy(true);
     const response = await fetch(`/api/network-incidents/${incident.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "admin_update", newUrl: url }),
+      body: JSON.stringify({
+        action: "admin_update",
+        newUrl: form.url,
+        companyId: form.companyId,
+        lineGroupId: form.lineGroupId || null,
+        name: form.name,
+        category: form.category,
+        backupUrl: form.backupUrl || null,
+        note: form.note || null,
+        isActive: form.isActive,
+      }),
     });
     const data = await response.json().catch(() => ({}));
     setMobileUpdateBusy(false);
     if (!response.ok) return alert(data.error || "แก้ไขลิงก์ไม่สำเร็จ");
-    setEditingMobileId("");
-    setMobileReplacementUrl("");
+    setMobileLinkModal(null);
     router.refresh();
   }
 
@@ -205,31 +241,8 @@ export default function IncidentsClient({
                   </div>
                   <IncidentStatusBadge status={incident.status} />
                 </div>
-                {canAdmin && editingMobileId === incident.id && (
-                  <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50/40 p-3">
-                    <label className="label">เปลี่ยนลิงก์ใน Master Data</label>
-                    <input
-                      className="input"
-                      autoFocus
-                      value={mobileReplacementUrl}
-                      onChange={(event) => setMobileReplacementUrl(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") updateMobileIncidentLink(incident);
-                        if (event.key === "Escape") setEditingMobileId("");
-                      }}
-                      placeholder="https://ลิงก์ใหม่..."
-                    />
-                    <p className="mt-2 text-[11px] text-slate-500">ระบบจะตรวจลิงก์ก่อนบันทึก อัปเดต Master Data และปิดเคสเก่านี้ แล้วมือถือจะตรวจลิงก์ใหม่ในรอบถัดไป</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button className="btn-primary text-xs" disabled={mobileUpdateBusy || !mobileReplacementUrl.trim()} onClick={() => updateMobileIncidentLink(incident)}>
-                        {mobileUpdateBusy ? "กำลังตรวจลิงก์..." : "ตรวจและบันทึก"}
-                      </button>
-                      <button className="btn-ghost text-xs" disabled={mobileUpdateBusy} onClick={() => setEditingMobileId("")}>ยกเลิก</button>
-                    </div>
-                  </div>
-                )}
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {canAdmin && editingMobileId !== incident.id && <button className="btn-primary text-xs py-1.5" onClick={() => beginMobileEdit(incident)}>✏️ แก้ลิงก์ตรงนี้</button>}
+                  {canAdmin && <button className="btn-primary text-xs py-1.5" onClick={() => beginMobileEdit(incident)}>✏️ แก้ลิงก์ตรงนี้</button>}
                   <button className="btn-ghost text-xs py-1.5" onClick={() => setSelectedMobile(incident)}>ดูรายละเอียดจากเครื่องตรวจ →</button>
                 </div>
               </div>
@@ -315,8 +328,118 @@ export default function IncidentsClient({
         />
       )}
       {selectedMobile && <MobileIncidentPanel incident={selectedMobile} onClose={() => setSelectedMobile(null)} />}
+      {mobileLinkModal && (
+        <MobileLinkEditModal
+          incident={mobileLinkModal.incident}
+          form={mobileLinkModal.form}
+          companies={companies}
+          busy={mobileUpdateBusy}
+          onChange={(form) => setMobileLinkModal({ ...mobileLinkModal, form })}
+          onClose={() => setMobileLinkModal(null)}
+          onSave={updateMobileIncidentLink}
+        />
+      )}
     </div>
   );
+}
+
+function MobileLinkEditModal({
+  incident,
+  form,
+  companies,
+  busy,
+  onChange,
+  onClose,
+  onSave,
+}: {
+  incident: MobileIncident;
+  form: MobileLinkForm;
+  companies: Company[];
+  busy: boolean;
+  onChange: (form: MobileLinkForm) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const company = companies.find((item) => item.id === form.companyId);
+  const categoryOptions = Array.from(new Set([...DEFAULT_CATEGORIES, incident.link.category || "", form.category])).filter(Boolean);
+  const [customCategory, setCustomCategory] = useState(!DEFAULT_CATEGORIES.includes(form.category));
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+      <div className="card w-full max-w-lg max-h-[92vh] overflow-y-auto p-6" onClick={(event) => event.stopPropagation()}>
+        <div className="mb-4">
+          <h3 className="text-xl font-semibold text-slate-800">แก้ไขลิงก์</h3>
+          <div className="mt-1 text-xs text-slate-400">เคสจากซิม #{incident.id.slice(-8).toUpperCase()} · แก้ไข Master Data จากหน้านี้ได้ทันที</div>
+        </div>
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <EditField label="บริษัท *">
+              <select className="input" value={form.companyId} onChange={(event) => onChange({ ...form, companyId: event.target.value, lineGroupId: "" })}>
+                {companies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+            </EditField>
+            <EditField label="ห้อง LINE">
+              <select className="input" value={form.lineGroupId} onChange={(event) => onChange({ ...form, lineGroupId: event.target.value })}>
+                <option value="">— ไม่ระบุ —</option>
+                {(company?.lineGroups || []).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+              </select>
+            </EditField>
+          </div>
+          <EditField label="ชื่อลิงก์ *">
+            <input className="input" value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} />
+          </EditField>
+          <EditField label="ลิงก์ (URL) *">
+            <input className="input" value={form.url} onChange={(event) => onChange({ ...form, url: event.target.value })} placeholder="https://..." />
+          </EditField>
+          <EditField label="หมวดหมู่">
+            <select className="input" value={customCategory ? "__custom__" : form.category} onChange={(event) => {
+              if (event.target.value === "__custom__") {
+                setCustomCategory(true);
+                onChange({ ...form, category: "" });
+              } else {
+                setCustomCategory(false);
+                onChange({ ...form, category: event.target.value });
+              }
+            }}>
+              {categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
+              <option value="__custom__">+ กำหนดเอง...</option>
+            </select>
+            {customCategory && <input className="input mt-2" value={form.category} onChange={(event) => onChange({ ...form, category: event.target.value })} placeholder="เช่น สมัคร" />}
+          </EditField>
+          <EditField label="ลิงก์สำรอง">
+            <input className="input" value={form.backupUrl} onChange={(event) => onChange({ ...form, backupUrl: event.target.value })} placeholder="https://... (ถ้ามี)" />
+          </EditField>
+          <EditField label="หมายเหตุ">
+            <textarea className="input" rows={3} value={form.note} onChange={(event) => onChange({ ...form, note: event.target.value })} />
+          </EditField>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={form.isActive} onChange={(event) => onChange({ ...form, isActive: event.target.checked })} />
+            เฝ้าดูสถานะลิงก์นี้ (ปิดถ้าเป็นลิงก์ LINE ที่เช็คไม่ได้)
+          </label>
+          {normalizeForComparison(form.url) !== normalizeForComparison(incident.link.url) && (
+            <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-700">URL มีการเปลี่ยนแปลง ระบบจะตรวจลิงก์ใหม่ก่อนบันทึกและปิดเคสเก่า เมื่อมือถือทำงานรอบถัดไปจะเริ่มตรวจ URL ใหม่นี้</div>
+          )}
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button className="btn-ghost" disabled={busy} onClick={onClose}>ยกเลิก</button>
+          <button className="btn-primary disabled:opacity-60" disabled={busy || !form.companyId || !form.name.trim() || !form.url.trim()} onClick={onSave}>{busy ? "กำลังตรวจและบันทึก..." : "บันทึก"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditField({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div><label className="label">{label}</label>{children}</div>;
+}
+
+function normalizeForComparison(value: string) {
+  try {
+    const url = new URL(value.trim());
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return value.trim();
+  }
 }
 
 function MobileIncidentPanel({ incident, onClose }: { incident: MobileIncident; onClose: () => void }) {

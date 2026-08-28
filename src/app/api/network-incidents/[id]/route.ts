@@ -39,17 +39,54 @@ export async function PATCH(
     );
   }
 
+  const nextCompanyId = body.companyId ? String(body.companyId) : incident.link.companyId;
+  if (!canAccessCompany(me.role, me.companyIds, nextCompanyId)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+  const nextLineGroupId = body.lineGroupId ? String(body.lineGroupId) : null;
+  if (nextLineGroupId) {
+    const group = await prisma.lineGroup.findFirst({ where: { id: nextLineGroupId, companyId: nextCompanyId } });
+    if (!group) return NextResponse.json({ error: "ห้อง LINE ไม่อยู่ในบริษัทที่เลือก" }, { status: 400 });
+  }
+
   const checkedAt = new Date();
-  const result = await probe(newUrl);
-  const status = classifyProbeStatus(result);
-  if (!result.ok) {
+  const oldUrl = incident.link.url;
+  const urlChanged = normalizeUrl(newUrl) !== normalizeUrl(oldUrl);
+  const result = urlChanged ? await probe(newUrl) : null;
+  const status = result ? classifyProbeStatus(result) : incident.link.lastStatus;
+  if (result && !result.ok) {
     return NextResponse.json(
       { error: `ลิงก์ใหม่ยังเปิดไม่ได้: ${result.error || `HTTP ${result.httpCode || "-"}`}` },
       { status: 422 }
     );
   }
 
-  const oldUrl = incident.link.url;
+  const linkData: Prisma.LinkUncheckedUpdateInput = {
+    companyId: nextCompanyId,
+    lineGroupId: nextLineGroupId,
+    name: typeof body.name === "string" && body.name.trim() ? body.name.trim() : incident.link.name,
+    url: newUrl,
+    category: typeof body.category === "string" ? body.category.trim() || null : incident.link.category,
+    backupUrl: typeof body.backupUrl === "string" ? body.backupUrl.trim() || null : body.backupUrl === null ? null : incident.link.backupUrl,
+    note: typeof body.note === "string" ? body.note.trim() || null : body.note === null ? null : incident.link.note,
+    isActive: typeof body.isActive === "boolean" ? body.isActive : incident.link.isActive,
+  };
+  if (result) {
+    Object.assign(linkData, {
+      lastStatus: status,
+      lastCheckedAt: checkedAt,
+      lastHttpCode: result.httpCode,
+      lastResponseMs: result.responseMs,
+      failureStreak: 0,
+      recoveryStreak: 0,
+    });
+  }
+
+  if (!urlChanged) {
+    const link = await prisma.link.update({ where: { id: incident.linkId }, data: linkData });
+    return NextResponse.json({ ok: true, link, urlChanged: false });
+  }
+
   const otherLinks = await prisma.link.findMany({
     where: { id: { not: incident.linkId }, isActive: true },
     select: { url: true },
@@ -59,23 +96,15 @@ export async function PATCH(
   const operations: Prisma.PrismaPromise<unknown>[] = [
     prisma.link.update({
       where: { id: incident.linkId },
-      data: {
-        url: newUrl,
-        lastStatus: status,
-        lastCheckedAt: checkedAt,
-        lastHttpCode: result.httpCode,
-        lastResponseMs: result.responseMs,
-        failureStreak: 0,
-        recoveryStreak: 0,
-      },
+      data: linkData,
     }),
     prisma.checkLog.create({
       data: {
         linkId: incident.linkId,
         status,
-        httpCode: result.httpCode,
-        responseMs: result.responseMs,
-        error: result.error,
+        httpCode: result?.httpCode ?? null,
+        responseMs: result?.responseMs ?? null,
+        error: result?.error ?? null,
       },
     }),
     prisma.networkIncident.updateMany({
@@ -96,5 +125,6 @@ export async function PATCH(
     newUrl,
     status,
     checkedAt,
+    urlChanged: true,
   });
 }

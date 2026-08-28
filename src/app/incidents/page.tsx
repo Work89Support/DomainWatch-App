@@ -54,7 +54,12 @@ export default async function IncidentsPage({
       : Promise.resolve(null),
     prisma.company.findMany({
       where: me.role === "ADMIN_COMPANY" ? { id: { in: me.companyIds } } : {},
-      orderBy: { createdAt: "asc" }, select: { id: true, name: true },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        name: true,
+        lineGroups: { orderBy: { createdAt: "asc" }, select: { id: true, name: true } },
+      },
     }),
   ]);
   const visibleIncidents = requestedIncident && !incidents.some((incident) => incident.id === requestedIncident.id)
