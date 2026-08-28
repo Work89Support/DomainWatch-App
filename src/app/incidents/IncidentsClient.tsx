@@ -88,6 +88,9 @@ export default function IncidentsClient({
   const [selectedMobile, setSelectedMobile] = useState<MobileIncident | null>(
     mobileInitial.find((incident) => incident.id === initialIncidentId) || null
   );
+  const [editingMobileId, setEditingMobileId] = useState("");
+  const [mobileReplacementUrl, setMobileReplacementUrl] = useState("");
+  const [mobileUpdateBusy, setMobileUpdateBusy] = useState(false);
 
   const systemOpen = initial.filter((incident) => incident.status !== "CLOSED").length;
   const mobileOpen = mobileInitial.filter((incident) => incident.status !== "CLOSED").length;
@@ -102,6 +105,30 @@ export default function IncidentsClient({
     : mobileInitial;
   const showSystem = source !== "MOBILE";
   const showMobile = source !== "SYSTEM";
+
+  function beginMobileEdit(incident: MobileIncident) {
+    setEditingMobileId(incident.id);
+    setMobileReplacementUrl(incident.finalUrl && incident.redirectType === "POSSIBLE_DOMAIN_MOVE"
+      ? incident.finalUrl
+      : incident.link.url);
+  }
+
+  async function updateMobileIncidentLink(incident: MobileIncident) {
+    const url = mobileReplacementUrl.trim();
+    if (!url) return alert("กรุณาใส่ลิงก์ใหม่");
+    setMobileUpdateBusy(true);
+    const response = await fetch(`/api/network-incidents/${incident.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "admin_update", newUrl: url }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setMobileUpdateBusy(false);
+    if (!response.ok) return alert(data.error || "แก้ไขลิงก์ไม่สำเร็จ");
+    setEditingMobileId("");
+    setMobileReplacementUrl("");
+    router.refresh();
+  }
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
@@ -178,7 +205,33 @@ export default function IncidentsClient({
                   </div>
                   <IncidentStatusBadge status={incident.status} />
                 </div>
-                <button className="btn-ghost mt-4 text-xs py-1.5" onClick={() => setSelectedMobile(incident)}>ดูรายละเอียดจากเครื่องตรวจ →</button>
+                {canAdmin && editingMobileId === incident.id && (
+                  <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50/40 p-3">
+                    <label className="label">เปลี่ยนลิงก์ใน Master Data</label>
+                    <input
+                      className="input"
+                      autoFocus
+                      value={mobileReplacementUrl}
+                      onChange={(event) => setMobileReplacementUrl(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") updateMobileIncidentLink(incident);
+                        if (event.key === "Escape") setEditingMobileId("");
+                      }}
+                      placeholder="https://ลิงก์ใหม่..."
+                    />
+                    <p className="mt-2 text-[11px] text-slate-500">ระบบจะตรวจลิงก์ก่อนบันทึก อัปเดต Master Data และปิดเคสเก่านี้ แล้วมือถือจะตรวจลิงก์ใหม่ในรอบถัดไป</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button className="btn-primary text-xs" disabled={mobileUpdateBusy || !mobileReplacementUrl.trim()} onClick={() => updateMobileIncidentLink(incident)}>
+                        {mobileUpdateBusy ? "กำลังตรวจลิงก์..." : "ตรวจและบันทึก"}
+                      </button>
+                      <button className="btn-ghost text-xs" disabled={mobileUpdateBusy} onClick={() => setEditingMobileId("")}>ยกเลิก</button>
+                    </div>
+                  </div>
+                )}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {canAdmin && editingMobileId !== incident.id && <button className="btn-primary text-xs py-1.5" onClick={() => beginMobileEdit(incident)}>✏️ แก้ลิงก์ตรงนี้</button>}
+                  <button className="btn-ghost text-xs py-1.5" onClick={() => setSelectedMobile(incident)}>ดูรายละเอียดจากเครื่องตรวจ →</button>
+                </div>
               </div>
             ))}
           </div>
