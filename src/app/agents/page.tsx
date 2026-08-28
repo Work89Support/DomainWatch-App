@@ -34,8 +34,10 @@ export default async function AgentsPage() {
           include: {
             link: {
               select: {
+                id: true,
                 name: true,
                 url: true,
+                backupUrl: true,
                 company: { select: { name: true } },
                 lineGroup: { select: { name: true } },
               },

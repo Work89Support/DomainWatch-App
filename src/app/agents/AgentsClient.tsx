@@ -15,7 +15,7 @@ type UrlStatus = {
 type NetworkIncident = {
   id: string; status: string; detectedAt: string; resolvedAt: string | null;
   finalUrl: string | null; redirectCount: number; redirectType: string | null;
-  link: { name: string; url: string; company: { name: string }; lineGroup: { name: string } | null };
+  link: { id: string; name: string; url: string; backupUrl: string | null; company: { name: string }; lineGroup: { name: string } | null };
 };
 type Agent = {
   id: string; name: string; carrier: string; isActive: boolean; deviceLabel: string | null;
@@ -26,13 +26,15 @@ type Agent = {
 };
 type Enrollment = { enrollmentUrl: string; expiresAt: string; qrDataUrl: string };
 type LinkContext = { id: string; name: string; company: string; room: string | null };
-type ResultFilter = "ALL" | "UP" | "SLOW" | "DOWN";
+type ResultFilter = "ALL" | "UP" | "SLOW" | "DOWN" | "UNKNOWN" | "INCIDENT";
 
 const FILTER_LABEL: Record<ResultFilter, string> = {
   ALL: "ผลตรวจทั้งหมด",
   UP: "ใช้งานได้",
   SLOW: "โหลดช้า",
   DOWN: "ใช้ไม่ได้",
+  UNKNOWN: "ยังไม่ทราบผล",
+  INCIDENT: "เคสค้าง",
 };
 
 function normalizeResultUrl(value: string) {
@@ -71,8 +73,11 @@ export default function AgentsClient({
   const [renameValue, setRenameValue] = useState("");
   const [resultFilter, setResultFilter] = useState<ResultFilter>("ALL");
   const [visibleResults, setVisibleResults] = useState(50);
+  const [selectedResult, setSelectedResult] = useState<UrlStatus | null>(null);
   const resultSectionRef = useRef<HTMLDivElement>(null);
   const selected = useMemo(() => initial.find((item) => item.id === selectedId) || initial[0], [initial, selectedId]);
+  const openIncidents = useMemo(() => selected?.networkIncidents.filter((item) => item.status !== "CLOSED" && item.status !== "PAUSED") || [], [selected]);
+  const openIncidentLinkIds = useMemo(() => new Set(openIncidents.map((item) => item.link.id)), [openIncidents]);
   const resultCounts = useMemo(() => ({
     all: selected?.urlStatuses.length || 0,
     up: selected?.urlStatuses.filter((row) => row.status === "UP").length || 0,
@@ -80,12 +85,24 @@ export default function AgentsClient({
     down: selected?.urlStatuses.filter((row) => row.status === "DOWN").length || 0,
     unknown: selected?.urlStatuses.filter((row) => row.status === "UNKNOWN").length || 0,
   }), [selected]);
-  const filteredResults = useMemo(() => selected?.urlStatuses.filter((row) => resultFilter === "ALL" || row.status === resultFilter) || [], [selected, resultFilter]);
+  const filteredResults = useMemo(() => selected?.urlStatuses.filter((row) => {
+    if (resultFilter === "ALL") return true;
+    if (resultFilter === "INCIDENT") {
+      return (linkContexts[normalizeResultUrl(row.url)] || []).some((context) => openIncidentLinkIds.has(context.id));
+    }
+    return row.status === resultFilter;
+  }) || [], [selected, resultFilter, linkContexts, openIncidentLinkIds]);
+  const selectedResultContexts = useMemo(() => selectedResult ? linkContexts[normalizeResultUrl(selectedResult.url)] || [] : [], [selectedResult, linkContexts]);
+  const selectedResultIncidents = useMemo(() => {
+    const contextIds = new Set(selectedResultContexts.map((context) => context.id));
+    return selected?.networkIncidents.filter((incident) => contextIds.has(incident.link.id)) || [];
+  }, [selected, selectedResultContexts]);
 
   function selectAgent(agentId: string) {
     setSelectedId(agentId);
     setResultFilter("ALL");
     setVisibleResults(50);
+    setSelectedResult(null);
   }
 
   function showResultDetails(filter: ResultFilter) {
@@ -282,7 +299,7 @@ export default function AgentsClient({
                     <button className="btn-ghost text-red-600" disabled={busy} onClick={() => deleteAgent(selected)}>🗑️ ลบเครื่อง</button>
                   </div>}
                 </div>
-                <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                <div className="mt-4 grid grid-cols-2 xl:grid-cols-5 gap-3 text-sm">
                   <button type="button" aria-pressed={resultFilter === "ALL"} onClick={() => showResultDetails("ALL")} className={`rounded-xl bg-slate-50 p-3 text-left transition hover:ring-2 hover:ring-slate-200 ${resultFilter === "ALL" ? "ring-2 ring-slate-300" : ""}`}>
                     <div className="text-xs text-slate-400">ตรวจล่าสุด</div><div className="font-medium text-slate-700 mt-1">{since(selected.lastSeenAt)}</div><div className="mt-1 text-[11px] text-brand-600">ดูทั้งหมด {resultCounts.all} URL →</div>
                   </button>
@@ -294,6 +311,9 @@ export default function AgentsClient({
                   </button>
                   <button type="button" aria-pressed={resultFilter === "DOWN"} onClick={() => showResultDetails("DOWN")} className={`rounded-xl bg-red-50 p-3 text-left transition hover:ring-2 hover:ring-red-200 ${resultFilter === "DOWN" ? "ring-2 ring-red-300" : ""}`}>
                     <div className="text-xs text-red-600">ใช้ไม่ได้</div><div className="font-semibold text-red-700 mt-1">{resultCounts.down}</div><div className="mt-1 text-[11px] text-red-700">ดูรายละเอียด →</div>
+                  </button>
+                  <button type="button" aria-pressed={resultFilter === "INCIDENT"} onClick={() => showResultDetails("INCIDENT")} className={`col-span-2 rounded-xl bg-violet-50 p-3 text-left transition hover:ring-2 hover:ring-violet-200 xl:col-span-1 ${resultFilter === "INCIDENT" ? "ring-2 ring-violet-300" : ""}`}>
+                    <div className="text-xs text-violet-600">เคสที่ต้องจัดการ</div><div className="font-semibold text-violet-700 mt-1">{openIncidents.length}</div><div className="mt-1 text-[11px] text-violet-700">เปิดดูเคสค้าง →</div>
                   </button>
                 </div>
               </div>
@@ -307,22 +327,30 @@ export default function AgentsClient({
                     </div>
                     {resultFilter !== "ALL" && <button type="button" className="btn-ghost text-xs" onClick={() => showResultDetails("ALL")}>ดูผลทั้งหมด</button>}
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                    <span className="badge bg-emerald-50 text-emerald-700">ใช้ได้ {resultCounts.up}</span>
-                    <span className="badge bg-amber-50 text-amber-700">ช้า {resultCounts.slow}</span>
-                    <span className="badge bg-red-50 text-red-700">ใช้ไม่ได้ {resultCounts.down}</span>
-                    {resultCounts.unknown > 0 && <span className="badge bg-slate-100 text-slate-500">ยังไม่ทราบ {resultCounts.unknown}</span>}
-                    <span className="badge bg-slate-100 text-slate-600">เคสค้าง {selected.networkIncidents.filter((item) => item.status !== "CLOSED" && item.status !== "PAUSED").length}</span>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs" aria-label="กรองผลตรวจ">
+                    {([
+                      ["ALL", `ทั้งหมด ${resultCounts.all}`, "bg-brand-50 text-brand-700 ring-brand-300"],
+                      ["UP", `ใช้ได้ ${resultCounts.up}`, "bg-emerald-50 text-emerald-700 ring-emerald-300"],
+                      ["SLOW", `ช้า ${resultCounts.slow}`, "bg-amber-50 text-amber-700 ring-amber-300"],
+                      ["DOWN", `ใช้ไม่ได้ ${resultCounts.down}`, "bg-red-50 text-red-700 ring-red-300"],
+                      ["UNKNOWN", `ยังไม่ทราบ ${resultCounts.unknown}`, "bg-slate-100 text-slate-600 ring-slate-300"],
+                      ["INCIDENT", `เคสค้าง ${openIncidents.length}`, "bg-violet-50 text-violet-700 ring-violet-300"],
+                    ] as Array<[ResultFilter, string, string]>).map(([filter, label, color]) => (
+                      <button key={filter} type="button" aria-pressed={resultFilter === filter} onClick={() => showResultDetails(filter)} className={`badge cursor-pointer transition hover:ring-2 ${color} ${resultFilter === filter ? "ring-2" : ""}`}>{label}</button>
+                    ))}
                   </div>
                 </div>
-                {filteredResults.length === 0 ? <div className="p-6 text-sm text-slate-400">{selected.urlStatuses.length === 0 ? "รอแอปส่งผลตรวจรอบแรก" : `ไม่มี URL สถานะ${FILTER_LABEL[resultFilter]}`}</div> : filteredResults.slice(0, visibleResults).map((row) => {
+                {filteredResults.length === 0 ? <div className="p-6 text-sm text-slate-400">{selected.urlStatuses.length === 0 ? "รอแอปส่งผลตรวจรอบแรก" : `ไม่มีผลตรวจในตัวกรอง “${FILTER_LABEL[resultFilter]}”`}</div> : filteredResults.slice(0, visibleResults).map((row) => {
                   const contexts = linkContexts[normalizeResultUrl(row.url)] || [];
                   return (
-                  <div key={row.id} className="p-4 border-b border-slate-50 last:border-0 flex gap-3">
+                  <div key={row.id} role="button" tabIndex={0} onClick={() => setSelectedResult(row)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedResult(row); }} className="group flex cursor-pointer gap-3 border-b border-slate-100 p-4 transition last:border-0 hover:bg-brand-50/40 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-300">
                     <span>{row.failureStreak > 0 && row.status !== "DOWN" ? "🟠" : row.status === "UP" ? "🟢" : row.status === "SLOW" ? "🟡" : row.status === "DOWN" ? "🔴" : "⚪"}</span>
                     <div className="min-w-0 flex-1">
-                      <a href={row.url} target="_blank" rel="noreferrer" className="block truncate text-sm text-brand-600 hover:underline">{row.url} ↗</a>
-                      {contexts.length > 0 && <div className="mt-1 flex flex-wrap gap-1.5">{contexts.map((context) => <span key={context.id} className="badge bg-brand-50 text-brand-700">{context.name} · {context.company}{context.room ? ` · ${context.room}` : ""}</span>)}</div>}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 truncate text-sm font-medium text-brand-600">{row.url}</div>
+                        <span className="shrink-0 text-xs font-medium text-brand-600 opacity-70 group-hover:opacity-100">ดูรายละเอียด →</span>
+                      </div>
+                      {contexts.length > 0 && <div className="mt-1 flex flex-wrap gap-1.5">{contexts.map((context) => <span key={`${context.id}-${context.name}`} className="badge bg-brand-50 text-brand-700">{context.name} · {context.company}{context.room ? ` · ${context.room}` : ""}</span>)}</div>}
                       <div className="mt-1 text-xs text-slate-400">HTTP {row.httpCode ?? "-"} · {row.responseMs ?? "-"} ms · {since(row.checkedAt)}{row.failureStreak > 0 ? ` · รอยืนยัน ${row.failureStreak}/2` : ""}</div>
                       {row.error && <div className="mt-1 break-words text-xs text-red-600">สาเหตุ: {row.error}</div>}
                       {row.redirectCount > 0 && row.finalUrl && (
@@ -345,11 +373,76 @@ export default function AgentsClient({
                     <div className="flex items-center justify-between gap-3"><div className="font-medium text-slate-700">{incident.link.name} · {incident.link.company.name}</div><span className={`badge ${incident.status === "CLOSED" ? "bg-emerald-50 text-emerald-700" : incident.status === "PAUSED" ? "bg-slate-100 text-slate-600" : "bg-red-50 text-red-700"}`}>{incident.status === "CLOSED" ? "กลับมาปกติ" : incident.status === "PAUSED" ? "พักการเฝ้าดู" : "ยังมีปัญหา"}</span></div>
                     <div className="mt-1 text-xs text-slate-400">{incident.link.lineGroup?.name || "ไม่ระบุห้อง"} · #{incident.id.slice(-8).toUpperCase()} · เริ่ม {new Date(incident.detectedAt).toLocaleString("th-TH")}</div>
                     {incident.redirectCount > 0 && incident.finalUrl && <div className="mt-2 text-xs text-red-600 break-all">↪️ {incident.redirectType === "NETWORK_BLOCK" ? "หน้าปิดกั้นเครือข่าย" : "ปลายทาง Redirect"}: {incident.finalUrl}</div>}
+                    <a href={`/incidents?incident=${incident.id}`} className="mt-3 inline-flex text-xs font-medium text-brand-600 hover:underline">เปิดรายละเอียดเคส →</a>
                   </div>
                 ))}
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {selectedResult && selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" onClick={() => setSelectedResult(null)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="result-detail-title" className="card max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5 sm:p-6" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className={`badge ${selectedResult.status === "UP" ? "bg-emerald-50 text-emerald-700" : selectedResult.status === "SLOW" ? "bg-amber-50 text-amber-700" : selectedResult.status === "DOWN" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"}`}>
+                  {selectedResult.status === "UP" ? "● ใช้งานได้" : selectedResult.status === "SLOW" ? "● โหลดช้า" : selectedResult.status === "DOWN" ? "● ใช้ไม่ได้" : "● ยังไม่ทราบผล"}
+                </div>
+                <h3 id="result-detail-title" className="mt-2 text-lg font-semibold text-slate-800">รายละเอียดผลตรวจจาก {selected.name}</h3>
+              </div>
+              <button type="button" aria-label="ปิดหน้าต่าง" className="btn-ghost h-9 w-9 p-0" onClick={() => setSelectedResult(null)}>✕</button>
+            </div>
+
+            <div className="mt-5 rounded-xl bg-slate-50 p-4">
+              <div className="text-xs text-slate-400">URL ที่ตรวจ</div>
+              <a href={selectedResult.url} target="_blank" rel="noreferrer" className="mt-1 block break-all font-medium text-brand-600 hover:underline">{selectedResult.url} ↗</a>
+              {selectedResultContexts.length > 0 ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {selectedResultContexts.map((context) => (
+                    <div key={`${context.id}-${context.name}`} className="rounded-lg border border-slate-100 bg-white p-3 text-sm">
+                      <div className="font-medium text-slate-700">{context.name}</div>
+                      <div className="mt-1 text-xs text-slate-500">บริษัท {context.company} · ห้อง {context.room || "ไม่ระบุ"}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : <div className="mt-2 text-xs text-slate-400">ไม่พบข้อมูลบริษัท/ห้องที่ผูกกับ URL นี้</div>}
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-xl border border-slate-100 p-3"><div className="text-xs text-slate-400">ตรวจเมื่อ</div><div className="mt-1 text-sm font-medium text-slate-700">{new Date(selectedResult.checkedAt).toLocaleString("th-TH")}</div></div>
+              <div className="rounded-xl border border-slate-100 p-3"><div className="text-xs text-slate-400">HTTP</div><div className="mt-1 text-sm font-medium text-slate-700">{selectedResult.httpCode ?? "-"}</div></div>
+              <div className="rounded-xl border border-slate-100 p-3"><div className="text-xs text-slate-400">เวลาตอบสนอง</div><div className="mt-1 text-sm font-medium text-slate-700">{selectedResult.responseMs == null ? "-" : `${selectedResult.responseMs} ms`}</div></div>
+              <div className="rounded-xl border border-slate-100 p-3"><div className="text-xs text-slate-400">การยืนยัน</div><div className="mt-1 text-sm font-medium text-slate-700">{selectedResult.failureStreak > 0 ? `${selectedResult.failureStreak}/2 รอบ` : "ปกติ"}</div></div>
+            </div>
+
+            {selectedResult.error && <div className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700"><div className="text-xs font-semibold">สาเหตุที่ตรวจพบ</div><div className="mt-1 break-words">{selectedResult.error}</div></div>}
+
+            {(selectedResult.redirectCount > 0 || selectedResult.finalUrl) && (
+              <div className="mt-4 rounded-xl bg-sky-50 p-4 text-sm text-sky-800">
+                <div className="font-semibold">ข้อมูล Redirect {selectedResult.redirectCount} ครั้ง</div>
+                <div className="mt-1">ประเภท: {selectedResult.redirectType || "REDIRECT"}</div>
+                {selectedResult.finalUrl && <div className="mt-1 break-all">ปลายทาง: {selectedResult.finalUrl}</div>}
+                {selectedResult.pageTitle && <div className="mt-1">ชื่อหน้า: {selectedResult.pageTitle}</div>}
+                {selectedResult.redirectChain && selectedResult.redirectChain.length > 0 && <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs">{selectedResult.redirectChain.map((url, index) => <li key={`${url}-${index}`} className="break-all">{url}</li>)}</ol>}
+              </div>
+            )}
+
+            <div className="mt-5">
+              <div className="font-semibold text-slate-700">เคสที่เกี่ยวข้อง ({selectedResultIncidents.length})</div>
+              {selectedResultIncidents.length === 0 ? <div className="mt-2 rounded-xl bg-slate-50 p-4 text-sm text-slate-400">URL นี้ยังไม่มีเคสในประวัติ</div> : (
+                <div className="mt-2 space-y-2">
+                  {selectedResultIncidents.map((incident) => (
+                    <a key={incident.id} href={`/incidents?incident=${incident.id}`} className="block rounded-xl border border-slate-100 p-4 transition hover:border-brand-200 hover:bg-brand-50/40">
+                      <div className="flex items-start justify-between gap-3"><div className="font-medium text-slate-700">เคส #{incident.id.slice(-8).toUpperCase()}</div><span className={`badge ${incident.status === "CLOSED" ? "bg-emerald-50 text-emerald-700" : incident.status === "PAUSED" ? "bg-slate-100 text-slate-600" : "bg-red-50 text-red-700"}`}>{incident.status === "CLOSED" ? "ปิดแล้ว" : incident.status === "PAUSED" ? "พักเฝ้าดู" : "เปิดค้าง"}</span></div>
+                      <div className="mt-1 text-xs text-slate-500">พบเมื่อ {new Date(incident.detectedAt).toLocaleString("th-TH")} · เปิดหน้าเคส →</div>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
