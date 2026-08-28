@@ -252,9 +252,9 @@ export default function IncidentsClient({
                       {incident.responseMs ? ` · ${(incident.responseMs / 1000).toFixed(1)} วินาที` : ""}
                     </div>
                     {incident.error && <div className="mt-2 rounded-lg bg-red-50 p-2 text-xs text-red-700">สาเหตุ: {incident.error}</div>}
-                    {incident.redirectCount > 0 && incident.finalUrl && (
+                    {(incident.redirectCount > 0 || incident.redirectType === "BACKUP_USED") && incident.finalUrl && (
                       <div className="mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-700 break-all">
-                        ↪️ {incident.redirectType === "NETWORK_BLOCK" ? "หน้าปิดกั้นของเครือข่าย" : "ปลายทาง Redirect"}: {incident.finalUrl}
+                        ↪️ {incident.redirectType === "NETWORK_BLOCK" ? "หน้าปิดกั้นของเครือข่าย" : incident.redirectType === "BACKUP_USED" ? "จัดการแล้วด้วยลิงก์สำรอง" : "ปลายทาง Redirect"}: {incident.finalUrl}
                       </div>
                     )}
                   </div>
@@ -517,10 +517,10 @@ function MobileIncidentPanel({ incident, onClose }: { incident: MobileIncident; 
           <Detail label="ตรวจพบ" value={fmtDateTime(incident.detectedAt)} />
           <Detail label="ผลตอบกลับ" value={`HTTP ${incident.httpCode ?? "-"} · ${incident.responseMs ? `${(incident.responseMs / 1000).toFixed(1)} วินาที` : "ไม่ทราบเวลา"}`} />
           <Detail label="สาเหตุจากเครื่อง" value={incident.error || "ไม่ระบุ"} danger />
-          {incident.redirectCount > 0 && incident.finalUrl && <>
-            <Detail label="ประเภท Redirect" value={incident.redirectType === "NETWORK_BLOCK" ? "หน้าปิดกั้นจากเครือข่ายมือถือ" : incident.redirectType === "POSSIBLE_DOMAIN_MOVE" ? "อาจมีการย้ายโดเมน — ยังไม่ได้เปลี่ยน Master Data" : "Redirect ปกติ"} danger={incident.redirectType === "NETWORK_BLOCK"} />
-            <Detail label="URL ปลายทาง" value={incident.finalUrl} />
-            <Detail label="จำนวน / เส้นทาง" value={`${incident.redirectCount} ครั้ง${Array.isArray(incident.redirectChain) ? ` · ${incident.redirectChain.join(" → ")}` : ""}`} />
+          {(incident.redirectCount > 0 || incident.redirectType === "BACKUP_USED") && incident.finalUrl && <>
+            <Detail label="การจัดการ" value={incident.redirectType === "NETWORK_BLOCK" ? "หน้าปิดกั้นจากเครือข่ายมือถือ" : incident.redirectType === "POSSIBLE_DOMAIN_MOVE" ? "อาจมีการย้ายโดเมน — ยังไม่ได้เปลี่ยน Master Data" : incident.redirectType === "BACKUP_USED" ? "ปิดเคสแล้ว — ใช้งานผ่านลิงก์สำรอง" : "Redirect ปกติ"} danger={incident.redirectType === "NETWORK_BLOCK"} />
+            <Detail label={incident.redirectType === "BACKUP_USED" ? "ลิงก์สำรองที่ใช้งานได้" : "URL ปลายทาง"} value={incident.finalUrl} />
+            {incident.redirectType !== "BACKUP_USED" && <Detail label="จำนวน / เส้นทาง" value={`${incident.redirectCount} ครั้ง${Array.isArray(incident.redirectChain) ? ` · ${incident.redirectChain.join(" → ")}` : ""}`} />}
             {incident.pageTitle && <Detail label="ชื่อหน้าปลายทาง" value={incident.pageTitle} />}
           </>}
           <div>

@@ -319,6 +319,8 @@ export function networkRecoveredMessage(opts: {
   room?: string | null;
   name: string;
   url: string;
+  primaryUrl?: string;
+  usedBackup?: boolean;
   downMinutes: number;
   slow?: boolean;
   responseMs?: number | null;
@@ -329,7 +331,9 @@ export function networkRecoveredMessage(opts: {
     : null;
   return {
     text: [
-      opts.slow
+      opts.usedBackup
+        ? `🟢 <b>${escapeHtml(opts.carrier)} ใช้งานได้แล้วผ่านลิงก์สำรอง</b>`
+        : opts.slow
         ? `🟡 <b>${escapeHtml(opts.carrier)} กลับมาเปิดได้แล้ว — แต่ยังโหลดช้า</b>`
         : `🟢 <b>${escapeHtml(opts.carrier)} กลับมาเปิดลิงก์ได้แล้ว</b>`,
       `━━━━━━━━━━━━━━━`,
@@ -338,7 +342,8 @@ export function networkRecoveredMessage(opts: {
       `🏢 บริษัท: ${escapeHtml(opts.company)}`,
       ...(opts.room ? [`💬 ห้อง: ${escapeHtml(opts.room)}`] : []),
       `📄 <b>${escapeHtml(opts.name)}</b>`,
-      `🔗 ${escapeHtml(opts.url)}`,
+      ...(opts.usedBackup && opts.primaryUrl ? [`🔗 ลิงก์หลัก: ${escapeHtml(opts.primaryUrl)}`] : []),
+      `${opts.usedBackup ? "♻️ ลิงก์สำรอง" : "🔗"} ${escapeHtml(opts.url)}`,
       `⏱️ ใช้งานไม่ได้ประมาณ ${opts.downMinutes} นาที`,
       ...(opts.slow && responseSeconds ? [`🐢 เวลาตอบกลับ: ${responseSeconds} วินาที`] : []),
       ...(opts.slow ? ["🔎 ระบบจะตรวจติดตามต่ออัตโนมัติ"] : []),

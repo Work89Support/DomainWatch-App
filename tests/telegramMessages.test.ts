@@ -112,6 +112,25 @@ test("mobile slow recovery is clearly reported", () => {
   assert.match(message.text, /7\.2 วินาที/);
 });
 
+test("mobile backup recovery says the case is resolved through fallback", () => {
+  const message = networkRecoveredMessage({
+    incidentId,
+    carrier: "TRUE",
+    agentName: "TRUE Phone 1",
+    company: "Example Co",
+    room: "Room A",
+    name: "Login",
+    primaryUrl: "https://primary.example.com",
+    url: "https://backup.example.com",
+    usedBackup: true,
+    downMinutes: 10,
+    appBaseUrl: "https://watch.example.com",
+  });
+  assert.match(message.text, /ใช้งานได้แล้วผ่านลิงก์สำรอง/);
+  assert.match(message.text, /ลิงก์หลัก: https:\/\/primary\.example\.com/);
+  assert.match(message.text, /ลิงก์สำรอง https:\/\/backup\.example\.com/);
+});
+
 test("daily mobile summary separates carrier, agent and open incident", () => {
   const lines = mobileAgentReportLines({
     mobileAgents: [{

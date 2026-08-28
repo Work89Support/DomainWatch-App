@@ -201,12 +201,22 @@ export function normalizeMobileProbeStatus(
 export async function storeMobileResults(agentId: string, results: MobileResultInput[]) {
   const agent = await prisma.mobileAgent.findUniqueOrThrow({ where: { id: agentId } });
   const routes = await loadRoutes();
-  const pendingAdminIncidents = await prisma.networkIncident.findMany({
-    where: { agentId, status: "ADMIN_UPDATED" },
-    select: { link: { select: { url: true } } },
+  const pendingIncidents = await prisma.networkIncident.findMany({
+    where: { agentId, status: { notIn: ["CLOSED", "PAUSED"] } },
+    select: { status: true, link: { select: { url: true, backupUrl: true } } },
   });
   const pendingAdminUrls = new Set(
-    pendingAdminIncidents.map((incident) => normalizeUrl(incident.link.url))
+    pendingIncidents
+      .filter((incident) => incident.status === "ADMIN_UPDATED")
+      .flatMap((incident) => [incident.link.url, incident.link.backupUrl])
+      .filter((url): url is string => Boolean(url?.trim()))
+      .map((url) => normalizeUrl(url))
+  );
+  const pendingBackupUrls = new Set(
+    pendingIncidents
+      .map((incident) => incident.link.backupUrl)
+      .filter((url): url is string => Boolean(url?.trim()))
+      .map((url) => normalizeUrl(url))
   );
   let opened = 0;
   let recovered = 0;
@@ -297,12 +307,14 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
     }
     // หลังแอดมินแก้ลิงก์ เคสจะอยู่ ADMIN_UPDATED จนซิมยืนยันว่าใช้งานได้
     // URL ใหม่อาจยังไม่มีประวัติ จึงรอผลที่ใช้งานได้ต่อเนื่อง 2 รอบก่อนปิดเคส
-    const confirmsAdminUpdate = probeStatus !== "DOWN"
-      && pendingAdminUrls.has(normalized)
+    const hasTwoUsableRounds = probeStatus !== "DOWN"
       && previous !== null
       && previous.status !== "DOWN"
       && next.status !== "DOWN";
-    if (!next.opened && !next.recovered && !confirmsAdminUpdate) continue;
+    const confirmsAdminUpdate = hasTwoUsableRounds
+      && pendingAdminUrls.has(normalized);
+    const confirmsBackup = hasTwoUsableRounds && pendingBackupUrls.has(normalized);
+    if (!next.opened && !next.recovered && !confirmsAdminUpdate && !confirmsBackup) continue;
     const candidateLinks = await prisma.link.findMany({
       where: { isActive: true },
       include: {
@@ -311,6 +323,9 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
       },
     });
     const links = candidateLinks.filter((link) => normalizeUrl(link.url) === normalized);
+    const backupLinks = candidateLinks.filter((link) =>
+      link.backupUrl && normalizeUrl(link.backupUrl) === normalized
+    );
 
     for (const link of links) {
       if (next.opened) {
@@ -386,7 +401,83 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
         }
       }
     }
+    for (const link of backupLinks) {
+      if (next.opened) {
+        const primary = await prisma.mobileUrlStatus.findUnique({
+          where: { agentId_urlHash: { agentId, urlHash: mobileUrlHash(link.url) } },
+        });
+        // สำรองล้มแต่หลักยังใช้ได้ ไม่ถือเป็น outage; ถ้าหลักก็ล้มด้วยจึงเปิดเคส
+        if (primary?.status !== "DOWN") continue;
+        const existing = await prisma.networkIncident.findFirst({
+          where: { agentId, linkId: link.id, status: { notIn: ["CLOSED", "PAUSED"] } },
+        });
+        if (existing) continue;
+        const incident = await prisma.networkIncident.create({
+          data: {
+            agentId,
+            linkId: link.id,
+            detectedAt: result.checkedAt,
+            httpCode: result.httpCode ?? null,
+            responseMs: result.responseMs ?? null,
+            error: `ลิงก์หลักและลิงก์สำรองใช้ไม่ได้: ${normalizedError || "ไม่ตอบสนอง"}`,
+            finalUrl,
+            redirectCount,
+            redirectType,
+            redirectChain,
+            pageTitle: result.pageTitle ?? null,
+            blockPageDetected: redirectType === "NETWORK_BLOCK",
+          },
+        });
+        await notifyCompany(routes, link.company.id, networkDownMessage({
+          incidentId: incident.id,
+          carrier: agent.carrier,
+          agentName: agent.name,
+          company: link.company.name,
+          room: link.lineGroup?.name,
+          name: `${link.name} (ลิงก์สำรอง)`,
+          url: link.backupUrl!,
+          error: `ลิงก์หลักและลิงก์สำรองใช้ไม่ได้: ${normalizedError || "ไม่ตอบสนอง"}`,
+          detectedAt: result.checkedAt,
+          appBaseUrl: APP_BASE_URL,
+        }));
+        opened++;
+        continue;
+      }
+      if (!next.recovered && !confirmsBackup) continue;
+      const incidents = await prisma.networkIncident.findMany({
+        where: { agentId, linkId: link.id, status: { notIn: ["CLOSED", "PAUSED"] } },
+      });
+      for (const incident of incidents) {
+        await prisma.networkIncident.update({
+          where: { id: incident.id },
+          data: {
+            status: "CLOSED",
+            resolvedAt: result.checkedAt,
+            finalUrl: link.backupUrl,
+            redirectType: "BACKUP_USED",
+          },
+        });
+        const downMinutes = Math.max(0, Math.round((result.checkedAt.getTime() - incident.detectedAt.getTime()) / 60_000));
+        await notifyCompany(routes, link.company.id, networkRecoveredMessage({
+          incidentId: incident.id,
+          carrier: agent.carrier,
+          agentName: agent.name,
+          company: link.company.name,
+          room: link.lineGroup?.name,
+          name: link.name,
+          url: link.backupUrl!,
+          primaryUrl: link.url,
+          usedBackup: true,
+          downMinutes,
+          slow: probeStatus === "SLOW",
+          responseMs: result.responseMs,
+          appBaseUrl: APP_BASE_URL,
+        }));
+        recovered++;
+      }
+    }
     if (confirmsAdminUpdate) pendingAdminUrls.delete(normalized);
+    if (confirmsBackup) pendingBackupUrls.delete(normalized);
   }
   return { accepted: results.length, opened, recovered };
 }

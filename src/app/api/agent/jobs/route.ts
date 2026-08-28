@@ -7,8 +7,14 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const agent = await authenticateMobileAgent(req.headers.get("authorization"));
   if (!agent) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const urls = await prisma.link.findMany({ where: { isActive: true }, select: { url: true } });
-  const unique = Array.from(new Set(urls.map((item) => normalizeUrl(item.url))));
+  const links = await prisma.link.findMany({
+    where: { isActive: true },
+    select: { url: true, backupUrl: true },
+  });
+  // ตรวจทั้งลิงก์หลักและลิงก์สำรอง เพื่อให้ซิมยืนยันได้ว่า fallback ใช้งานจริง
+  const unique = Array.from(new Set(links.flatMap((item) => [item.url, item.backupUrl])
+    .filter((url): url is string => Boolean(url?.trim()))
+    .map((url) => normalizeUrl(url))));
   await prisma.mobileAgent.update({
     where: { id: agent.id },
     data: {

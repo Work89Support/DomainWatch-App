@@ -50,6 +50,7 @@ export default async function AgentsPage() {
         id: true,
         name: true,
         url: true,
+        backupUrl: true,
         company: { select: { name: true } },
         lineGroup: { select: { name: true } },
       },
@@ -67,6 +68,15 @@ export default async function AgentsPage() {
       company: link.company.name,
       room: link.lineGroup?.name || null,
     });
+    if (link.backupUrl?.trim()) {
+      const backupKey = normalizeUrl(link.backupUrl);
+      (result[backupKey] ||= []).push({
+        id: link.id,
+        name: `${link.name} (ลิงก์สำรอง)`,
+        company: link.company.name,
+        room: link.lineGroup?.name || null,
+      });
+    }
     return result;
   }, {});
   return <AgentsClient
