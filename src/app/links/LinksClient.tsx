@@ -289,8 +289,8 @@ export default function LinksClient({
         {view.responseMs !== null && <div className={view.status === "SLOW" ? "text-amber-600" : "text-slate-400"}>{(view.responseMs / 1000).toFixed(1)} วินาที</div>}
       </td>
       <td className="py-3 px-4">
-        <button disabled={!capabilities.edit} onClick={() => toggleActive(l)} className={`badge disabled:cursor-default ${l.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
-          {l.isActive ? "เฝ้าดู" : "ไม่เฝ้าดู"}
+        <button disabled={!capabilities.edit} onClick={() => toggleActive(l)} className={`badge disabled:cursor-default ${l.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+          {l.isActive ? "● เปิดเฝ้าดู" : "⏸ พักชั่วคราว"}
         </button>
       </td>
       <td className="py-3 px-4 text-right whitespace-nowrap">
@@ -353,6 +353,7 @@ export default function LinksClient({
   }
 
   async function toggleActive(l: LinkRow) {
+    if (l.isActive && !confirm(`พักการเฝ้าดูลิงก์ "${l.name}" ชั่วคราว?\n\nเคสค้างจะย้ายไปประวัติด้วยสถานะ “พักการเฝ้าดู” และระบบจะหยุดตรวจ/หยุดแจ้งเตือนจนกว่าจะเปิดกลับมา`)) return;
     await fetch(`/api/links/${l.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -566,10 +567,31 @@ export default function LinksClient({
             <Field label="หมายเหตุ">
               <textarea className="input" rows={2} value={modal.note} onChange={(e) => setModal({ ...modal, note: e.target.value })} />
             </Field>
-            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-              <input type="checkbox" checked={modal.isActive} onChange={(e) => setModal({ ...modal, isActive: e.target.checked })} />
-              เฝ้าดูสถานะลิงก์นี้ (ปิดถ้าเป็นลิงก์ LINE ที่เช็คไม่ได้)
-            </label>
+            <Field label="สถานะการเฝ้าดู">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setModal({ ...modal, isActive: true })}
+                  className={`rounded-xl border p-3 text-left transition ${modal.isActive ? "border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300" : "border-slate-200 bg-white"}`}
+                >
+                  <div className="font-semibold text-emerald-700">● เปิดเฝ้าดู</div>
+                  <div className="mt-1 text-xs text-slate-500">ตรวจตามรอบและแจ้งเตือนเมื่อพบปัญหา</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModal({ ...modal, isActive: false })}
+                  className={`rounded-xl border p-3 text-left transition ${!modal.isActive ? "border-slate-500 bg-slate-100 ring-1 ring-slate-300" : "border-slate-200 bg-white"}`}
+                >
+                  <div className="font-semibold text-slate-700">⏸ พักชั่วคราว</div>
+                  <div className="mt-1 text-xs text-slate-500">หยุดตรวจและแจ้งเตือน แต่ยังเก็บประวัติไว้</div>
+                </button>
+              </div>
+              {!modal.isActive && (
+                <div className="mt-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+                  เคสค้างจะย้ายไป “ประวัติทั้งหมด” ด้วยสถานะพักการเฝ้าดู และจะเริ่มตรวจใหม่เมื่อเปิดกลับมา
+                </div>
+              )}
+            </Field>
           </div>
           <div className="flex justify-end gap-2 mt-5">
             <button className="btn-ghost" onClick={() => setModal(null)}>ยกเลิก</button>

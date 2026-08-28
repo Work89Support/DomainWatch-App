@@ -439,10 +439,19 @@ function MobileLinkEditModal({
           <EditField label="หมายเหตุ">
             <textarea className="input" rows={3} value={form.note} onChange={(event) => onChange({ ...form, note: event.target.value })} />
           </EditField>
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-            <input type="checkbox" checked={form.isActive} onChange={(event) => onChange({ ...form, isActive: event.target.checked })} />
-            เฝ้าดูสถานะลิงก์นี้ (ปิดถ้าเป็นลิงก์ LINE ที่เช็คไม่ได้)
-          </label>
+          <EditField label="สถานะการเฝ้าดู">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button type="button" onClick={() => onChange({ ...form, isActive: true })} className={`rounded-xl border p-3 text-left ${form.isActive ? "border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300" : "border-slate-200"}`}>
+                <div className="font-semibold text-emerald-700">● เปิดเฝ้าดู</div>
+                <div className="mt-1 text-xs text-slate-500">ตรวจและแจ้งเตือนตามปกติ</div>
+              </button>
+              <button type="button" onClick={() => onChange({ ...form, isActive: false })} className={`rounded-xl border p-3 text-left ${!form.isActive ? "border-slate-500 bg-slate-100 ring-1 ring-slate-300" : "border-slate-200"}`}>
+                <div className="font-semibold text-slate-700">⏸ พักชั่วคราว</div>
+                <div className="mt-1 text-xs text-slate-500">หยุดตรวจ แต่เก็บประวัติไว้</div>
+              </button>
+            </div>
+            {!form.isActive && <div className="mt-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">เคสค้างจะย้ายไปประวัติด้วยสถานะ “พักการเฝ้าดู”</div>}
+          </EditField>
           {normalizeForComparison(form.url) !== normalizeForComparison(incident.link.url) && (
             <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-700">URL มีการเปลี่ยนแปลง ระบบจะตรวจลิงก์ใหม่ก่อนบันทึกและปิดเคสเก่า เมื่อมือถือทำงานรอบถัดไปจะเริ่มตรวจ URL ใหม่นี้</div>
           )}
