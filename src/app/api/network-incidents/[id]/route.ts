@@ -28,6 +28,16 @@ export async function PATCH(
   }
 
   const body = await req.json().catch(() => ({}));
+  if (body.action === "mark_updated") {
+    if (incident.status === "CLOSED") {
+      return NextResponse.json({ error: "เคสนี้ปิดเรียบร้อยแล้ว" }, { status: 409 });
+    }
+    const updated = await prisma.networkIncident.update({
+      where: { id: incident.id },
+      data: { status: "ADMIN_UPDATED", resolvedAt: null },
+    });
+    return NextResponse.json({ ok: true, incidentStatus: updated.status });
+  }
   if (body.action !== "admin_update") {
     return NextResponse.json({ error: "action ไม่ถูกต้อง" }, { status: 400 });
   }
@@ -83,8 +93,14 @@ export async function PATCH(
   }
 
   if (!urlChanged) {
-    const link = await prisma.link.update({ where: { id: incident.linkId }, data: linkData });
-    return NextResponse.json({ ok: true, link, urlChanged: false });
+    const [link] = await prisma.$transaction([
+      prisma.link.update({ where: { id: incident.linkId }, data: linkData }),
+      prisma.networkIncident.updateMany({
+        where: { linkId: incident.linkId, status: { not: "CLOSED" } },
+        data: { status: "ADMIN_UPDATED", resolvedAt: null },
+      }),
+    ]);
+    return NextResponse.json({ ok: true, link, incidentStatus: "ADMIN_UPDATED", urlChanged: false });
   }
 
   const otherLinks = await prisma.link.findMany({
@@ -109,7 +125,9 @@ export async function PATCH(
     }),
     prisma.networkIncident.updateMany({
       where: { linkId: incident.linkId, status: { not: "CLOSED" } },
-      data: { status: "CLOSED", resolvedAt: checkedAt },
+      // การเปิดได้จากตัวตรวจส่วนกลางยังไม่ยืนยันว่าเปิดได้ผ่านซิมจริง
+      // ให้เครื่องซิมตรวจผ่านอีกครั้งก่อนจึงปิดเคสอัตโนมัติ
+      data: { status: "ADMIN_UPDATED", resolvedAt: null },
     }),
   ];
   // ถ้าไม่มี Master Data รายการอื่นใช้ URL เก่าแล้ว ให้เอาผลค้างของ URL เก่าออกจากสรุปเครื่อง
@@ -124,6 +142,7 @@ export async function PATCH(
     oldUrl,
     newUrl,
     status,
+    incidentStatus: "ADMIN_UPDATED",
     checkedAt,
     urlChanged: true,
   });

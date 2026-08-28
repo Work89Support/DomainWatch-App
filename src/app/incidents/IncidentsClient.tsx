@@ -108,9 +108,12 @@ export default function IncidentsClient({
   );
   const [mobileLinkModal, setMobileLinkModal] = useState<{ incident: MobileIncident; form: MobileLinkForm } | null>(null);
   const [mobileUpdateBusy, setMobileUpdateBusy] = useState(false);
+  const [mobileMarkBusyId, setMobileMarkBusyId] = useState<string | null>(null);
 
   const systemOpen = initial.filter((incident) => incident.status !== "CLOSED").length;
   const mobileOpen = mobileInitial.filter((incident) => incident.status !== "CLOSED").length;
+  const mobileWaitingAction = mobileInitial.filter((incident) => incident.status === "OPEN").length;
+  const mobileWaitingVerification = mobileInitial.filter((incident) => incident.status === "ADMIN_UPDATED").length;
   const openCount = source === "SYSTEM" ? systemOpen : source === "MOBILE" ? mobileOpen : systemOpen + mobileOpen;
   const totalCount = source === "SYSTEM" ? initial.length : source === "MOBILE" ? mobileInitial.length : initial.length + mobileInitial.length;
 
@@ -166,6 +169,19 @@ export default function IncidentsClient({
     router.refresh();
   }
 
+  async function markMobileIncidentUpdated(incident: MobileIncident) {
+    setMobileMarkBusyId(incident.id);
+    const response = await fetch(`/api/network-incidents/${incident.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "mark_updated" }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setMobileMarkBusyId(null);
+    if (!response.ok) return alert(data.error || "เปลี่ยนสถานะไม่สำเร็จ");
+    router.refresh();
+  }
+
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
       <PageHeader
@@ -206,13 +222,15 @@ export default function IncidentsClient({
 
       {showMobile && mobileList.length > 0 && (
         <div className="mb-6">
-          <div className="mb-3 flex items-center gap-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             <h2 className="font-semibold text-slate-800">📱 ปัญหาที่ตรวจจากซิมมือถือ</h2>
-            <span className="badge bg-red-50 text-red-600">{mobileList.length} เคส</span>
+            {mobileWaitingAction > 0 && <span className="badge bg-red-50 text-red-600">รอจัดการ {mobileWaitingAction}</span>}
+            {mobileWaitingVerification > 0 && <span className="badge bg-amber-50 text-amber-700">รอตรวจยืนยัน {mobileWaitingVerification}</span>}
+            {filter === "all" && <span className="badge bg-slate-100 text-slate-500">ทั้งหมด {mobileList.length}</span>}
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {mobileList.map((incident) => (
-              <div key={incident.id} className="card border-red-100 p-5">
+              <div key={incident.id} className={`card p-5 ${mobileIncidentCardTone(incident.status)}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -239,10 +257,19 @@ export default function IncidentsClient({
                       </div>
                     )}
                   </div>
-                  <IncidentStatusBadge status={incident.status} />
+                  <MobileIncidentStatusBadge status={incident.status} />
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {canAdmin && <button className="btn-primary text-xs py-1.5" onClick={() => beginMobileEdit(incident)}>✏️ แก้ลิงก์ตรงนี้</button>}
+                  {canAdmin && incident.status === "OPEN" && (
+                    <button
+                      className="btn-ghost text-xs py-1.5"
+                      disabled={mobileMarkBusyId === incident.id}
+                      onClick={() => markMobileIncidentUpdated(incident)}
+                    >
+                      {mobileMarkBusyId === incident.id ? "กำลังบันทึก..." : "✓ ปรับแก้แล้ว — รอตรวจ"}
+                    </button>
+                  )}
                   <button className="btn-ghost text-xs py-1.5" onClick={() => setSelectedMobile(incident)}>ดูรายละเอียดจากเครื่องตรวจ →</button>
                 </div>
               </div>
@@ -428,6 +455,23 @@ function MobileLinkEditModal({
   );
 }
 
+function mobileIncidentCardTone(status: string) {
+  if (status === "ADMIN_UPDATED") return "border-amber-200 bg-amber-50/20";
+  if (status === "CLOSED") return "border-emerald-100";
+  return "border-red-100";
+}
+
+function MobileIncidentStatusBadge({ status }: { status: string }) {
+  const map: Record<string, { text: string; cls: string }> = {
+    OPEN: { text: "เปิด (รอจัดการ)", cls: "bg-red-50 text-red-600" },
+    ADMIN_UPDATED: { text: "ปรับแก้แล้ว · รอตรวจยืนยัน", cls: "bg-amber-100 text-amber-800" },
+    IT_RESOLVED: { text: "กำลังตรวจยืนยัน", cls: "bg-brand-50 text-brand-700" },
+    CLOSED: { text: "จัดการเรียบร้อย", cls: "bg-emerald-50 text-emerald-700" },
+  };
+  const value = map[status] || map.OPEN;
+  return <span className={`badge shrink-0 ${value.cls}`}>{value.text}</span>;
+}
+
 function EditField({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><label className="label">{label}</label>{children}</div>;
 }
@@ -453,7 +497,7 @@ function MobileIncidentPanel({ incident, onClose }: { incident: MobileIncident; 
             <h3 className="mt-1 text-lg font-semibold text-slate-800">{incident.link.name}</h3>
             <div className="text-xs text-slate-400">เคส #{incident.id.slice(-8).toUpperCase()}</div>
           </div>
-          <IncidentStatusBadge status={incident.status} />
+          <MobileIncidentStatusBadge status={incident.status} />
         </div>
         <div className="mt-5 grid gap-3 text-sm">
           <Detail label="เครื่องตรวจ" value={`${incident.agent.name} · ${incident.agent.deviceLabel || "ไม่ระบุรุ่น"} · แอป ${incident.agent.appVersion || "-"}`} />

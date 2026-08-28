@@ -201,6 +201,13 @@ export function normalizeMobileProbeStatus(
 export async function storeMobileResults(agentId: string, results: MobileResultInput[]) {
   const agent = await prisma.mobileAgent.findUniqueOrThrow({ where: { id: agentId } });
   const routes = await loadRoutes();
+  const pendingAdminIncidents = await prisma.networkIncident.findMany({
+    where: { agentId, status: "ADMIN_UPDATED" },
+    select: { link: { select: { url: true } } },
+  });
+  const pendingAdminUrls = new Set(
+    pendingAdminIncidents.map((incident) => normalizeUrl(incident.link.url))
+  );
   let opened = 0;
   let recovered = 0;
 
@@ -288,7 +295,14 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
         },
       });
     }
-    if (!next.opened && !next.recovered) continue;
+    // หลังแอดมินแก้ลิงก์ เคสจะอยู่ ADMIN_UPDATED จนซิมยืนยันว่าใช้งานได้
+    // URL ใหม่อาจยังไม่มีประวัติ จึงรอผลที่ใช้งานได้ต่อเนื่อง 2 รอบก่อนปิดเคส
+    const confirmsAdminUpdate = probeStatus !== "DOWN"
+      && pendingAdminUrls.has(normalized)
+      && previous !== null
+      && previous.status !== "DOWN"
+      && next.status !== "DOWN";
+    if (!next.opened && !next.recovered && !confirmsAdminUpdate) continue;
     const candidateLinks = await prisma.link.findMany({
       where: { isActive: true },
       include: {
@@ -339,7 +353,11 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
         opened++;
       } else {
         const incidents = await prisma.networkIncident.findMany({
-          where: { agentId, linkId: link.id, status: { not: "CLOSED" } },
+          where: {
+            agentId,
+            linkId: link.id,
+            status: next.recovered ? { not: "CLOSED" } : "ADMIN_UPDATED",
+          },
         });
         for (const incident of incidents) {
           await prisma.networkIncident.update({
@@ -368,6 +386,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
         }
       }
     }
+    if (confirmsAdminUpdate) pendingAdminUrls.delete(normalized);
   }
   return { accepted: results.length, opened, recovered };
 }
