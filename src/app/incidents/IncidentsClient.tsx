@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader, IncidentStatusBadge } from "@/components/ui";
 import { fmtDateTime, fmtMinutes } from "@/lib/format";
 import CompanyFilter from "@/components/CompanyFilter";
+import { mobileIncidentStatusText } from "@/lib/statusPresentation";
 
 type Incident = {
   id: string;
@@ -77,6 +78,28 @@ type MobileLinkForm = {
 const DEFAULT_CATEGORIES = ["ทางเข้า", "ริชเมนู", "โปรโมชัน", "ทั่วไป"];
 const isOpenIncidentStatus = (status: string) => status !== "CLOSED" && status !== "PAUSED";
 
+function useDialogFocus(onClose: () => void) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = ref.current;
+    dialog?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+      if (event.key !== "Tab" || !dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => { document.removeEventListener("keydown", onKeyDown); previous?.focus(); };
+  }, [onClose]);
+  return ref;
+}
+
 export default function IncidentsClient({
   initial,
   mobileInitial,
@@ -86,6 +109,8 @@ export default function IncidentsClient({
   canAdmin,
   canIt,
   showKpi,
+  counts,
+  pagination,
 }: {
   initial: Incident[];
   mobileInitial: MobileIncident[];
@@ -95,6 +120,8 @@ export default function IncidentsClient({
   canAdmin: boolean;
   canIt: boolean;
   showKpi: boolean;
+  counts: { systemTotal: number; mobileTotal: number; systemOpen: number; mobileOpen: number };
+  pagination: { page: number; pageSize: number; pageCount: number };
 }) {
   const router = useRouter();
   // ลิงก์จาก Telegram อาจชี้มายังเคสที่บอทปิดอัตโนมัติแล้ว
@@ -111,12 +138,12 @@ export default function IncidentsClient({
   const [mobileUpdateBusy, setMobileUpdateBusy] = useState(false);
   const [mobileMarkBusyId, setMobileMarkBusyId] = useState<string | null>(null);
 
-  const systemOpen = initial.filter((incident) => isOpenIncidentStatus(incident.status)).length;
-  const mobileOpen = mobileInitial.filter((incident) => isOpenIncidentStatus(incident.status)).length;
+  const systemOpen = counts.systemOpen;
+  const mobileOpen = counts.mobileOpen;
   const mobileWaitingAction = mobileInitial.filter((incident) => incident.status === "OPEN").length;
   const mobileWaitingVerification = mobileInitial.filter((incident) => incident.status === "ADMIN_UPDATED").length;
   const openCount = source === "SYSTEM" ? systemOpen : source === "MOBILE" ? mobileOpen : systemOpen + mobileOpen;
-  const totalCount = source === "SYSTEM" ? initial.length : source === "MOBILE" ? mobileInitial.length : initial.length + mobileInitial.length;
+  const totalCount = source === "SYSTEM" ? counts.systemTotal : source === "MOBILE" ? counts.mobileTotal : counts.systemTotal + counts.mobileTotal;
 
   const list = filter === "open"
     ? initial.filter((incident) => isOpenIncidentStatus(incident.status))
@@ -126,6 +153,13 @@ export default function IncidentsClient({
     : mobileInitial;
   const showSystem = source !== "MOBILE";
   const showMobile = source !== "SYSTEM";
+
+  function goToPage(nextPage: number) {
+    const params = new URLSearchParams(window.location.search);
+    if (nextPage <= 1) params.delete("page"); else params.set("page", String(nextPage));
+    params.delete("incident");
+    router.push(`/incidents${params.size ? `?${params.toString()}` : ""}`);
+  }
 
   function beginMobileEdit(incident: MobileIncident) {
     setMobileLinkModal({
@@ -258,7 +292,7 @@ export default function IncidentsClient({
                       </div>
                     )}
                   </div>
-                  <MobileIncidentStatusBadge status={incident.status} />
+                  <MobileIncidentStatusBadge incident={incident} />
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {canAdmin && <button className="btn-primary text-xs py-1.5" onClick={() => beginMobileEdit(incident)}>✏️ แก้ลิงก์ตรงนี้</button>}
@@ -343,6 +377,16 @@ export default function IncidentsClient({
         <div className="card p-10 text-center text-slate-400">ไม่มีเหตุการณ์จากเครือข่ายซิมตามเงื่อนไข</div>
       )}
 
+      {filter === "all" && pagination.pageCount > 1 && (
+        <nav aria-label="หน้าประวัติเหตุการณ์" className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-4 text-sm">
+          <div className="text-slate-500">หน้าที่ {pagination.page} จาก {pagination.pageCount} · หน้านี้แสดงสูงสุด {pagination.pageSize} เคสต่อแหล่งตรวจ · ทั้งหมด {totalCount.toLocaleString("th-TH")} เคส</div>
+          <div className="flex gap-2">
+            <button type="button" className="btn-ghost text-xs" disabled={pagination.page <= 1} onClick={() => goToPage(pagination.page - 1)}>← หน้าก่อน</button>
+            <button type="button" className="btn-ghost text-xs" disabled={pagination.page >= pagination.pageCount} onClick={() => goToPage(pagination.page + 1)}>หน้าถัดไป →</button>
+          </div>
+        </nav>
+      )}
+
       {selected && (
         <IncidentPanel
           incident={selected}
@@ -388,14 +432,15 @@ function MobileLinkEditModal({
   onClose: () => void;
   onSave: () => void;
 }) {
+  const dialogRef = useDialogFocus(onClose);
   const company = companies.find((item) => item.id === form.companyId);
   const categoryOptions = Array.from(new Set([...DEFAULT_CATEGORIES, incident.link.category || "", form.category])).filter(Boolean);
   const [customCategory, setCustomCategory] = useState(!DEFAULT_CATEGORIES.includes(form.category));
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
-      <div className="card w-full max-w-lg max-h-[92vh] overflow-y-auto p-6" onClick={(event) => event.stopPropagation()}>
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mobile-link-edit-title" className="card w-full max-w-lg max-h-[92vh] overflow-y-auto p-6 outline-none" onClick={(event) => event.stopPropagation()}>
         <div className="mb-4">
-          <h3 className="text-xl font-semibold text-slate-800">แก้ไขลิงก์</h3>
+          <h3 id="mobile-link-edit-title" className="text-xl font-semibold text-slate-800">แก้ไขลิงก์</h3>
           <div className="mt-1 text-xs text-slate-400">เคสจากซิม #{incident.id.slice(-8).toUpperCase()} · แก้ไข Master Data จากหน้านี้ได้ทันที</div>
         </div>
         <div className="space-y-3">
@@ -472,7 +517,11 @@ function mobileIncidentCardTone(status: string) {
   return "border-red-100";
 }
 
-function MobileIncidentStatusBadge({ status }: { status: string }) {
+function MobileIncidentStatusBadge({ incident }: { incident: MobileIncident }) {
+  const status = incident.status;
+  if (status === "CLOSED" && incident.redirectType === "BACKUP_USED" && incident.finalUrl) {
+    return <span className="badge shrink-0 bg-emerald-50 text-emerald-700">{mobileIncidentStatusText(incident)}</span>;
+  }
   const map: Record<string, { text: string; cls: string }> = {
     OPEN: { text: "เปิด (รอจัดการ)", cls: "bg-red-50 text-red-600" },
     ADMIN_UPDATED: { text: "ปรับแก้แล้ว · รอตรวจยืนยัน", cls: "bg-amber-100 text-amber-800" },
@@ -499,17 +548,18 @@ function normalizeForComparison(value: string) {
 }
 
 function MobileIncidentPanel({ incident, onClose }: { incident: MobileIncident; onClose: () => void }) {
+  const dialogRef = useDialogFocus(onClose);
   const carrier = incident.agent.reportedCarrier || incident.agent.carrier;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
-      <div className="card w-full max-w-xl p-6 max-h-[92vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mobile-incident-title" className="card w-full max-w-xl p-6 max-h-[92vh] overflow-y-auto outline-none" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-xs font-semibold text-brand-700">📱 ตรวจจากซิม {carrier}</div>
-            <h3 className="mt-1 text-lg font-semibold text-slate-800">{incident.link.name}</h3>
+            <h3 id="mobile-incident-title" className="mt-1 text-lg font-semibold text-slate-800">{incident.link.name}</h3>
             <div className="text-xs text-slate-400">เคส #{incident.id.slice(-8).toUpperCase()}</div>
           </div>
-          <MobileIncidentStatusBadge status={incident.status} />
+          <MobileIncidentStatusBadge incident={incident} />
         </div>
         <div className="mt-5 grid gap-3 text-sm">
           <Detail label="เครื่องตรวจ" value={`${incident.agent.name} · ${incident.agent.deviceLabel || "ไม่ระบุรุ่น"} · แอป ${incident.agent.appVersion || "-"}`} />
@@ -567,6 +617,7 @@ function IncidentPanel({
   canAdmin: boolean;
   canIt: boolean;
 }) {
+  const dialogRef = useDialogFocus(onClose);
   const [busy, setBusy] = useState(false);
   const [newUrl, setNewUrl] = useState(incident.newUrl || "");
   const [cause, setCause] = useState(incident.cause || "");
@@ -589,10 +640,10 @@ function IncidentPanel({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
-      <div className="card w-full max-w-xl p-6 max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="system-incident-title" className="card w-full max-w-xl p-6 max-h-[92vh] overflow-y-auto outline-none" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h3 className="text-lg font-semibold text-slate-800">{incident.link.name}</h3>
+            <h3 id="system-incident-title" className="text-lg font-semibold text-slate-800">{incident.link.name}</h3>
             <div className="text-xs text-slate-400">🏢 {incident.link.company.name}</div>
             <a href={incident.link.url} target="_blank" rel="noreferrer" className="text-xs text-brand-600 hover:underline break-all inline-flex items-center gap-1">
               {incident.link.url} <span className="text-brand-400">↗</span>

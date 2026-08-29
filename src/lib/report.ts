@@ -60,6 +60,8 @@ export type DailyReport = {
     lastSeenAt: string | null;
     lastCheckedAt: string | null;
     totalUrls: number;
+    primaryUrls?: number;
+    backupUrls?: number;
     up: number;
     slow: number;
     down: number;
@@ -186,10 +188,12 @@ export async function getDailyReport(
     }),
     prisma.link.findMany({
       where: { isActive: true, ...(scoped ? { companyId: { in: companyIds } } : {}) },
-      select: { url: true },
+      select: { url: true, backupUrl: true },
     }),
   ]);
-  const scopedUrls = new Set(scopedUrlRows.map((link) => normalizeReportUrl(link.url)));
+  const primaryUrls = new Set(scopedUrlRows.map((link) => normalizeReportUrl(link.url)));
+  const backupUrls = new Set(scopedUrlRows.flatMap((link) => link.backupUrl?.trim() ? [normalizeReportUrl(link.backupUrl)] : []));
+  const scopedUrls = new Set([...primaryUrls, ...backupUrls]);
   const downNow = downLinksNow.length;
   const downNowUnique = countUniqueCompanyUrls(downLinksNow);
   const currentOpenIncidents = openIncidentsNow.length;
@@ -226,6 +230,8 @@ export async function getDailyReport(
       lastSeenAt: agent.lastSeenAt?.toISOString() || null,
       lastCheckedAt: latestCheck?.toISOString() || null,
       totalUrls: urlStatuses.length,
+      primaryUrls: urlStatuses.filter((item) => primaryUrls.has(normalizeReportUrl(item.url))).length,
+      backupUrls: urlStatuses.filter((item) => backupUrls.has(normalizeReportUrl(item.url)) && !primaryUrls.has(normalizeReportUrl(item.url))).length,
       up: count("UP"),
       slow: count("SLOW"),
       down: count("DOWN"),

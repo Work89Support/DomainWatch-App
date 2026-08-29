@@ -3,13 +3,14 @@ import IncidentsClient from "./IncidentsClient";
 import { requireUser } from "@/lib/auth";
 import { canActAsAdmin, canActAsIt, canViewIncidents, canViewKpi } from "@/lib/permissions";
 import { redirect } from "next/navigation";
+import { IncidentStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
 export default async function IncidentsPage({
   searchParams,
 }: {
-  searchParams: { company?: string; incident?: string };
+  searchParams: { company?: string; incident?: string; page?: string };
 }) {
   const me = await requireUser();
   if (!canViewIncidents(me.role)) redirect("/");
@@ -21,17 +22,22 @@ export default async function IncidentsPage({
     ? (companyId ? { companyId } : { companyId: { in: me.companyIds } })
     : (companyId ? { companyId } : {});
   const include = { link: { include: { company: true, lineGroup: true } } } as const;
-  const [incidents, mobileIncidents, requestedIncident, requestedMobileIncident, companies] = await Promise.all([
+  const pageSize = 100;
+  const page = Math.max(1, Number.parseInt(searchParams.page || "1", 10) || 1);
+  const openStatusWhere = { status: { notIn: [IncidentStatus.CLOSED, IncidentStatus.PAUSED] } };
+  const [incidents, mobileIncidents, requestedIncident, requestedMobileIncident, companies, systemTotal, mobileTotal, systemOpen, mobileOpen, openIncidents, openMobileIncidents] = await Promise.all([
     prisma.incident.findMany({
       where: { link: companyWhere },
       orderBy: { detectedAt: "desc" },
-      take: 200,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
       include,
     }),
     prisma.networkIncident.findMany({
       where: { link: companyWhere },
       orderBy: { detectedAt: "desc" },
-      take: 200,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
       include: {
         agent: { select: { id: true, name: true, carrier: true, reportedCarrier: true, deviceLabel: true, appVersion: true } },
         link: { include: { company: true, lineGroup: true } },
@@ -61,13 +67,30 @@ export default async function IncidentsPage({
         lineGroups: { orderBy: { createdAt: "asc" }, select: { id: true, name: true } },
       },
     }),
+    prisma.incident.count({ where: { link: companyWhere } }),
+    prisma.networkIncident.count({ where: { link: companyWhere } }),
+    prisma.incident.count({ where: { link: companyWhere, ...openStatusWhere } }),
+    prisma.networkIncident.count({ where: { link: companyWhere, ...openStatusWhere } }),
+    prisma.incident.findMany({ where: { link: companyWhere, ...openStatusWhere }, orderBy: { detectedAt: "desc" }, include }),
+    prisma.networkIncident.findMany({
+      where: { link: companyWhere, ...openStatusWhere },
+      orderBy: { detectedAt: "desc" },
+      include: {
+        agent: { select: { id: true, name: true, carrier: true, reportedCarrier: true, deviceLabel: true, appVersion: true } },
+        link: { include: { company: true, lineGroup: true } },
+      },
+    }),
   ]);
-  const visibleIncidents = requestedIncident && !incidents.some((incident) => incident.id === requestedIncident.id)
-    ? [requestedIncident, ...incidents]
-    : incidents;
-  const visibleMobileIncidents = requestedMobileIncident && !mobileIncidents.some((incident) => incident.id === requestedMobileIncident.id)
-    ? [requestedMobileIncident, ...mobileIncidents]
-    : mobileIncidents;
+  const visibleIncidents = Array.from(new Map([
+    ...(requestedIncident ? [requestedIncident] : []),
+    ...openIncidents,
+    ...incidents,
+  ].map((incident) => [incident.id, incident])).values());
+  const visibleMobileIncidents = Array.from(new Map([
+    ...(requestedMobileIncident ? [requestedMobileIncident] : []),
+    ...openMobileIncidents,
+    ...mobileIncidents,
+  ].map((incident) => [incident.id, incident])).values());
   return (
     <IncidentsClient
       initial={JSON.parse(JSON.stringify(visibleIncidents))}
@@ -78,6 +101,8 @@ export default async function IncidentsPage({
       canAdmin={canActAsAdmin(me.role)}
       canIt={canActAsIt(me.role)}
       showKpi={canViewKpi(me.role)}
+      counts={{ systemTotal, mobileTotal, systemOpen, mobileOpen }}
+      pagination={{ page, pageSize, pageCount: Math.max(1, Math.ceil(Math.max(systemTotal, mobileTotal) / pageSize)) }}
     />
   );
 }

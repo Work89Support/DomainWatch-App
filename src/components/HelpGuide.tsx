@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MANUAL_HTML } from "@/lib/manualHtml";
 
 export default function HelpGuide() {
   const [open, setOpen] = useState(false);
   const [min, setMin] = useState(false);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const [anotherDialogOpen, setAnotherDialogOpen] = useState(false);
   const winRef = useRef<HTMLDivElement>(null);
   const drag = useRef({ on: false, ox: 0, oy: 0 });
 
@@ -38,9 +39,17 @@ export default function HelpGuide() {
     ? { left: pos.x, top: pos.y }
     : { left: "50%", top: "54%", transform: "translate(-50%,-50%)" };
 
+  useEffect(() => {
+    const update = () => setAnotherDialogOpen(Boolean(document.querySelector('[role="dialog"][aria-modal="true"]:not([data-help-guide])')));
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <>
-      {!open && (
+      {!open && !anotherDialogOpen && (
         <button
           onClick={() => setOpen(true)}
           className="fixed right-5 bottom-5 z-[60] flex items-center gap-2 rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-brand-700 print:hidden"
@@ -50,6 +59,10 @@ export default function HelpGuide() {
       )}
       {open && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="คู่มือการใช้งาน DomainWatch"
+          data-help-guide
           ref={winRef}
           style={{ position: "fixed", zIndex: 70, width: 860, maxWidth: "96vw", height: min ? "auto" : 620, maxHeight: "92vh", ...winStyle }}
           className="flex flex-col overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-2xl print:hidden"

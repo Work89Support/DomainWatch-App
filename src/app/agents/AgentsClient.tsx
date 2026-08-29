@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { PageHeader } from "@/components/ui";
+import { failureConfirmationText } from "@/lib/statusPresentation";
 
 type UrlStatus = {
   id: string; url: string; status: "UP" | "SLOW" | "DOWN" | "UNKNOWN";
@@ -47,9 +48,10 @@ function normalizeResultUrl(value: string) {
   }
 }
 
-function since(value: string | null) {
+function since(value: string | null, now: number | null) {
   if (!value) return "ยังไม่เคยเชื่อมต่อ";
-  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (now === null) return "กำลังอัปเดตเวลา...";
+  const seconds = Math.max(0, Math.floor((now - new Date(value).getTime()) / 1000));
   if (seconds < 60) return `${seconds} วินาทีที่แล้ว`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)} นาทีที่แล้ว`;
   return `${Math.floor(seconds / 3600)} ชั่วโมงที่แล้ว`;
@@ -74,6 +76,7 @@ export default function AgentsClient({
   const [resultFilter, setResultFilter] = useState<ResultFilter>("ALL");
   const [visibleResults, setVisibleResults] = useState(50);
   const [selectedResult, setSelectedResult] = useState<UrlStatus | null>(null);
+  const [now, setNow] = useState<number | null>(null);
   const resultSectionRef = useRef<HTMLDivElement>(null);
   const selected = useMemo(() => initial.find((item) => item.id === selectedId) || initial[0], [initial, selectedId]);
   const openIncidents = useMemo(() => selected?.networkIncidents.filter((item) => item.status !== "CLOSED" && item.status !== "PAUSED") || [], [selected]);
@@ -97,6 +100,24 @@ export default function AgentsClient({
     const contextIds = new Set(selectedResultContexts.map((context) => context.id));
     return selected?.networkIncidents.filter((incident) => contextIds.has(incident.link.id)) || [];
   }, [selected, selectedResultContexts]);
+  const resultDimensions = useMemo(() => {
+    const recordIds = new Set<string>();
+    const rooms = new Set<string>();
+    for (const row of filteredResults) {
+      for (const context of linkContexts[normalizeResultUrl(row.url)] || []) {
+        recordIds.add(context.id);
+        rooms.add(`${context.company}\u0000${context.room || "ไม่ระบุห้อง"}`);
+      }
+    }
+    return { uniqueUrls: filteredResults.length, records: recordIds.size, rooms: rooms.size };
+  }, [filteredResults, linkContexts]);
+
+  useEffect(() => {
+    const updateNow = () => setNow(Date.now());
+    updateNow();
+    const timer = window.setInterval(updateNow, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   function selectAgent(agentId: string) {
     setSelectedId(agentId);
@@ -244,12 +265,12 @@ export default function AgentsClient({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="space-y-3">
             {initial.map((agent) => {
-              const online = Boolean(agent.isActive && agent.hasEnrollment && agent.lastSeenAt && Date.now() - new Date(agent.lastSeenAt).getTime() < 12 * 60_000);
+              const online = Boolean(now !== null && agent.isActive && agent.hasEnrollment && agent.lastSeenAt && now - new Date(agent.lastSeenAt).getTime() < 12 * 60_000);
               const open = agent.networkIncidents.filter((item) => item.status !== "CLOSED" && item.status !== "PAUSED").length;
               return (
                 <button key={agent.id} onClick={() => selectAgent(agent.id)} className={`card w-full p-4 text-left transition ${selected?.id === agent.id ? "ring-2 ring-brand-500" : "hover:border-brand-200"}`}>
                   <div className="flex items-start justify-between gap-2">
-                    <div><div className="font-semibold text-slate-800">📱 {agent.name}</div><div className="text-xs text-slate-400 mt-1">ซิม {agent.carrier} · {since(agent.lastSeenAt)}</div></div>
+                    <div><div className="font-semibold text-slate-800">📱 {agent.name}</div><div className="text-xs text-slate-400 mt-1">ซิม {agent.carrier} · {since(agent.lastSeenAt, now)}</div></div>
                     <span className={`badge ${online ? "bg-emerald-50 text-emerald-700" : agent.isActive ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-400"}`}>{online ? "ออนไลน์" : agent.isActive && !agent.hasEnrollment ? "รอผูก QR ใหม่" : agent.isActive ? "ขาดการเชื่อมต่อ" : "ปิดใช้งาน"}</span>
                   </div>
                   {open > 0 && <div className="mt-3 text-xs font-medium text-red-600">🔴 มีปัญหาเครือข่ายค้าง {open} รายการ</div>}
@@ -301,7 +322,7 @@ export default function AgentsClient({
                 </div>
                 <div className="mt-4 grid grid-cols-2 xl:grid-cols-5 gap-3 text-sm">
                   <button type="button" aria-pressed={resultFilter === "ALL"} onClick={() => showResultDetails("ALL")} className={`rounded-xl bg-slate-50 p-3 text-left transition hover:ring-2 hover:ring-slate-200 ${resultFilter === "ALL" ? "ring-2 ring-slate-300" : ""}`}>
-                    <div className="text-xs text-slate-400">ตรวจล่าสุด</div><div className="font-medium text-slate-700 mt-1">{since(selected.lastSeenAt)}</div><div className="mt-1 text-[11px] text-brand-600">ดูทั้งหมด {resultCounts.all} URL →</div>
+                    <div className="text-xs text-slate-400">ตรวจล่าสุด</div><div className="font-medium text-slate-700 mt-1">{since(selected.lastSeenAt, now)}</div><div className="mt-1 text-[11px] text-brand-600">ดูทั้งหมด {resultCounts.all} URL →</div>
                   </button>
                   <button type="button" aria-pressed={resultFilter === "UP"} onClick={() => showResultDetails("UP")} className={`rounded-xl bg-emerald-50 p-3 text-left transition hover:ring-2 hover:ring-emerald-200 ${resultFilter === "UP" ? "ring-2 ring-emerald-300" : ""}`}>
                     <div className="text-xs text-emerald-600">ใช้งานได้</div><div className="font-semibold text-emerald-700 mt-1">{resultCounts.up}</div><div className="mt-1 text-[11px] text-emerald-700">ดูรายละเอียด →</div>
@@ -327,6 +348,11 @@ export default function AgentsClient({
                     </div>
                     {resultFilter !== "ALL" && <button type="button" className="btn-ghost text-xs" onClick={() => showResultDetails("ALL")}>ดูผลทั้งหมด</button>}
                   </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-center text-xs" aria-label="ขอบเขตผลตรวจ">
+                    <div><div className="font-semibold text-slate-700">{resultDimensions.uniqueUrls}</div><div className="text-slate-400">URL ไม่ซ้ำ</div></div>
+                    <div><div className="font-semibold text-slate-700">{resultDimensions.records}</div><div className="text-slate-400">รายการ Master Data</div></div>
+                    <div><div className="font-semibold text-slate-700">{resultDimensions.rooms}</div><div className="text-slate-400">ห้องที่ได้รับผล</div></div>
+                  </div>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs" aria-label="กรองผลตรวจ">
                     {([
                       ["ALL", `ทั้งหมด ${resultCounts.all}`, "bg-brand-50 text-brand-700 ring-brand-300"],
@@ -351,7 +377,7 @@ export default function AgentsClient({
                         <span className="shrink-0 text-xs font-medium text-brand-600 opacity-70 group-hover:opacity-100">ดูรายละเอียด →</span>
                       </div>
                       {contexts.length > 0 && <div className="mt-1 flex flex-wrap gap-1.5">{contexts.map((context) => <span key={`${context.id}-${context.name}`} className="badge bg-brand-50 text-brand-700">{context.name} · {context.company}{context.room ? ` · ${context.room}` : ""}</span>)}</div>}
-                      <div className="mt-1 text-xs text-slate-400">HTTP {row.httpCode ?? "-"} · {row.responseMs ?? "-"} ms · {since(row.checkedAt)}{row.failureStreak > 0 ? ` · รอยืนยัน ${row.failureStreak}/2` : ""}</div>
+                      <div className="mt-1 text-xs text-slate-400">HTTP {row.httpCode ?? "-"} · {row.responseMs ?? "-"} ms · {since(row.checkedAt, now)}{row.failureStreak > 0 ? ` · ${failureConfirmationText(row.status, row.failureStreak)}` : ""}</div>
                       {row.error && <div className="mt-1 break-words text-xs text-red-600">สาเหตุ: {row.error}</div>}
                       {row.redirectCount > 0 && row.finalUrl && (
                         <div className={`mt-2 rounded-lg p-2 text-xs ${row.redirectType === "NETWORK_BLOCK" && row.status === "DOWN" ? "bg-red-50 text-red-700" : row.redirectType === "NETWORK_BLOCK" || row.redirectType === "POSSIBLE_DOMAIN_MOVE" ? "bg-amber-50 text-amber-700" : "bg-sky-50 text-sky-700"}`}>
@@ -414,7 +440,7 @@ export default function AgentsClient({
               <div className="rounded-xl border border-slate-100 p-3"><div className="text-xs text-slate-400">ตรวจเมื่อ</div><div className="mt-1 text-sm font-medium text-slate-700">{new Date(selectedResult.checkedAt).toLocaleString("th-TH")}</div></div>
               <div className="rounded-xl border border-slate-100 p-3"><div className="text-xs text-slate-400">HTTP</div><div className="mt-1 text-sm font-medium text-slate-700">{selectedResult.httpCode ?? "-"}</div></div>
               <div className="rounded-xl border border-slate-100 p-3"><div className="text-xs text-slate-400">เวลาตอบสนอง</div><div className="mt-1 text-sm font-medium text-slate-700">{selectedResult.responseMs == null ? "-" : `${selectedResult.responseMs} ms`}</div></div>
-              <div className="rounded-xl border border-slate-100 p-3"><div className="text-xs text-slate-400">การยืนยัน</div><div className="mt-1 text-sm font-medium text-slate-700">{selectedResult.failureStreak > 0 ? `${selectedResult.failureStreak}/2 รอบ` : "ปกติ"}</div></div>
+              <div className="rounded-xl border border-slate-100 p-3"><div className="text-xs text-slate-400">การยืนยัน</div><div className="mt-1 text-sm font-medium text-slate-700">{failureConfirmationText(selectedResult.status, selectedResult.failureStreak)}</div></div>
             </div>
 
             {selectedResult.error && <div className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700"><div className="text-xs font-semibold">สาเหตุที่ตรวจพบ</div><div className="mt-1 break-words">{selectedResult.error}</div></div>}
@@ -448,8 +474,8 @@ export default function AgentsClient({
 
       {qr && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" onClick={() => setQr(null)}>
-          <div className="card w-full max-w-md p-6 text-center" onClick={(event) => event.stopPropagation()}>
-            <h3 className="text-xl font-semibold text-slate-800">QR ผูกเครื่อง — {qr.agentName}</h3>
+          <div role="dialog" aria-modal="true" aria-labelledby="agent-qr-title" className="card w-full max-w-md p-6 text-center" onClick={(event) => event.stopPropagation()}>
+            <h3 id="agent-qr-title" className="text-xl font-semibold text-slate-800">QR ผูกเครื่อง — {qr.agentName}</h3>
             <p className="mt-1 text-xs text-amber-600">ใช้ได้ครั้งเดียว ภายใน 15 นาที ห้ามส่งเข้ากลุ่มสาธารณะ</p>
             <Image unoptimized width={256} height={256} src={qr.enrollment.qrDataUrl} alt="QR ผูกเครื่อง DomainWatch Agent" className="mx-auto my-4 w-64 h-64 rounded-xl border border-slate-100" />
             <div className="rounded-lg bg-slate-50 p-3 text-left text-xs text-slate-500 break-all">{qr.enrollment.enrollmentUrl}</div>

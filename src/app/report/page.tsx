@@ -137,6 +137,7 @@ export default async function ReportPage({ searchParams }: { searchParams: { dat
                   <span>รอบวัน: พบ {agent.newIncidents} · กลับมา {agent.resolvedIncidents}</span>
                   <span>ล่าสุด: {agent.lastSeenAt ? fmtDateTime(agent.lastSeenAt) : "ยังไม่เคยเชื่อมต่อ"}</span>
                 </div>
+                <div className="mt-2 rounded-lg bg-white px-3 py-2 text-xs text-slate-500">ตรวจ {agent.totalUrls} URL: ลิงก์หลัก {agent.primaryUrls ?? agent.totalUrls} · ลิงก์สำรอง {agent.backupUrls ?? 0}</div>
               </div>
             ))}
           </div>
@@ -311,6 +312,7 @@ function ExportReportView({ report: r }: { report: DailyReport }) {
               <tr className="border-b border-slate-200 text-left text-slate-500">
                 <th className="py-2 pr-3 font-medium">ค่าย / เครื่อง</th>
                 <th className="py-2 pr-3 font-medium">สถานะเครื่อง</th>
+                <th className="py-2 pr-3 font-medium">URL (หลัก/สำรอง)</th>
                 <th className="py-2 pr-3 font-medium">ใช้ได้</th>
                 <th className="py-2 pr-3 font-medium">ช้า</th>
                 <th className="py-2 pr-3 font-medium">ใช้ไม่ได้</th>
@@ -322,6 +324,7 @@ function ExportReportView({ report: r }: { report: DailyReport }) {
                 <tr key={agent.id} className="border-b border-slate-100 last:border-0">
                   <td className="py-2.5 pr-3"><b>{agent.reportedCarrier || agent.carrier}</b> · {agent.name}</td>
                   <td className="py-2.5 pr-3">{!agent.isActive ? "ปิดใช้งาน" : agent.online ? "ออนไลน์" : "ขาดการเชื่อมต่อ"}</td>
+                  <td className="py-2.5 pr-3">{agent.totalUrls} ({agent.primaryUrls ?? agent.totalUrls}/{agent.backupUrls ?? 0})</td>
                   <td className="py-2.5 pr-3 text-emerald-700">{agent.up}</td>
                   <td className="py-2.5 pr-3 text-amber-700">{agent.slow}</td>
                   <td className="py-2.5 pr-3 text-red-700">{agent.down}</td>

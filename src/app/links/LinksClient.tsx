@@ -273,8 +273,9 @@ export default function LinksClient({
       <td className="py-3 px-4 text-slate-600">{l.category || "-"}</td>
       <td className="py-3 px-4">
         {view.failureStreak > 0 && view.status !== "DOWN"
-          ? <span className="badge bg-amber-50 text-amber-700">● รอยืนยัน {view.failureStreak}/2</span>
+          ? <span className="badge bg-amber-50 text-amber-700">● รอยืนยัน {Math.min(view.failureStreak, 1)}/2</span>
           : <StatusBadge status={view.status} />}
+        {view.status === "DOWN" && view.failureStreak > 0 && <div className="mt-1 text-[11px] font-medium text-red-600">ยืนยันแล้ว · เสียต่อเนื่อง {view.failureStreak} รอบ</div>}
         <div className="mt-1 text-[11px] text-slate-400">{view.detail}</div>
         {view.error && <div className={`mt-1 max-w-[220px] text-[11px] line-clamp-2 ${view.status === "DOWN" ? "text-red-500" : "text-amber-600"}`}>{view.error}</div>}
         {fSource === "MOBILE" && view.redirectCount > 0 && view.finalUrl && (
