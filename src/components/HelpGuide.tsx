@@ -12,7 +12,7 @@ export default function HelpGuide() {
   const drag = useRef({ on: false, ox: 0, oy: 0 });
 
   function onDown(e: React.PointerEvent) {
-    if ((e.target as HTMLElement).tagName === "BUTTON") return;
+    if ((e.target as HTMLElement).closest("button, a")) return;
     const el = winRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
@@ -79,6 +79,25 @@ export default function HelpGuide() {
             <span className="ml-1 text-sm font-semibold">📘 คู่มือการใช้งาน DomainWatch</span>
             <span className="hidden text-[11px] font-light opacity-80 sm:inline">— ลากแถบนี้เพื่อย้าย</span>
             <span className="flex-1" />
+            <a
+              href="/downloads/DomainWatch-User-Manual-v2.1.pdf"
+              target="_blank"
+              rel="noreferrer"
+              onPointerDown={(event) => event.stopPropagation()}
+              className="hidden rounded-md bg-white/20 px-2 py-1 text-[11px] font-semibold text-white hover:bg-white/30 sm:inline-flex"
+              title="เปิดคู่มือฉบับ PDF"
+            >
+              PDF
+            </a>
+            <a
+              href="/downloads/DomainWatch-User-Manual-v2.1.docx"
+              download
+              onPointerDown={(event) => event.stopPropagation()}
+              className="hidden rounded-md bg-white/20 px-2 py-1 text-[11px] font-semibold text-white hover:bg-white/30 md:inline-flex"
+              title="ดาวน์โหลดคู่มือฉบับ Word"
+            >
+              Word
+            </a>
             <button onClick={() => setMin((m) => !m)} className="h-6 w-6 rounded-md bg-white/20 text-white" title="ย่อ/ขยาย">–</button>
             <button onClick={() => { setOpen(false); setMin(false); }} className="h-6 w-6 rounded-md bg-white/20 text-white" title="ปิด">×</button>
           </div>
