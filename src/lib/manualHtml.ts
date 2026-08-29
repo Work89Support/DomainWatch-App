@@ -30,4 +30,12 @@ export const MANUAL_HTML = String.raw`<!doctype html>
 <section id="troubleshoot"><h2>11. แก้ปัญหาที่พบบ่อย</h2><table><thead><tr><th>อาการ</th><th>สิ่งที่ต้องตรวจ</th></tr></thead><tbody><tr><td>เข้าไม่ได้</td><td>ตรวจ username/rหัสผ่าน อินเทอร์เน็ต URL แล้วให้ ADMIN รีเซ็ตรหัสถ้าจำเป็น</td></tr><tr><td>มือถือขาดการเชื่อมต่อ</td><td>เปิดข้อมูลมือถือ ปิด Wi‑Fi เมื่อต้องบังคับซิม ตั้งแบตเตอรี่ไม่จำกัด อนุญาตงานเบื้องหลัง และเปิดแอปใหม่</td></tr><tr><td>แจ้งว่าเสียแต่เปิดได้</td><td>ดูว่าเป็น timeout/โหลดช้า, DNS เฉพาะค่าย, หน้าปิดกั้น หรือเปิดผ่านสำรอง ไม่สรุปจาก Wi‑Fi จุดเดียว</td></tr><tr><td>แก้แล้วแต่เคสยังอยู่</td><td>“รอตรวจยืนยัน” ต้องรอซิมสำเร็จ 2 รอบ ตรวจว่าแอปออนไลน์และสำรองอยู่ใน Master Data</td></tr><tr><td>ยอดไม่เท่ากัน</td><td>เทียบหน่วย: URL ไม่ซ้ำ, รายการ Master Data, ห้อง, เคส หรือ URL หลัก+สำรอง</td></tr><tr><td>ปุ่มคู่มือบังหน้าต่าง</td><td>เวอร์ชันล่าสุดซ่อนปุ่มคู่มือเมื่อเปิด modal อัตโนมัติ</td></tr></tbody></table></section>
 
 <section id="glossary"><h2>12. คำศัพท์และเช็กลิสต์ก่อนส่งมอบ</h2><table><thead><tr><th>คำ</th><th>ความหมาย</th></tr></thead><tbody><tr><td>ระบบกลาง</td><td>ตัวตรวจบน Vercel/เซิร์ฟเวอร์ ไม่ได้ออกอินเทอร์เน็ตผ่านซิมไทย</td></tr><tr><td>เครือข่ายซิม</td><td>ผลจากโทรศัพท์ Android ที่ใช้ค่ายตามซิมจริง</td></tr><tr><td>Redirect</td><td>URL ต้นทางพาไป URL อื่น อาจปกติ ย้ายโดเมน หรือหน้าปิดกั้น</td></tr><tr><td>ลิงก์สำรอง</td><td>ปลายทางให้บริการต่อเมื่อ URL หลักมีปัญหา</td></tr><tr><td>Heartbeat</td><td>สัญญาณว่าแอปมือถือยังติดต่อระบบได้</td></tr></tbody></table><ul class="checklist"><li>ผู้ใช้ทุกคนมีบัญชีส่วนตัวและบทบาทถูกต้อง</li><li>ทดสอบเข้าใช้จากลิงก์และ QR</li><li>พนักงานหน้าไซต์เห็นเฉพาะหน้าเครื่องตรวจและไม่มีปุ่มลบ</li><li>ตั้ง background/battery และทดสอบปิดจอเกิน 10 นาที</li><li>แต่ละบริษัททดสอบ Telegram เข้ากลุ่มของตน</li><li>ทดลองเปิดเคส แก้ลิงก์ ใช้สำรอง และปิดเคสครบ Flow</li><li>ทดลอง Export PNG/PDF และตรวจภาษาไทยก่อนส่ง</li></ul></section>
-</main></div></body></html>`;
+</main></div><script>
+document.querySelectorAll('a[href^="#"]').forEach(function(link){
+  link.addEventListener('click',function(event){
+    event.preventDefault();
+    var target=document.getElementById(link.getAttribute('href').slice(1));
+    if(target){target.scrollIntoView({behavior:'smooth',block:'start'});}
+  });
+});
+</script></body></html>`;
