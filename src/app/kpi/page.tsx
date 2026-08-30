@@ -5,20 +5,81 @@ import { fmtDateTime, fmtMinutes } from "@/lib/format";
 import KpiTrend from "@/components/KpiTrend";
 import { canViewKpi, ROLE_LABELS, type AppRole } from "@/lib/permissions";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import KpiExportActions from "@/components/KpiExportActions";
 
 export const dynamic = "force-dynamic";
 
-export default async function KpiPage() {
+export default async function KpiPage({ searchParams }: { searchParams: { userId?: string; from?: string; to?: string; source?: string } }) {
   const me = await requireUser();
   if (!canViewKpi(me.role)) redirect("/");
-  const d = await getUserKpi();
+  const source = searchParams.source === "SYSTEM" || searchParams.source === "MOBILE" ? searchParams.source : "ALL";
+  const d = await getUserKpi({
+    userId: searchParams.userId || undefined,
+    from: searchParams.from || undefined,
+    to: searchParams.to || undefined,
+    source,
+  });
+  const selectedUser = d.userOptions.find((u) => u.id === searchParams.userId);
+  const fileLabel = [selectedUser?.name || "ทุกคน", searchParams.from || "เริ่มต้น", searchParams.to || "ปัจจุบัน"]
+    .join("-")
+    .replace(/[^\p{L}\p{N}._-]+/gu, "-");
+  const exportRows = d.exportLog.map((row) => ({
+    id: row.id,
+    source: row.source === "MOBILE" ? "เครือข่ายซิม" : "ระบบกลาง",
+    agent: row.agentName || "",
+    link: row.linkName,
+    company: row.company,
+    detectedAt: fmtDateTime(row.detectedAt),
+    status: row.status,
+    admin: row.adminName || "",
+    adminMinutes: row.adminMin,
+    it: row.itName || "",
+    itMinutes: row.itMin,
+  }));
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
       <PageHeader
         title="KPI รายคน"
         subtitle="ตั้งแต่ระบบตรวจพบปัญหา → ใครเป็นคนแก้ → ใช้เวลาเท่าไหร่"
+        action={<KpiExportActions rows={exportRows} fileLabel={fileLabel} />}
       />
+
+      <form method="get" className="card p-4 mb-6 print:hidden">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <label className="text-sm text-slate-600">
+            <span className="mb-1 block text-xs font-medium text-slate-500">ผู้ใช้งาน</span>
+            <select name="userId" defaultValue={searchParams.userId || ""} className="input w-full">
+              <option value="">ทุกคน</option>
+              {d.userOptions.map((user) => <option key={user.id} value={user.id}>{user.name} · {ROLE_LABELS[user.role as AppRole] || user.role}</option>)}
+            </select>
+          </label>
+          <label className="text-sm text-slate-600">
+            <span className="mb-1 block text-xs font-medium text-slate-500">ตั้งแต่วันที่</span>
+            <input type="date" name="from" defaultValue={searchParams.from || ""} className="input w-full" />
+          </label>
+          <label className="text-sm text-slate-600">
+            <span className="mb-1 block text-xs font-medium text-slate-500">ถึงวันที่</span>
+            <input type="date" name="to" defaultValue={searchParams.to || ""} className="input w-full" />
+          </label>
+          <label className="text-sm text-slate-600">
+            <span className="mb-1 block text-xs font-medium text-slate-500">แหล่งงาน</span>
+            <select name="source" defaultValue={source} className="input w-full">
+              <option value="ALL">ทั้งหมด</option>
+              <option value="SYSTEM">ระบบกลาง</option>
+              <option value="MOBILE">เครือข่ายซิม</option>
+            </select>
+          </label>
+          <div className="flex items-end gap-2">
+            <button type="submit" className="btn-primary flex-1">แสดงผล</button>
+            <Link href="/kpi" className="btn-ghost">ล้าง</Link>
+          </div>
+        </div>
+        <div className="mt-3 text-xs text-slate-400">
+          กำลังแสดง: {selectedUser?.name || "ทุกคน"} · {searchParams.from || "เริ่มต้น"} ถึง {searchParams.to || "ปัจจุบัน"} · {source === "SYSTEM" ? "ระบบกลาง" : source === "MOBILE" ? "เครือข่ายซิม" : "ทุกแหล่งงาน"}
+        </div>
+      </form>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="เหตุการณ์ทั้งหมด" value={d.totals.incidents} tone="brand" />
@@ -84,7 +145,8 @@ export default async function KpiPage() {
 
       {/* ประวัติรายเคส (log) */}
       <div className="card p-5">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4">ประวัติรายเคส</h2>
+        <h2 className="text-lg font-semibold text-slate-800 mb-1">ประวัติรายเคส</h2>
+        <p className="mb-4 text-xs text-slate-400">แสดงล่าสุดไม่เกิน 100 เคส · ไฟล์ Export รวมทุกเคสตามตัวกรอง</p>
         {d.log.length === 0 ? (
           <p className="text-sm text-slate-400 py-6 text-center">ยังไม่มีเหตุการณ์</p>
         ) : (

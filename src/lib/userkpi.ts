@@ -38,9 +38,18 @@ export type TrendPoint = {
 
 export type UserKpiData = {
   users: UserStat[];
+  userOptions: { id: string; name: string; role: string }[];
   log: IncidentLogRow[];
+  exportLog: IncidentLogRow[];
   trend: TrendPoint[];
   totals: { incidents: number; resolved: number; avgAdmin: number | null; avgIt: number | null };
+};
+
+export type UserKpiFilters = {
+  userId?: string;
+  from?: string;
+  to?: string;
+  source?: "ALL" | "SYSTEM" | "MOBILE";
 };
 
 const avg = (arr: number[]) =>
@@ -53,8 +62,8 @@ function startOfWeek(d: Date): Date {
   return x;
 }
 
-export async function getUserKpi(): Promise<UserKpiData> {
-  const [users, incidents, networkIncidents] = await Promise.all([
+export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiData> {
+  const [users, allIncidents, allNetworkIncidents] = await Promise.all([
     prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.incident.findMany({
       orderBy: { detectedAt: "desc" },
@@ -65,6 +74,15 @@ export async function getUserKpi(): Promise<UserKpiData> {
       include: { link: { include: { company: true } }, agent: true, adminUser: true },
     }),
   ]);
+  const from = filters.from ? new Date(`${filters.from}T00:00:00+07:00`) : null;
+  const to = filters.to ? new Date(`${filters.to}T23:59:59.999+07:00`) : null;
+  const inPeriod = (date: Date) => (!from || date >= from) && (!to || date <= to);
+  const incidents = filters.source === "MOBILE"
+    ? []
+    : allIncidents.filter((i) => inPeriod(i.detectedAt));
+  const networkIncidents = filters.source === "SYSTEM"
+    ? []
+    : allNetworkIncidents.filter((i) => inPeriod(i.detectedAt));
 
   // เคสซิมรุ่นเดิมยังไม่มี adminUserId ในฐานข้อมูล หากระบบมีผู้จัดการเพียงคนเดียว
   // สามารถนับเคสที่ถูกปรับแก้/พักด้วยมือให้คนนั้นได้อย่างไม่กำกวม
@@ -83,16 +101,22 @@ export async function getUserKpi(): Promise<UserKpiData> {
       0,
       Math.round(((i.adminUpdatedAt || i.updatedAt).getTime() - i.detectedAt.getTime()) / 60_000)
     );
+  const scopedIncidents = filters.userId
+    ? incidents.filter((i) => i.adminUserId === filters.userId || i.itUserId === filters.userId)
+    : incidents;
+  const scopedNetworkIncidents = filters.userId
+    ? networkIncidents.filter((i) => networkOwnerId(i) === filters.userId)
+    : networkIncidents;
 
   // ---- สรุปรายคน ----
-  const users_ = users.map((u) => {
-    const asAdmin = incidents.filter(
+  const users_ = users.filter((u) => !filters.userId || u.id === filters.userId).map((u) => {
+    const asAdmin = scopedIncidents.filter(
       (i) => i.adminUserId === u.id && i.adminResponseMin !== null
     );
-    const asIt = incidents.filter(
+    const asIt = scopedIncidents.filter(
       (i) => i.itUserId === u.id && i.itResponseMin !== null
     );
-    const asNetworkAdmin = networkIncidents.filter(
+    const asNetworkAdmin = scopedNetworkIncidents.filter(
       (i) => networkOwnerId(i) === u.id
     );
     const legacyNetworkCount = asNetworkAdmin.filter(isLegacyHandledNetworkIncident).length;
@@ -117,8 +141,8 @@ export async function getUserKpi(): Promise<UserKpiData> {
     .sort((a, b) => b.totalHandled - a.totalHandled);
 
   // ---- ประวัติรายเคส ----
-  const log: IncidentLogRow[] = [
-    ...incidents.map((i) => ({
+  const exportLog: IncidentLogRow[] = [
+    ...scopedIncidents.map((i) => ({
       id: i.id,
       linkName: i.link.name,
       company: i.link.company.name,
@@ -132,7 +156,7 @@ export async function getUserKpi(): Promise<UserKpiData> {
       source: "SYSTEM" as const,
       agentName: null,
     })),
-    ...networkIncidents.map((i) => ({
+    ...scopedNetworkIncidents.map((i) => ({
       id: i.id,
       linkName: i.link.name,
       company: i.link.company.name,
@@ -147,11 +171,11 @@ export async function getUserKpi(): Promise<UserKpiData> {
       agentName: i.agent.name,
     })),
   ]
-    .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime())
-    .slice(0, 60);
+    .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
+  const log = exportLog.slice(0, 100);
 
   // ---- แนวโน้ม 8 สัปดาห์ ----
-  const now = new Date();
+  const now = to || new Date();
   const thisWeek = startOfWeek(now);
   const buckets: { key: number; label: string; inc: number[]; adm: number[]; it: number[] }[] = [];
   for (let i = 7; i >= 0; i--) {
@@ -161,7 +185,7 @@ export async function getUserKpi(): Promise<UserKpiData> {
     const dd = String(ws.getUTCDate()).padStart(2, "0");
     buckets.push({ key: ws.getTime(), label: `${mm}/${dd}`, inc: [], adm: [], it: [] });
   }
-  for (const i of incidents) {
+  for (const i of scopedIncidents) {
     const ws = startOfWeek(i.detectedAt).getTime();
     const b = buckets.find((x) => x.key === ws);
     if (b) {
@@ -170,7 +194,7 @@ export async function getUserKpi(): Promise<UserKpiData> {
       if (i.itResponseMin !== null) b.it.push(i.itResponseMin);
     }
   }
-  for (const i of networkIncidents) {
+  for (const i of scopedNetworkIncidents) {
     const ws = startOfWeek(i.detectedAt).getTime();
     const b = buckets.find((x) => x.key === ws);
     if (b) {
@@ -186,22 +210,24 @@ export async function getUserKpi(): Promise<UserKpiData> {
   }));
 
   const allAdmin = [
-    ...incidents.map((i) => i.adminResponseMin),
-    ...networkIncidents
+    ...scopedIncidents.map((i) => i.adminResponseMin),
+    ...scopedNetworkIncidents
       .filter((i) => !!networkOwnerId(i))
       .map(networkResponseMinutes),
   ].filter((v): v is number => v !== null);
-  const allIt = incidents.map((i) => i.itResponseMin).filter((v): v is number => v !== null);
+  const allIt = scopedIncidents.map((i) => i.itResponseMin).filter((v): v is number => v !== null);
 
   return {
     users: users_,
+    userOptions: users.map((u) => ({ id: u.id, name: u.name, role: u.role })),
     log,
+    exportLog,
     trend,
     totals: {
-      incidents: incidents.length + networkIncidents.length,
+      incidents: scopedIncidents.length + scopedNetworkIncidents.length,
       resolved:
-        incidents.filter((i) => i.status === "CLOSED").length +
-        networkIncidents.filter((i) => i.status === "CLOSED").length,
+        scopedIncidents.filter((i) => i.status === "CLOSED").length +
+        scopedNetworkIncidents.filter((i) => i.status === "CLOSED").length,
       avgAdmin: avg(allAdmin),
       avgIt: avg(allIt),
     },
