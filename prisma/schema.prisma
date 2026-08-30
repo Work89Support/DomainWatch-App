@@ -189,6 +189,10 @@ model NetworkIncident {
   status     IncidentStatus  @default(OPEN)
   detectedAt DateTime        @default(now())
   resolvedAt DateTime?
+  adminUpdatedAt DateTime?
+  adminResponseMin Int?
+  adminUserId String?
+  adminUser   User?           @relation("AdminNetworkIncidents", fields: [adminUserId], references: [id])
   httpCode   Int?
   responseMs Int?
   error      String?
@@ -203,6 +207,7 @@ model NetworkIncident {
 
   @@index([agentId, status])
   @@index([linkId, detectedAt])
+  @@index([adminUserId])
 }
 
 enum LinkStatus {
@@ -283,6 +288,7 @@ model User {
 
   adminIncidents Incident[] @relation("AdminIncidents")
   itIncidents    Incident[] @relation("ITIncidents")
+  adminNetworkIncidents NetworkIncident[] @relation("AdminNetworkIncidents")
   companyAssignments UserCompany[]
 }
 

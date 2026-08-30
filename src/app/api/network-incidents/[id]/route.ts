@@ -6,6 +6,7 @@ import { mobileUrlHash, normalizeUrl } from "@/lib/mobileAgent";
 import { canAccessCompany, canActAsAdmin } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { normalizeReplacementUrl } from "@/lib/replacementLink";
+import { minutesBetween } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -32,9 +33,16 @@ export async function PATCH(
     if (incident.status === "CLOSED") {
       return NextResponse.json({ error: "เคสนี้ปิดเรียบร้อยแล้ว" }, { status: 409 });
     }
+    const markedAt = new Date();
     const updated = await prisma.networkIncident.update({
       where: { id: incident.id },
-      data: { status: "ADMIN_UPDATED", resolvedAt: null },
+      data: {
+        status: "ADMIN_UPDATED",
+        resolvedAt: null,
+        adminUpdatedAt: markedAt,
+        adminResponseMin: minutesBetween(incident.detectedAt, markedAt),
+        adminUserId: me.id,
+      },
     });
     return NextResponse.json({ ok: true, incidentStatus: updated.status });
   }
@@ -82,6 +90,22 @@ export async function PATCH(
     isActive: typeof body.isActive === "boolean" ? body.isActive : incident.link.isActive,
   };
   const nextIncidentStatus = linkData.isActive === false ? "PAUSED" : "ADMIN_UPDATED";
+  const affectedIncidents = await prisma.networkIncident.findMany({
+    where: { linkId: incident.linkId, status: { not: "CLOSED" } },
+    select: { id: true, detectedAt: true },
+  });
+  const markAffectedIncidents = () => affectedIncidents.map((item) =>
+    prisma.networkIncident.update({
+      where: { id: item.id },
+      data: {
+        status: nextIncidentStatus,
+        resolvedAt: null,
+        adminUpdatedAt: checkedAt,
+        adminResponseMin: minutesBetween(item.detectedAt, checkedAt),
+        adminUserId: me.id,
+      },
+    })
+  );
   if (result) {
     Object.assign(linkData, {
       lastStatus: status,
@@ -96,10 +120,7 @@ export async function PATCH(
   if (!urlChanged) {
     const operations: Prisma.PrismaPromise<unknown>[] = [
       prisma.link.update({ where: { id: incident.linkId }, data: linkData }),
-      prisma.networkIncident.updateMany({
-        where: { linkId: incident.linkId, status: { not: "CLOSED" } },
-        data: { status: nextIncidentStatus, resolvedAt: null },
-      }),
+      ...markAffectedIncidents(),
     ];
     if (nextIncidentStatus === "PAUSED") {
       operations.push(prisma.incident.updateMany({
@@ -131,12 +152,9 @@ export async function PATCH(
         error: result?.error ?? null,
       },
     }),
-    prisma.networkIncident.updateMany({
-      where: { linkId: incident.linkId, status: { not: "CLOSED" } },
-      // การเปิดได้จากตัวตรวจส่วนกลางยังไม่ยืนยันว่าเปิดได้ผ่านซิมจริง
-      // ให้เครื่องซิมตรวจผ่านอีกครั้งก่อนจึงปิดเคสอัตโนมัติ
-      data: { status: nextIncidentStatus, resolvedAt: null },
-    }),
+    // การเปิดได้จากตัวตรวจส่วนกลางยังไม่ยืนยันว่าเปิดได้ผ่านซิมจริง
+    // ให้เครื่องซิมตรวจผ่านอีกครั้งก่อนจึงปิดเคสอัตโนมัติ
+    ...markAffectedIncidents(),
   ];
   // ถ้าไม่มี Master Data รายการอื่นใช้ URL เก่าแล้ว ให้เอาผลค้างของ URL เก่าออกจากสรุปเครื่อง
   if (!oldUrlStillUsed) {

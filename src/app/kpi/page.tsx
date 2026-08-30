@@ -61,7 +61,13 @@ export default async function KpiPage() {
                         {ROLE_LABELS[u.role as AppRole] || u.role}
                       </span>
                     </td>
-                    <td className="py-2.5 pr-4 font-semibold text-slate-800">{u.totalHandled}</td>
+                    <td className="py-2.5 pr-4">
+                      <div className="font-semibold text-slate-800">{u.totalHandled}</div>
+                      <div className="text-xs text-slate-400">
+                        ระบบกลาง {u.centralAdminCount + u.itCount} · เครือข่ายซิม {u.networkAdminCount}
+                        {u.legacyNetworkCount > 0 ? ` (ย้อนหลัง ${u.legacyNetworkCount})` : ""}
+                      </div>
+                    </td>
                     <td className="py-2.5 pr-4 text-slate-600">
                       {u.adminCount > 0 ? `${u.adminCount} เคส · ${fmtMinutes(u.adminAvgMin)}` : "-"}
                     </td>
@@ -98,7 +104,9 @@ export default async function KpiPage() {
                   <tr key={r.id} className="border-b border-slate-50">
                     <td className="py-2.5 pr-4">
                       <div className="font-medium text-slate-700">{r.linkName}</div>
-                      <div className="text-xs text-slate-400">{r.company}</div>
+                      <div className="text-xs text-slate-400">
+                        {r.company} · {r.source === "MOBILE" ? `เครือข่ายซิม${r.agentName ? ` (${r.agentName})` : ""}` : "ระบบกลาง"}
+                      </div>
                     </td>
                     <td className="py-2.5 pr-4 text-slate-500">{fmtDateTime(r.detectedAt)}</td>
                     <td className="py-2.5 pr-4 text-slate-600">
