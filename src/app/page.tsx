@@ -110,7 +110,7 @@ export default async function DashboardPage({
 
       {/* KPI ย่อ */}
       {canViewKpi(me.role) && <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="เหตุการณ์เปิดค้าง" value={d.openIncidents} hint="รอแอดมิน/IT" tone={d.openIncidents > 0 ? "amber" : "green"} />
+        <StatCard label="เหตุการณ์เปิดค้าง" value={d.openIncidents} hint="รวมระบบกลางและเครือข่ายซิม" tone={d.openIncidents > 0 ? "amber" : "green"} />
         <StatCard label="เหตุการณ์ 30 วัน" value={d.incidents30d} tone="brand" />
         <StatCard label="KPI แอดมิน (เฉลี่ย)" value={fmtMinutes(d.avgAdminMin)} tone="brand" />
         <StatCard label="KPI ไอที (เฉลี่ย)" value={fmtMinutes(d.avgItMin)} tone="brand" />
@@ -183,7 +183,9 @@ export default async function DashboardPage({
                   <tr key={i.id} className="border-b border-slate-50">
                     <td className="py-2.5 pr-4">
                       <div className="font-medium text-slate-700">{i.linkName}</div>
-                      <div className="text-xs text-slate-400">{i.company}</div>
+                      <div className="text-xs text-slate-400">
+                        {i.company} · {i.source === "MOBILE" ? `เครือข่ายซิม${i.agentName ? ` (${i.agentName})` : ""}` : "ระบบกลาง"}
+                      </div>
                     </td>
                     <td className="py-2.5 pr-4"><IncidentStatusBadge status={i.status} /></td>
                     <td className="py-2.5 pr-4 text-slate-500">{fmtDateTime(i.detectedAt)}</td>

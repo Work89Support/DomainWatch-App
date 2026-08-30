@@ -47,7 +47,7 @@ export default function DashboardCharts({
       {/* เหตุการณ์ต่อวัน */}
       <div className="card p-5 lg:col-span-2">
         <h2 className="text-lg font-semibold text-slate-800 mb-4">
-          จำนวนเหตุการณ์ลิงก์ล่ม (14 วันล่าสุด)
+          เหตุการณ์ระบบกลาง + เครือข่ายซิม (14 วันล่าสุด)
         </h2>
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={incidentsPerDay}>

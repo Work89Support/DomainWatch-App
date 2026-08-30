@@ -33,6 +33,8 @@ export type DashboardData = {
     detectedAt: string;
     adminResponseMin: number | null;
     itResponseMin: number | null;
+    source: "SYSTEM" | "MOBILE";
+    agentName: string | null;
   }[];
   // มิติไอที: ลิงก์สำรอง
   linksWithBackup: number;
@@ -55,8 +57,9 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
   const companyScope = companyId ? { equals: companyId } : allowedCompanyIds ? { in: allowedCompanyIds } : undefined;
   const linkWhere: Prisma.LinkWhereInput = companyScope ? { companyId: companyScope } : {};
   const incWhere: Prisma.IncidentWhereInput = companyScope ? { link: { companyId: companyScope } } : {};
+  const networkIncWhere: Prisma.NetworkIncidentWhereInput = companyScope ? { link: { companyId: companyScope } } : {};
 
-  const [links, companies, incidents30d, closedWithKpi, recent] =
+  const [links, companies, centralIncidents30d, closedWithKpi, recent, network30d, recentNetwork, networkOpenCount, adminUsers] =
     await Promise.all([
       prisma.link.findMany({ where: linkWhere, include: { company: true } }),
       prisma.company.findMany({
@@ -74,7 +77,43 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
         take: 8,
         include: { link: { include: { company: true } } },
       }),
+      prisma.networkIncident.findMany({
+        where: { ...networkIncWhere, detectedAt: { gte: since30 } },
+        select: {
+          adminResponseMin: true,
+          adminUserId: true,
+          adminUpdatedAt: true,
+          detectedAt: true,
+          updatedAt: true,
+          status: true,
+        },
+      }),
+      prisma.networkIncident.findMany({
+        where: networkIncWhere,
+        orderBy: { detectedAt: "desc" },
+        take: 8,
+        include: { agent: true, link: { include: { company: true } } },
+      }),
+      prisma.networkIncident.count({
+        where: { ...networkIncWhere, status: { notIn: ["CLOSED", "PAUSED"] } },
+      }),
+      prisma.user.findMany({
+        where: { role: { in: ["ADMIN", "ADMIN_LEAD", "ADMIN_COMPANY"] } },
+        select: { id: true },
+      }),
     ]);
+  const hasSoleAdmin = adminUsers.length === 1;
+  const networkAdminMinutes = network30d.flatMap((incident) => {
+    if (incident.adminResponseMin !== null) return [incident.adminResponseMin];
+    const isLegacyHandled =
+      hasSoleAdmin &&
+      !incident.adminUserId &&
+      (incident.status === "ADMIN_UPDATED" || incident.status === "PAUSED");
+    if (!isLegacyHandled) return [];
+    const handledAt = incident.adminUpdatedAt || incident.updatedAt;
+    return [Math.max(0, Math.round((handledAt.getTime() - incident.detectedAt.getTime()) / 60_000))];
+  });
+  const incidents30d = centralIncidents30d + network30d.length;
 
   // นับเฉพาะลิงก์ที่ "เฝ้าดูอยู่" (isActive) — ลิงก์ LINE ที่ตั้งไม่เฝ้าดูจะไม่ถูกนับสถานะ/สำรอง
   const activeArr = links.filter((l) => l.isActive);
@@ -102,7 +141,7 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
     hasBackup: !!(i.link.backupUrl && i.link.backupUrl.trim()),
     detectedAt: i.detectedAt.toISOString(),
   }));
-  const openIncidents = openQueueList.length;
+  const openIncidents = openQueueList.length + networkOpenCount;
 
   const upCount = activeArr.filter((l) => l.lastStatus === "UP").length;
   const slowCount = activeArr.filter((l) => l.lastStatus === "SLOW").length;
@@ -118,6 +157,7 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
   const adminVals = closedWithKpi
     .map((i) => i.adminResponseMin)
     .filter((v): v is number => v !== null);
+  adminVals.push(...networkAdminMinutes);
   const itVals = closedWithKpi
     .map((i) => i.itResponseMin)
     .filter((v): v is number => v !== null);
@@ -150,6 +190,14 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
     const cid = o.link.companyId;
     openByCompany.set(cid, (openByCompany.get(cid) || 0) + 1);
   }
+  const networkOpenList = await prisma.networkIncident.findMany({
+    where: { ...networkIncWhere, status: { notIn: ["CLOSED", "PAUSED"] } },
+    select: { link: { select: { companyId: true } } },
+  });
+  for (const o of networkOpenList) {
+    const cid = o.link.companyId;
+    openByCompany.set(cid, (openByCompany.get(cid) || 0) + 1);
+  }
   const companyBreakdown = companies
     .map((co) => {
       const cl = activeArr.filter((l) => l.companyId === co.id);
@@ -171,12 +219,20 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
     where: { ...incWhere, detectedAt: { gte: since14 } },
     select: { detectedAt: true },
   });
+  const networkIncs14 = await prisma.networkIncident.findMany({
+    where: { ...networkIncWhere, detectedAt: { gte: since14 } },
+    select: { detectedAt: true },
+  });
   const dayMap = new Map<string, number>();
   for (let i = 0; i < 14; i++) {
     const d = new Date(since14.getTime() + i * 24 * 60 * 60 * 1000);
     dayMap.set(d.toISOString().slice(0, 10), 0);
   }
   for (const inc of incs14) {
+    const key = inc.detectedAt.toISOString().slice(0, 10);
+    if (dayMap.has(key)) dayMap.set(key, (dayMap.get(key) || 0) + 1);
+  }
+  for (const inc of networkIncs14) {
     const key = inc.detectedAt.toISOString().slice(0, 10);
     if (dayMap.has(key)) dayMap.set(key, (dayMap.get(key) || 0) + 1);
   }
@@ -200,16 +256,34 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
     categoryBreakdown,
     companyBreakdown,
     incidentsPerDay,
-    recentIncidents: recent.map((i) => ({
-      id: i.id,
-      linkName: i.link.name,
-      company: i.link.company.name,
-      url: i.link.url,
-      status: i.status,
-      detectedAt: i.detectedAt.toISOString(),
-      adminResponseMin: i.adminResponseMin,
-      itResponseMin: i.itResponseMin,
-    })),
+    recentIncidents: [
+      ...recent.map((i) => ({
+        id: i.id,
+        linkName: i.link.name,
+        company: i.link.company.name,
+        url: i.link.url,
+        status: i.status,
+        detectedAt: i.detectedAt.toISOString(),
+        adminResponseMin: i.adminResponseMin,
+        itResponseMin: i.itResponseMin,
+        source: "SYSTEM" as const,
+        agentName: null,
+      })),
+      ...recentNetwork.map((i) => ({
+        id: i.id,
+        linkName: i.link.name,
+        company: i.link.company.name,
+        url: i.link.url,
+        status: i.status,
+        detectedAt: i.detectedAt.toISOString(),
+        adminResponseMin: i.adminResponseMin,
+        itResponseMin: null,
+        source: "MOBILE" as const,
+        agentName: i.agent.name,
+      })),
+    ]
+      .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime())
+      .slice(0, 8),
     linksWithBackup,
     linksWithoutBackup,
     updateQueue,
