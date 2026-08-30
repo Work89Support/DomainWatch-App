@@ -281,7 +281,7 @@ def build():
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.runs[0].font.color.rgb = RGBColor.from_string(BLUE)
     p.runs[0].bold = True
-    p2 = doc.add_paragraph("ฉบับ 2.1 • 29 สิงหาคม 2569 • เอกสารสำหรับส่งมอบงาน")
+    p2 = doc.add_paragraph("ฉบับ 2.2 • 30 สิงหาคม 2569 • เอกสารสำหรับส่งมอบงาน")
     p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p2.runs[0].font.size = Pt(9.5)
     p2.runs[0].font.color.rgb = RGBColor.from_string(MUTED)
@@ -349,6 +349,17 @@ def build():
         "บันทึกแล้วตรวจวันที่เช็คล่าสุดและสถานะในตาราง",
     ], numbered=True)
     add_callout(doc, "กรณี Redirect ของเครือข่าย", "เก็บ URL หลักไว้เป็นหลักฐาน ใส่ปลายทางที่เครือข่ายใช้งานได้ในช่องลิงก์สำรอง เมื่อเครื่องซิมยืนยันว่าลิงก์สำรองใช้งานได้ ระบบถือว่าบริการกลับมาใช้ได้และปิดเคสเครือข่ายเดิมได้", "ECFDF5", GREEN)
+    doc.add_heading("ตรวจ LINE OA และดึงลิงก์จาก Rich Menu", level=2)
+    add_bullets(doc, [
+        "เข้า LINE Developers Console เลือก Provider และ Messaging API channel ของ OA จากแท็บ Messaging API ให้ออก Channel access token แล้วเก็บเป็นความลับ",
+        "ใน DomainWatch ไปที่ บริษัท / ห้อง LINE กางบริษัท แล้วกด ⚙️ OA ที่ห้องเป้าหมาย",
+        "วาง Channel Access Token กรอกชื่อ OA ที่คาดหวัง และกด บันทึก ก่อน",
+        "กด ตรวจ OA ตอนนี้ เพื่อตรวจว่า token ใช้ได้ ชื่อบัญชีตรง และมีรูปโปรไฟล์หรือไม่",
+        "กด ดึงลิงก์จาก Rich Menu ระบบจะเพิ่ม URL ใหม่ในห้องนั้นเป็นหมวด ริชเมนู และข้าม URL ที่มีอยู่แล้ว",
+        "ไปที่ Master Data กรองบริษัทและห้อง ตรวจชื่อ URL สถานะเฝ้าดู และเติมลิงก์สำรองก่อนใช้งานจริง",
+    ], numbered=True)
+    add_callout(doc, "ข้อจำกัดของ LINE", "Messaging API ดึงรายการ Rich Menu ได้เฉพาะเมนูที่สร้างผ่าน Messaging API เท่านั้น เมนูที่สร้างใน LINE Official Account Manager อาจดึงไม่ได้ หากระบบแจ้งว่าไม่พบลิงก์ ให้ตรวจแหล่งที่สร้างเมนูและเพิ่ม URL ใน Master Data ด้วยตนเอง", "FEF3C7", "92400E")
+    add_callout(doc, "รักษา Token ให้ปลอดภัย", "Channel Access Token มีสิทธิ์เรียก Messaging API ห้ามส่งในกลุ่มหรือแนบในภาพหน้าจอ หากสงสัยว่ารั่วให้ revoke หรือออก token ใหม่ใน LINE Developers Console", "FEE2E2", RED)
 
     add_title(doc, "5. เหตุการณ์และสถานะการจัดการ")
     doc.add_heading("แหล่งตรวจ 2 แบบ", level=2)
@@ -435,6 +446,7 @@ def build():
         ("UnknownHostException", "ตรวจ DNS/โดเมนผ่านซิม หาก URL หลักถูกบล็อกให้ใส่ลิงก์สำรองที่ใช้งานได้"),
         ("แก้แล้วเคสยังไม่ปิด", "ตรวจว่าอยู่สถานะรอยืนยัน รอผลเครื่องซิมรอบใหม่ และยืนยันว่าลิงก์สำรองถูกบันทึก"),
         ("ยอดไม่ตรง", "ตรวจตัวกรอง วันที่ บริษัท แหล่งตรวจ และแยกจำนวน URL ออกจากจำนวนเคส"),
+        ("ดึง Rich Menu ไม่ได้", "บันทึก Channel Access Token ก่อน ตรวจว่าเป็น Messaging API channel และเมนูถูกสร้างผ่าน Messaging API; เมนูจาก OA Manager อาจดึงผ่าน API ไม่ได้"),
     ]
     for symptom, fix in troubleshooting:
         cells = table.add_row().cells
@@ -448,6 +460,7 @@ def build():
         "ทดลองเข้าสู่ระบบทั้งจากลิงก์และ QR",
         "ตรวจเมนูและปุ่มด้วยบัญชีแต่ละบทบาท",
         "เพิ่ม/แก้ไข/พักเฝ้าดูลิงก์ และตรวจว่าประวัติยังอยู่",
+        "ตรวจ LINE OA ด้วย token ทดสอบดึง Rich Menu และตรวจว่า URL ซ้ำไม่ถูกสร้างเพิ่ม",
         "ผูกเครื่องซิม ตรวจเมื่อปิดหน้าจอ และทดสอบย้ายเครื่องด้วย QR ใหม่",
         "จำลองปัญหา ตรวจ Telegram เปิดเคส รอยืนยัน และปิดเคส",
         "ตรวจยอด Dashboard เหตุการณ์ รายงานรอบวัน และ KPI ว่าใช้ตัวกรองเดียวกัน",
