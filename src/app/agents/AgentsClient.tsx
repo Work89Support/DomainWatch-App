@@ -22,6 +22,9 @@ type Agent = {
   id: string; name: string; carrier: string; isActive: boolean; deviceLabel: string | null;
   hasEnrollment: boolean;
   appVersion: string | null; networkType: string | null; reportedCarrier: string | null;
+  routeMode: "CELLULAR_DIRECT" | "VPN_DEFAULT"; lastRouteMode: string | null;
+  egressCountry: string | null; egressRegion: string | null; egressCity: string | null;
+  egressUpdatedAt: string | null;
   enrolledAt: string | null; lastSeenAt: string | null; createdAt: string;
   urlStatuses: UrlStatus[]; networkIncidents: NetworkIncident[];
 };
@@ -55,6 +58,11 @@ function since(value: string | null, now: number | null) {
   if (seconds < 60) return `${seconds} วินาทีที่แล้ว`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)} นาทีที่แล้ว`;
   return `${Math.floor(seconds / 3600)} ชั่วโมงที่แล้ว`;
+}
+
+function egressLocation(agent: Agent) {
+  if (agent.lastRouteMode !== agent.routeMode || !agent.egressUpdatedAt) return "รอผลตรวจรอบแรกจากเส้นทางนี้";
+  return [agent.egressCity, agent.egressRegion, agent.egressCountry].filter(Boolean).join(", ") || "ผู้ให้บริการไม่ได้ส่งข้อมูลเมือง/ประเทศ";
 }
 
 export default function AgentsClient({
@@ -223,6 +231,22 @@ export default function AgentsClient({
     router.refresh();
   }
 
+  async function changeRouteMode(agent: Agent, routeMode: Agent["routeMode"]) {
+    if (routeMode === agent.routeMode) return;
+    const label = routeMode === "VPN_DEFAULT" ? "VPN ที่เปิดอยู่บนโทรศัพท์" : `ซิม ${agent.carrier} โดยตรง`;
+    if (!confirm(`เปลี่ยนเส้นทางตรวจเป็น “${label}” ใช่หรือไม่?\n\nตำแหน่งที่ระบบแสดงจะเป็นตำแหน่งโดยประมาณของ Public IP ทางออก ไม่ใช่ GPS ของมือถือ`)) return;
+    setBusy(true);
+    const response = await fetch(`/api/mobile-agents/${agent.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ routeMode }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setBusy(false);
+    if (!response.ok) return alert(data.error || "เปลี่ยนเส้นทางตรวจไม่สำเร็จ");
+    router.refresh();
+  }
+
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
       <PageHeader
@@ -236,8 +260,8 @@ export default function AgentsClient({
       />
 
       <div className="card mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border-brand-100 bg-brand-50/40">
-        <div><div className="font-semibold text-slate-700">1) ติดตั้งแอปบนโทรศัพท์ก่อน</div><div className="mt-1 text-xs text-slate-500">รองรับ Android 8 ขึ้นไป · รุ่น 1.0.5 · ตรวจผ่านซิมโดยตรงและไม่ใช้ GPS</div></div>
-        <a className="btn-primary whitespace-nowrap" href="/downloads/DomainWatch-Agent-v1.0.5.apk" download>⬇️ ดาวน์โหลด APK</a>
+        <div><div className="font-semibold text-slate-700">1) ติดตั้งแอปบนโทรศัพท์ก่อน</div><div className="mt-1 text-xs text-slate-500">รองรับ Android 8 ขึ้นไป · รุ่น 1.0.6 · เลือกตรวจผ่านซิมหรือ VPN ได้ และไม่ใช้ GPS</div></div>
+        <a className="btn-primary whitespace-nowrap" href="/downloads/DomainWatch-Agent-v1.0.6.apk" download>⬇️ ดาวน์โหลด APK</a>
       </div>
 
       {canManage && <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
@@ -309,8 +333,8 @@ export default function AgentsClient({
                       </div>
                     )}
                     <p className="text-xs text-slate-400 mt-1">{selected.deviceLabel || "ยังไม่มีข้อมูลรุ่นเครื่อง"} · แอป {selected.appVersion || "-"}</p>
-                    <p className="text-xs text-slate-400 mt-1">จุดตรวจ: {mobileSourceLabel(selected.reportedCarrier, selected.carrier)} · ซิมโดยตรง · {selected.networkType || "รอข้อมูล"}</p>
-                    <p className="text-xs text-emerald-700 mt-1">🔒 ไม่ขอสิทธิ์ GPS · ไม่บันทึกพิกัด · ไม่แสดง IP ของโทรศัพท์</p>
+                    <p className="text-xs text-slate-400 mt-1">จุดตรวจ: {mobileSourceLabel(selected.reportedCarrier, selected.carrier)} · {selected.routeMode === "VPN_DEFAULT" ? "VPN" : "ซิมโดยตรง"} · {selected.networkType || "รอข้อมูล"}</p>
+                    <p className="text-xs text-emerald-700 mt-1">🔒 ไม่ขอสิทธิ์ GPS · ไม่บันทึก IP · แสดงเฉพาะตำแหน่งโดยประมาณของ IP ทางออก</p>
                     {selected.isActive && !selected.hasEnrollment && (
                       <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-700">สิทธิ์โทรศัพท์เดิมหมดแล้ว ต้องสร้าง QR และสแกนผูกเครื่องใหม่</div>
                     )}
@@ -320,6 +344,22 @@ export default function AgentsClient({
                     <button disabled={busy} className={selected.isActive ? "btn-danger" : "btn-primary"} onClick={() => toggle(selected)}>{selected.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน + QR ใหม่"}</button>
                     <button className="btn-ghost text-red-600" disabled={busy} onClick={() => deleteAgent(selected)}>🗑️ ลบเครื่อง</button>
                   </div>}
+                </div>
+                <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-700">เส้นทางและตำแหน่ง IP ทางออก</div>
+                      <div className="mt-1 text-sm text-brand-700">📍 {egressLocation(selected)}</div>
+                      <div className="mt-1 text-xs text-slate-400">ตำแหน่งระดับเมือง/ภูมิภาค/ประเทศจาก Public IP ไม่ใช่ตำแหน่งจริงหรือ GPS ของโทรศัพท์{selected.egressUpdatedAt && selected.lastRouteMode === selected.routeMode ? ` · อัปเดต ${since(selected.egressUpdatedAt, now)}` : ""}</div>
+                    </div>
+                    {canManage ? (
+                      <select className="input sm:w-auto" disabled={busy} value={selected.routeMode} onChange={(event) => changeRouteMode(selected, event.target.value as Agent["routeMode"])} aria-label="เลือกเส้นทางตรวจ">
+                        <option value="CELLULAR_DIRECT">TRUE โดยตรง</option>
+                        <option value="VPN_DEFAULT">VPN ที่เปิดอยู่บนมือถือ</option>
+                      </select>
+                    ) : <span className="badge bg-brand-50 text-brand-700">{selected.routeMode === "VPN_DEFAULT" ? "VPN" : "TRUE โดยตรง"}</span>}
+                  </div>
+                  {selected.routeMode === "VPN_DEFAULT" && <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-700">ต้องเปิด VPN บนมือถือไว้ แอปจะตรวจและส่งผลผ่าน VPN เท่านั้น หาก VPN หลุด ระบบจะไม่เอาตำแหน่งจากซิมมาแสดงแทน</div>}
                 </div>
                 <div className="mt-4 grid grid-cols-2 xl:grid-cols-5 gap-3 text-sm">
                   <button type="button" aria-pressed={resultFilter === "ALL"} onClick={() => showResultDetails("ALL")} className={`rounded-xl bg-slate-50 p-3 text-left transition hover:ring-2 hover:ring-slate-200 ${resultFilter === "ALL" ? "ring-2 ring-slate-300" : ""}`}>

@@ -285,6 +285,8 @@ export function networkDownMessage(opts: {
   redirectCount?: number;
   detectedAt: Date;
   appBaseUrl: string;
+  routeMode?: string | null;
+  egressLocation?: string | null;
 }): TgMessage {
   const detected = opts.detectedAt.toLocaleString("th-TH", { timeZone: "Asia/Bangkok" });
   const reason = opts.error || (opts.httpCode ? `HTTP ${opts.httpCode}` : "เชื่อมต่อไม่ได้");
@@ -294,7 +296,8 @@ export function networkDownMessage(opts: {
       `━━━━━━━━━━━━━━━`,
       `🆔 เคสเครือข่าย: <b>#${opts.incidentId.slice(-8).toUpperCase()}</b>`,
       `📱 เครื่องตรวจ: ${escapeHtml(opts.agentName)}`,
-      `🛡️ เส้นทางตรวจ: ซิมโดยตรง · ไม่บันทึกพิกัด GPS`,
+      `🛡️ เส้นทางตรวจ: ${opts.routeMode === "VPN_DEFAULT" ? "VPN" : "ซิมโดยตรง"} · ไม่บันทึกพิกัด GPS/IP`,
+      ...(opts.egressLocation ? [`📍 IP ทางออกโดยประมาณ: ${escapeHtml(opts.egressLocation)}`] : []),
       `🏢 บริษัท: ${escapeHtml(opts.company)}`,
       ...(opts.room ? [`💬 ห้อง: ${escapeHtml(opts.room)}`] : []),
       `📄 <b>${escapeHtml(opts.name)}</b>`,
@@ -327,6 +330,8 @@ export function networkRecoveredMessage(opts: {
   slow?: boolean;
   responseMs?: number | null;
   appBaseUrl: string;
+  routeMode?: string | null;
+  egressLocation?: string | null;
 }): TgMessage {
   const responseSeconds = typeof opts.responseMs === "number"
     ? Math.max(0, opts.responseMs / 1000).toFixed(1)
@@ -341,7 +346,8 @@ export function networkRecoveredMessage(opts: {
       `━━━━━━━━━━━━━━━`,
       `🆔 เคสเครือข่าย: <b>#${opts.incidentId.slice(-8).toUpperCase()}</b>`,
       `📱 เครื่องตรวจ: ${escapeHtml(opts.agentName)}`,
-      `🛡️ เส้นทางตรวจ: ซิมโดยตรง · ไม่บันทึกพิกัด GPS`,
+      `🛡️ เส้นทางตรวจ: ${opts.routeMode === "VPN_DEFAULT" ? "VPN" : "ซิมโดยตรง"} · ไม่บันทึกพิกัด GPS/IP`,
+      ...(opts.egressLocation ? [`📍 IP ทางออกโดยประมาณ: ${escapeHtml(opts.egressLocation)}`] : []),
       `🏢 บริษัท: ${escapeHtml(opts.company)}`,
       ...(opts.room ? [`💬 ห้อง: ${escapeHtml(opts.room)}`] : []),
       `📄 <b>${escapeHtml(opts.name)}</b>`,

@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
   });
   return NextResponse.json({
     agent: { id: agent.id, name: agent.name, carrier: agent.carrier },
+    routeMode: agent.routeMode,
     intervalSeconds: 300,
     slowResponseMs: Number(process.env.SLOW_RESPONSE_MS || 5000),
     jobs: unique.map((url) => ({ url, urlHash: mobileUrlHash(url) })),

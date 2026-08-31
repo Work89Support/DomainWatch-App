@@ -8,7 +8,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!canManageMobileAgents(user.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const body = await req.json().catch(() => ({}));
-  const data: { name?: string; isActive?: boolean } = {};
+  const data: {
+    name?: string;
+    isActive?: boolean;
+    routeMode?: "CELLULAR_DIRECT" | "VPN_DEFAULT";
+    lastRouteMode?: null;
+    egressCountry?: null;
+    egressRegion?: null;
+    egressCity?: null;
+    egressUpdatedAt?: null;
+  } = {};
   if ("name" in body) {
     if (typeof body.name !== "string" || !body.name.trim()) {
       return NextResponse.json({ error: "กรุณาระบุชื่อเครื่อง" }, { status: 400 });
@@ -19,6 +28,18 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     data.name = body.name.trim();
   }
   if (typeof body.isActive === "boolean") data.isActive = body.isActive;
+  if ("routeMode" in body) {
+    if (body.routeMode !== "CELLULAR_DIRECT" && body.routeMode !== "VPN_DEFAULT") {
+      return NextResponse.json({ error: "โหมดเส้นทางตรวจไม่ถูกต้อง" }, { status: 400 });
+    }
+    data.routeMode = body.routeMode;
+    // ป้องกันการแสดงตำแหน่งจากโหมดเดิมหลังสลับเส้นทาง
+    data.lastRouteMode = null;
+    data.egressCountry = null;
+    data.egressRegion = null;
+    data.egressCity = null;
+    data.egressUpdatedAt = null;
+  }
   const agent = await prisma.mobileAgent.update({
     where: { id: params.id },
     data: {

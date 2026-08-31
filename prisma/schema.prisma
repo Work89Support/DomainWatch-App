@@ -101,6 +101,15 @@ model MobileAgent {
   appVersion      String?
   networkType     String?
   reportedCarrier String?
+  /// เส้นทางที่แอดมินกำหนด: CELLULAR_DIRECT หรือ VPN_DEFAULT
+  routeMode       String   @default("CELLULAR_DIRECT")
+  /// เส้นทางที่แอปใช้จริงในรอบล่าสุด
+  lastRouteMode   String?
+  /// ตำแหน่งโดยประมาณของ Public IP ทางออกเท่านั้น — ไม่ใช่ GPS และไม่เก็บ IP
+  egressCountry   String?
+  egressRegion    String?
+  egressCity      String?
+  egressUpdatedAt DateTime?
   enrolledAt      DateTime?
   lastSeenAt      DateTime?
   createdAt       DateTime @default(now())

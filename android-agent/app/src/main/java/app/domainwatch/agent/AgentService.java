@@ -6,6 +6,8 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.os.Build;
 import android.os.IBinder;
@@ -88,13 +90,27 @@ public class AgentService extends Service {
             JSONObject jobsResponse = ApiClient.jobs(cellular.network, prefs.baseUrl(), token);
             JSONArray jobs = jobsResponse.getJSONArray("jobs");
             int slowMs = jobsResponse.optInt("slowResponseMs", 5000);
-            updateNotification("กำลังตรวจ " + jobs.length() + " URL ผ่านซิม " + prefs.carrier());
+            String routeMode = jobsResponse.optString("routeMode", "CELLULAR_DIRECT");
+            Network probeNetwork = cellular.network;
+            String routeLabel = "ซิม " + prefs.carrier() + " โดยตรง";
+            if ("VPN_DEFAULT".equals(routeMode)) {
+                ConnectivityManager connectivity = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                Network active = connectivity == null ? null : connectivity.getActiveNetwork();
+                NetworkCapabilities activeCaps = connectivity == null || active == null ? null : connectivity.getNetworkCapabilities(active);
+                if (active == null || activeCaps == null || !activeCaps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
+                    throw new Exception("ตั้งค่าให้ตรวจผ่าน VPN แต่ไม่พบ VPN ที่เชื่อมต่อ กรุณาเปิด VPN แล้วรอรอบใหม่");
+                }
+                probeNetwork = active;
+                routeLabel = "VPN (ตำแหน่งตาม IP ทางออก)";
+            }
+            updateNotification("กำลังตรวจ " + jobs.length() + " URL ผ่าน " + routeLabel);
 
             ExecutorService pool = Executors.newFixedThreadPool(Math.min(32, Math.max(1, jobs.length())));
             List<Future<JSONObject>> futures = new ArrayList<>();
+            final Network selectedNetwork = probeNetwork;
             for (int index = 0; index < jobs.length(); index++) {
                 JSONObject job = jobs.getJSONObject(index);
-                futures.add(pool.submit((Callable<JSONObject>) () -> ApiClient.probe(cellular.network, job, slowMs)));
+                futures.add(pool.submit((Callable<JSONObject>) () -> ApiClient.probe(selectedNetwork, job, slowMs)));
             }
             pool.shutdown();
             JSONArray results = new JSONArray();
@@ -108,15 +124,18 @@ public class AgentService extends Service {
 
             TelephonyManager phone = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
             String carrier = phone == null ? prefs.carrier() : phone.getNetworkOperatorName();
-            NetworkCapabilities caps = ((android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE)).getNetworkCapabilities(cellular.network);
-            String networkType = caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ? "CELLULAR" : "UNKNOWN";
+            NetworkCapabilities caps = ((ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE)).getNetworkCapabilities(probeNetwork);
+            String networkType = caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ? "VPN"
+                    : caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ? "CELLULAR" : "UNKNOWN";
             JSONObject body = new JSONObject();
             body.put("deviceLabel", Build.MANUFACTURER + " " + Build.MODEL);
             body.put("appVersion", BuildConfig.VERSION_NAME);
             body.put("reportedCarrier", carrier);
             body.put("networkType", networkType);
+            body.put("routeModeUsed", routeMode);
             body.put("results", results);
-            ApiClient.submit(cellular.network, prefs.baseUrl(), token, body);
+            // ส่งผลผ่านเส้นทางเดียวกับที่ตรวจ เพื่อให้ server อ่านเมือง/ประเทศของ IP ทางออกนั้นได้
+            ApiClient.submit(probeNetwork, prefs.baseUrl(), token, body);
             String summary = "ปกติ " + up + " · ช้า " + slow + " · ใช้ไม่ได้ " + down;
             prefs.setLastSummary(summary, System.currentTimeMillis());
             updateNotification(summary + " · ตรวจอีกครั้งใน 5 นาที");

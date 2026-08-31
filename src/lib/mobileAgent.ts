@@ -200,6 +200,9 @@ export function normalizeMobileProbeStatus(
 
 export async function storeMobileResults(agentId: string, results: MobileResultInput[]) {
   const agent = await prisma.mobileAgent.findUniqueOrThrow({ where: { id: agentId } });
+  const egressLocation = agent.lastRouteMode === agent.routeMode
+    ? [agent.egressCity, agent.egressRegion, agent.egressCountry].filter(Boolean).join(", ") || null
+    : null;
   const routes = await loadRoutes();
   const pendingIncidents = await prisma.networkIncident.findMany({
     where: { agentId, status: { notIn: ["CLOSED", "PAUSED"] } },
@@ -364,6 +367,8 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
           redirectCount,
           detectedAt: result.checkedAt,
           appBaseUrl: APP_BASE_URL,
+          routeMode: agent.routeMode,
+          egressLocation,
         }));
         opened++;
       } else {
@@ -395,6 +400,8 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
               slow: probeStatus === "SLOW",
               responseMs: result.responseMs,
               appBaseUrl: APP_BASE_URL,
+              routeMode: agent.routeMode,
+              egressLocation,
             }));
           }
           recovered++;
@@ -439,6 +446,8 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
           error: `ลิงก์หลักและลิงก์สำรองใช้ไม่ได้: ${normalizedError || "ไม่ตอบสนอง"}`,
           detectedAt: result.checkedAt,
           appBaseUrl: APP_BASE_URL,
+          routeMode: agent.routeMode,
+          egressLocation,
         }));
         opened++;
         continue;
@@ -472,6 +481,8 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
           slow: probeStatus === "SLOW",
           responseMs: result.responseMs,
           appBaseUrl: APP_BASE_URL,
+          routeMode: agent.routeMode,
+          egressLocation,
         }));
         recovered++;
       }
