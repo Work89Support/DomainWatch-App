@@ -267,7 +267,7 @@ export default function AgentsClient({
       {canManage && <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
         <div className="card p-5 lg:col-span-2">
           <div className="text-sm font-semibold text-slate-700">เพิ่มเครื่องตรวจ TRUE</div>
-          <p className="mt-1 text-xs text-slate-400">สร้าง QR ใช้ครั้งเดียว อายุ 15 นาที แล้วสแกนด้วยกล้องโทรศัพท์</p>
+          <p className="mt-1 text-xs text-slate-400">สร้าง QR ติดตั้งครบชุด ใช้ครั้งเดียว อายุ 30 นาที แล้วสแกนด้วยกล้องโทรศัพท์</p>
           <div className="mt-4 flex flex-col sm:flex-row gap-2">
             <input className="input" value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น เครื่องตรวจ TRUE ห้อง IT" />
             <button className="btn-primary whitespace-nowrap" disabled={busy} onClick={createAgent}>{busy ? "กำลังสร้าง..." : "+ สร้างเครื่องและ QR"}</button>
@@ -517,9 +517,10 @@ export default function AgentsClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" onClick={() => setQr(null)}>
           <div role="dialog" aria-modal="true" aria-labelledby="agent-qr-title" className="card w-full max-w-md p-6 text-center" onClick={(event) => event.stopPropagation()}>
             <h3 id="agent-qr-title" className="text-xl font-semibold text-slate-800">QR ผูกเครื่อง — {qr.agentName}</h3>
-            <p className="mt-1 text-xs text-amber-600">ใช้ได้ครั้งเดียว ภายใน 15 นาที ห้ามส่งเข้ากลุ่มสาธารณะ</p>
+            <p className="mt-1 text-xs text-amber-600">QR เดียวสำหรับดาวน์โหลด APK และผูกค่าทั้งหมด · ใช้ได้ครั้งเดียวภายใน 30 นาที</p>
             <Image unoptimized width={256} height={256} src={qr.enrollment.qrDataUrl} alt="QR ผูกเครื่อง DomainWatch Agent" className="mx-auto my-4 w-64 h-64 rounded-xl border border-slate-100" />
-            <div className="rounded-lg bg-slate-50 p-3 text-left text-xs text-slate-500 break-all">{qr.enrollment.enrollmentUrl}</div>
+            <div className="rounded-lg bg-emerald-50 p-3 text-left text-xs leading-5 text-emerald-700">ให้ผู้ใช้สแกน QR นี้จากมือถือ แล้วทำตามหน้า “ติดตั้งและผูกเครื่อง” ไม่ต้องกรอกค่าใดเอง</div>
+            <div className="mt-2 rounded-lg bg-slate-50 p-3 text-left text-xs text-slate-500 break-all">{qr.enrollment.enrollmentUrl}</div>
             <div className="mt-4 flex gap-2">
               <button className="btn-ghost flex-1" onClick={() => navigator.clipboard.writeText(qr.enrollment.enrollmentUrl)}>คัดลอกลิงก์</button>
               <button className="btn-primary flex-1" onClick={() => setQr(null)}>เสร็จแล้ว</button>

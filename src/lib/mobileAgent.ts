@@ -10,7 +10,8 @@ import {
 } from "@/lib/telegram";
 
 const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
-export const ENROLLMENT_TTL_MINUTES = 15;
+// เผื่อเวลาติดตั้ง APK ในการผูกครั้งแรก โดยรหัสยังคงใช้ได้ครั้งเดียว
+export const ENROLLMENT_TTL_MINUTES = 30;
 export const MOBILE_DOWN_CONFIRMATIONS = Math.max(2, Number(process.env.MOBILE_DOWN_CONFIRMATIONS || 2));
 export const MOBILE_RECOVERY_CONFIRMATIONS = Math.max(2, Number(process.env.MOBILE_RECOVERY_CONFIRMATIONS || 2));
 
