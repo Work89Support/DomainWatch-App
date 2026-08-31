@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { fmtDateTime } from "@/lib/format";
+import { mobileSourceLabel } from "@/lib/statusPresentation";
 
 type LineGroup = { id: string; name: string };
 type Company = { id: string; name: string; lineGroups: LineGroup[] };
@@ -402,7 +403,7 @@ export default function LinksClient({
               <option value="">ทุกเครื่อง / ทุกค่าย (แสดงสถานะที่แย่ที่สุด)</option>
               {mobileAgents.map((agent) => (
                 <option key={agent.id} value={agent.id}>
-                  {agent.reportedCarrier || agent.carrier} · {agent.name}{agent.isActive ? "" : " (ปิดใช้งาน)"}
+                  {mobileSourceLabel(agent.reportedCarrier, agent.carrier)} · {agent.name}{agent.isActive ? "" : " (ปิดใช้งาน)"}
                 </option>
               ))}
             </select>

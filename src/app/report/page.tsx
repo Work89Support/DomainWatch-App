@@ -6,6 +6,7 @@ import { fmtDateTime, fmtMinutes } from "@/lib/format";
 import ReportActions from "@/components/ReportActions";
 import { canViewReport } from "@/lib/permissions";
 import { redirect } from "next/navigation";
+import { mobileSourceLabel } from "@/lib/statusPresentation";
 
 export const dynamic = "force-dynamic";
 
@@ -116,7 +117,7 @@ export default async function ReportPage({ searchParams }: { searchParams: { dat
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="badge bg-brand-50 text-brand-700">{agent.reportedCarrier || agent.carrier}</span>
+                      <span className="badge bg-brand-50 text-brand-700">{mobileSourceLabel(agent.reportedCarrier, agent.carrier)}</span>
                       <span className="font-semibold text-slate-800">{agent.name}</span>
                     </div>
                     <div className="mt-1 text-xs text-slate-400">
@@ -322,7 +323,7 @@ function ExportReportView({ report: r }: { report: DailyReport }) {
             <tbody>
               {r.mobileAgents.map((agent) => (
                 <tr key={agent.id} className="border-b border-slate-100 last:border-0">
-                  <td className="py-2.5 pr-3"><b>{agent.reportedCarrier || agent.carrier}</b> · {agent.name}</td>
+                  <td className="py-2.5 pr-3"><b>{mobileSourceLabel(agent.reportedCarrier, agent.carrier)}</b> · {agent.name}</td>
                   <td className="py-2.5 pr-3">{!agent.isActive ? "ปิดใช้งาน" : agent.online ? "ออนไลน์" : "ขาดการเชื่อมต่อ"}</td>
                   <td className="py-2.5 pr-3">{agent.totalUrls} ({agent.primaryUrls ?? agent.totalUrls}/{agent.backupUrls ?? 0})</td>
                   <td className="py-2.5 pr-3 text-emerald-700">{agent.up}</td>

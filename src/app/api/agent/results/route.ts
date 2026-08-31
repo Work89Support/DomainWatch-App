@@ -40,7 +40,6 @@ export async function POST(req: NextRequest) {
     where: { id: agent.id },
     data: {
       lastSeenAt: new Date(),
-      lastIp: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
       deviceLabel: typeof body.deviceLabel === "string" ? body.deviceLabel.slice(0, 160) : agent.deviceLabel,
       appVersion: typeof body.appVersion === "string" ? body.appVersion.slice(0, 40) : agent.appVersion,
       networkType: typeof body.networkType === "string" ? body.networkType.slice(0, 80) : agent.networkType,

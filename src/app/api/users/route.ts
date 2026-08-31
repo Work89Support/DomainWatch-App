@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
 import { isAppRole } from "@/lib/permissions";
+import { normalizeAllowedIpRanges } from "@/lib/ipAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export async function GET() {
     orderBy: { createdAt: "asc" },
     select: {
       id: true, name: true, username: true, role: true, isActive: true, createdAt: true,
+      allowedIpRanges: true, lastLoginIp: true, lastLoginAt: true,
       companyAssignments: { select: { companyId: true } },
     },
   });
@@ -25,7 +27,7 @@ export async function POST(req: NextRequest) {
   const me = await getCurrentUser();
   if (!me || me.role !== "ADMIN")
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  const { name, username, password, role, companyIds } = await req.json().catch(() => ({}));
+  const { name, username, password, role, companyIds, allowedIpRanges } = await req.json().catch(() => ({}));
   if (!name || !username || !password) {
     return NextResponse.json({ error: "กรอกชื่อ, ชื่อผู้ใช้ และรหัสผ่าน" }, { status: 400 });
   }
@@ -47,17 +49,23 @@ export async function POST(req: NextRequest) {
   if (exists) {
     return NextResponse.json({ error: "ชื่อผู้ใช้นี้มีอยู่แล้ว" }, { status: 400 });
   }
+  let normalizedIpRanges: string | null;
+  try { normalizedIpRanges = normalizeAllowedIpRanges(allowedIpRanges); }
+  catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "รูปแบบ IP ไม่ถูกต้อง" }, { status: 400 });
+  }
   const user = await prisma.user.create({
     data: {
       name: String(name).trim(),
       username: String(username).trim(),
       passwordHash: hashPassword(String(password)),
       role,
+      allowedIpRanges: normalizedIpRanges,
       companyAssignments: role === "ADMIN_COMPANY"
         ? { create: assignedCompanyIds.map((companyId) => ({ companyId })) }
         : undefined,
     },
-    select: { id: true, name: true, username: true, role: true, isActive: true },
+    select: { id: true, name: true, username: true, role: true, isActive: true, allowedIpRanges: true },
   });
   return NextResponse.json(user, { status: 201 });
 }

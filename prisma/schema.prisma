@@ -101,7 +101,6 @@ model MobileAgent {
   appVersion      String?
   networkType     String?
   reportedCarrier String?
-  lastIp          String?
   enrolledAt      DateTime?
   lastSeenAt      DateTime?
   createdAt       DateTime @default(now())
@@ -284,6 +283,9 @@ model User {
   passwordHash String
   role         Role     @default(ADMIN)
   isActive     Boolean  @default(true)
+  allowedIpRanges String? // IP/CIDR ที่อนุญาต คั่นด้วยบรรทัดว่าง = เข้าได้จากทุก IP
+  lastLoginIp  String?
+  lastLoginAt  DateTime?
   createdAt    DateTime @default(now())
 
   adminIncidents Incident[] @relation("AdminIncidents")

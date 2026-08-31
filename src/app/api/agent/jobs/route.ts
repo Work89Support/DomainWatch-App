@@ -17,10 +17,7 @@ export async function GET(req: NextRequest) {
     .map((url) => normalizeUrl(url))));
   await prisma.mobileAgent.update({
     where: { id: agent.id },
-    data: {
-      lastSeenAt: new Date(),
-      lastIp: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
-    },
+    data: { lastSeenAt: new Date() },
   });
   return NextResponse.json({
     agent: { id: agent.id, name: agent.name, carrier: agent.carrier },

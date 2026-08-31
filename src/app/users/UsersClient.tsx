@@ -5,16 +5,20 @@ import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/ui";
 import { ROLE_LABELS, ROLES, type AppRole } from "@/lib/permissions";
 
-type U = { id: string; name: string; username: string; role: AppRole; isActive: boolean; companyAssignments: { companyId: string }[] };
+type U = {
+  id: string; name: string; username: string; role: AppRole; isActive: boolean;
+  allowedIpRanges: string | null; lastLoginIp: string | null; lastLoginAt: string | null;
+  companyAssignments: { companyId: string }[];
+};
 type Company = { id: string; name: string };
 
-export default function UsersClient({ initial, companies, currentUserId }: { initial: U[]; companies: Company[]; currentUserId: string }) {
+export default function UsersClient({ initial, companies, currentUserId, currentIp }: { initial: U[]; companies: Company[]; currentUserId: string; currentIp: string | null }) {
   const router = useRouter();
-  const [form, setForm] = useState<{ name: string; username: string; password: string; role: AppRole; companyIds: string[] }>({ name: "", username: "", password: "", role: "ADMIN", companyIds: [] });
+  const [form, setForm] = useState<{ name: string; username: string; password: string; role: AppRole; companyIds: string[]; allowedIpRanges: string }>({ name: "", username: "", password: "", role: "ADMIN", companyIds: [], allowedIpRanges: "" });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [editing, setEditing] = useState<U | null>(null);
-  const [accessForm, setAccessForm] = useState<{ role: AppRole; companyIds: string[] }>({ role: "IT", companyIds: [] });
+  const [accessForm, setAccessForm] = useState<{ role: AppRole; companyIds: string[]; allowedIpRanges: string }>({ role: "IT", companyIds: [], allowedIpRanges: "" });
 
   async function add() {
     if (!form.name || !form.username || !form.password) return alert("กรอกให้ครบ");
@@ -27,7 +31,7 @@ export default function UsersClient({ initial, companies, currentUserId }: { ini
     });
     setBusy(false);
     if (res.ok) {
-      setForm({ name: "", username: "", password: "", role: "ADMIN", companyIds: [] });
+      setForm({ name: "", username: "", password: "", role: "ADMIN", companyIds: [], allowedIpRanges: "" });
       router.refresh();
     } else {
       const e = await res.json();
@@ -58,7 +62,7 @@ export default function UsersClient({ initial, companies, currentUserId }: { ini
 
   function openAccess(u: U) {
     setEditing(u);
-    setAccessForm({ role: u.role, companyIds: u.companyAssignments.map((item) => item.companyId) });
+    setAccessForm({ role: u.role, companyIds: u.companyAssignments.map((item) => item.companyId), allowedIpRanges: u.allowedIpRanges || "" });
   }
 
   async function saveAccess() {
@@ -113,6 +117,16 @@ export default function UsersClient({ initial, companies, currentUserId }: { ini
             {busy ? "กำลังเพิ่ม..." : "+ เพิ่ม"}
           </button>
         </div>
+        <div className="mt-3">
+          <label className="label">จำกัด IP สำหรับเข้าใช้ (ไม่กรอก = เข้าได้จากทุก IP)</label>
+          <textarea
+            className="input min-h-20"
+            placeholder={`ตัวอย่าง: ${currentIp || "203.0.113.10"}\nหรือวง IP: 203.0.113.0/24`}
+            value={form.allowedIpRanges}
+            onChange={(e) => setForm({ ...form, allowedIpRanges: e.target.value })}
+          />
+          <div className="mt-1 text-xs text-slate-400">ใส่ได้หลายค่า แยกบรรทัด · IP ที่ระบบเห็นตอนนี้: <b>{currentIp || "ตรวจไม่พบ (local)"}</b></div>
+        </div>
         {form.role === "ADMIN_COMPANY" && (
           <div className="mt-3 rounded-lg bg-slate-50 p-3">
             <div className="text-xs font-medium text-slate-600 mb-2">บริษัทที่มอบหมาย *</div>
@@ -157,6 +171,10 @@ export default function UsersClient({ initial, companies, currentUserId }: { ini
                   <span className={`badge ${u.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
                     {u.isActive ? "ใช้งาน" : "ปิด"}
                   </span>
+                  <div className="mt-1 text-[11px] text-slate-400">
+                    {u.allowedIpRanges ? `🔒 ${u.allowedIpRanges.split(/\s+/).filter(Boolean).length} IP/วง` : "🌐 ทุก IP"}
+                    {u.lastLoginIp ? ` · ล่าสุด ${u.lastLoginIp}` : ""}
+                  </div>
                 </td>
                 <td className="py-3 px-4 text-right whitespace-nowrap">
                   <button className="text-brand-600 hover:underline text-xs mr-3" onClick={() => openAccess(u)}>สิทธิ์/บริษัท</button>
@@ -173,12 +191,12 @@ export default function UsersClient({ initial, companies, currentUserId }: { ini
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={() => setEditing(null)}>
           <div className="card w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-slate-800">กำหนดสิทธิ์ — {editing.name}</h3>
-            <p className="text-xs text-slate-400 mt-1 mb-4">เลือกบทบาทก่อน หากเป็นแอดมินบริษัทให้เลือกบริษัทที่รับผิดชอบ</p>
+            <p className="text-xs text-slate-400 mt-1 mb-4">กำหนดบทบาท ขอบเขตบริษัท และ IP ที่อนุญาตให้เข้าใช้</p>
             <label className="label">บทบาท</label>
             <select
               className="input"
               value={accessForm.role}
-              onChange={(e) => setAccessForm({ role: e.target.value as AppRole, companyIds: [] })}
+              onChange={(e) => setAccessForm({ ...accessForm, role: e.target.value as AppRole, companyIds: [] })}
               disabled={editing.id === currentUserId}
             >
               {ROLES.map((role) => <option key={role} value={role}>{ROLE_LABELS[role]} ({role})</option>)}
@@ -196,6 +214,20 @@ export default function UsersClient({ initial, companies, currentUserId }: { ini
                 </div>
               </div>
             )}
+            <div className="mt-4">
+              <label className="label">IP/CIDR ที่อนุญาต</label>
+              <textarea
+                className="input min-h-28"
+                value={accessForm.allowedIpRanges}
+                onChange={(e) => setAccessForm({ ...accessForm, allowedIpRanges: e.target.value })}
+                placeholder={`${currentIp || "203.0.113.10"}\n203.0.113.0/24`}
+              />
+              <div className="mt-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+                เว้นว่าง = เข้าได้ทุก IP · แนะนำให้ใช้ IP คงที่ของ VPN/สำนักงาน
+                <br />IP ที่ระบบเห็นตอนนี้: <b>{currentIp || "ตรวจไม่พบ"}</b>
+                {editing.id === currentUserId && <> · บัญชีตัวเองต้องใส่ IP ปัจจุบันไว้ด้วย</>}
+              </div>
+            </div>
             <div className="flex justify-end gap-2 mt-5">
               <button className="btn-ghost" onClick={() => setEditing(null)}>ยกเลิก</button>
               <button className="btn-primary disabled:opacity-60" disabled={busy} onClick={saveAccess}>{busy ? "กำลังบันทึก..." : "บันทึกสิทธิ์"}</button>

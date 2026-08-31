@@ -3,6 +3,7 @@
 
 import { fmtMinutes } from "@/lib/format";
 import type { DailyReport } from "@/lib/report";
+import { mobileSourceLabel } from "@/lib/statusPresentation";
 
 type Audience = "admin" | "it" | "all";
 const TELEGRAM_TIMEOUT_MS = 5000;
@@ -289,10 +290,11 @@ export function networkDownMessage(opts: {
   const reason = opts.error || (opts.httpCode ? `HTTP ${opts.httpCode}` : "เชื่อมต่อไม่ได้");
   return {
     text: [
-      `🔴 <b>${escapeHtml(opts.carrier)} เปิดลิงก์ไม่ได้ — ยืนยันจากซิม 2 รอบ</b>`,
+      `🔴 <b>${escapeHtml(mobileSourceLabel(opts.carrier))} เปิดลิงก์ไม่ได้ — ยืนยันจากซิม 2 รอบ</b>`,
       `━━━━━━━━━━━━━━━`,
       `🆔 เคสเครือข่าย: <b>#${opts.incidentId.slice(-8).toUpperCase()}</b>`,
       `📱 เครื่องตรวจ: ${escapeHtml(opts.agentName)}`,
+      `🛡️ เส้นทางตรวจ: ซิมโดยตรง · ไม่บันทึกพิกัด GPS`,
       `🏢 บริษัท: ${escapeHtml(opts.company)}`,
       ...(opts.room ? [`💬 ห้อง: ${escapeHtml(opts.room)}`] : []),
       `📄 <b>${escapeHtml(opts.name)}</b>`,
@@ -332,13 +334,14 @@ export function networkRecoveredMessage(opts: {
   return {
     text: [
       opts.usedBackup
-        ? `🟢 <b>${escapeHtml(opts.carrier)} ใช้งานได้แล้วผ่านลิงก์สำรอง</b>`
+        ? `🟢 <b>${escapeHtml(mobileSourceLabel(opts.carrier))} ใช้งานได้แล้วผ่านลิงก์สำรอง</b>`
         : opts.slow
-        ? `🟡 <b>${escapeHtml(opts.carrier)} กลับมาเปิดได้แล้ว — แต่ยังโหลดช้า</b>`
-        : `🟢 <b>${escapeHtml(opts.carrier)} กลับมาเปิดลิงก์ได้แล้ว</b>`,
+        ? `🟡 <b>${escapeHtml(mobileSourceLabel(opts.carrier))} กลับมาเปิดได้แล้ว — แต่ยังโหลดช้า</b>`
+        : `🟢 <b>${escapeHtml(mobileSourceLabel(opts.carrier))} กลับมาเปิดลิงก์ได้แล้ว</b>`,
       `━━━━━━━━━━━━━━━`,
       `🆔 เคสเครือข่าย: <b>#${opts.incidentId.slice(-8).toUpperCase()}</b>`,
       `📱 เครื่องตรวจ: ${escapeHtml(opts.agentName)}`,
+      `🛡️ เส้นทางตรวจ: ซิมโดยตรง · ไม่บันทึกพิกัด GPS`,
       `🏢 บริษัท: ${escapeHtml(opts.company)}`,
       ...(opts.room ? [`💬 ห้อง: ${escapeHtml(opts.room)}`] : []),
       `📄 <b>${escapeHtml(opts.name)}</b>`,
@@ -411,7 +414,7 @@ export function mobileAgentReportLines(
   if (r.mobileAgents.length === 0) return [];
   const lines = ["", `<b>📱 ผลตรวจจากซิมมือถือ แยกตามเครื่อง / ค่าย</b>`];
   for (const agent of r.mobileAgents.slice(0, 10)) {
-    const carrier = agent.reportedCarrier || agent.carrier;
+    const carrier = mobileSourceLabel(agent.reportedCarrier, agent.carrier);
     const status = !agent.isActive ? "⚪ ปิดใช้งาน" : agent.online ? "🟢 ออนไลน์" : "🟠 ขาดการเชื่อมต่อ";
     lines.push(
       `${status} · <b>${escapeHtml(carrier)}</b> / ${escapeHtml(agent.name)}`,
@@ -425,7 +428,7 @@ export function mobileAgentReportLines(
     for (const incident of r.mobileOpenDetails.slice(0, 5)) {
       const room = incident.room ? ` · ห้อง ${escapeHtml(incident.room)}` : "";
       lines.push(
-        `🔴 #${incident.id.slice(-8).toUpperCase()} ${escapeHtml(incident.carrier)}/${escapeHtml(incident.agentName)}`,
+        `🔴 #${incident.id.slice(-8).toUpperCase()} ${escapeHtml(mobileSourceLabel(incident.carrier))}/${escapeHtml(incident.agentName)}`,
         `  ${escapeHtml(incident.name)} · ${escapeHtml(incident.company)}${room} · ${fmtMinutes(incident.openMinutes)}`,
         ...(incident.finalUrl && incident.finalUrl !== incident.url
           ? [`  ↪️ ${incident.redirectType === "NETWORK_BLOCK" ? "หน้าปิดกั้นเครือข่าย" : "ปลายทาง"}: ${escapeHtml(incident.finalUrl)}`]

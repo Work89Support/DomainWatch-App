@@ -80,7 +80,7 @@ public class MainActivity extends Activity {
         root.addView(logo, params(dp(64), dp(64), 0, 0, 0, 14));
 
         root.addView(text("DomainWatch Agent", 27, Color.rgb(29, 41, 57), true), params(-1, -2, 0, 0, 0, 4));
-        root.addView(text("ตรวจหน้าเว็บผ่านซิมมือถือจริง ทุก 5 นาที", 15, Color.rgb(100, 116, 139), false), params(-1, -2, 0, 0, 0, 22));
+        root.addView(text("ตรวจผ่านซิมมือถือจริงโดยตรง ทุก 5 นาที · ไม่ใช้ GPS", 15, Color.rgb(100, 116, 139), false), params(-1, -2, 0, 0, 0, 22));
 
         LinearLayout card = card();
         titleStatus = text("ยังไม่ผูกเครื่อง", 20, Color.rgb(71, 85, 105), true);
@@ -186,7 +186,11 @@ public class MainActivity extends Activity {
         }
         boolean running = prefs.serviceRunning();
         titleStatus.setText(running ? "🟢 กำลังตรวจตลอดเวลา" : "🟡 หยุดตรวจชั่วคราว");
-        detail.setText("เครื่อง: " + prefs.agentName() + "\nซิมที่กำหนด: " + prefs.carrier() + "\nคำขอทั้งหมดถูกบังคับให้ออกผ่าน Cellular");
+        String carrier = prefs.carrier().toUpperCase().contains("TRUE") ? "TRUE" : prefs.carrier().toUpperCase();
+        detail.setText("เครื่อง: " + prefs.agentName()
+                + "\nจุดตรวจ: " + carrier + " — ประเทศไทย"
+                + "\nเส้นทาง: ซิมโดยตรง · CELLULAR"
+                + "\nความเป็นส่วนตัว: ไม่ใช้ GPS และไม่ส่งพิกัด/IP โทรศัพท์");
         String last = prefs.lastSummary();
         if (prefs.lastTime() > 0) last += "\n" + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(new Date(prefs.lastTime()));
         lastResult.setText(last);

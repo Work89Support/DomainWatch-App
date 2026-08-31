@@ -4,6 +4,12 @@ export function failureConfirmationText(status: string, failureStreak: number): 
   return `รอยืนยัน ${Math.min(failureStreak, 1)}/2`;
 }
 
+export function mobileSourceLabel(reportedCarrier?: string | null, configuredCarrier?: string | null): string {
+  const carrier = (reportedCarrier || configuredCarrier || "เครือข่ายมือถือ").trim();
+  const canonical = /true/i.test(carrier) ? "TRUE" : carrier.toUpperCase();
+  return `${canonical} — ประเทศไทย`;
+}
+
 export function mobileIncidentStatusText(input: {
   status: string;
   redirectType?: string | null;

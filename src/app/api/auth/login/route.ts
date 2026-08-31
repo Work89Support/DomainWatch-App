@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword, createSessionToken, COOKIE_NAME } from "@/lib/auth";
+import { getClientIp, isIpAllowed } from "@/lib/ipAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,16 @@ export async function POST(req: NextRequest) {
   if (!user || !user.isActive || !verifyPassword(String(password), user.passwordHash)) {
     return NextResponse.json({ error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" }, { status: 401 });
   }
+  const clientIp = getClientIp(req.headers);
+  if (!isIpAllowed(clientIp, user.allowedIpRanges)) {
+    return NextResponse.json({
+      error: `IP นี้ไม่ได้รับอนุญาต${clientIp ? ` (${clientIp})` : ""} กรุณาติดต่อแอดมิน`,
+    }, { status: 403 });
+  }
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginIp: clientIp, lastLoginAt: new Date() },
+  });
   const token = createSessionToken(user.id, user.passwordHash);
   const res = NextResponse.json({
     ok: true,

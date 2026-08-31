@@ -1,8 +1,9 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import type { AppRole } from "@/lib/permissions";
+import { getClientIp, isIpAllowed } from "@/lib/ipAccess";
 
 export const COOKIE_NAME = "dw_session";
 const SECRET = process.env.AUTH_SECRET || "dev-insecure-secret-change-me";
@@ -71,6 +72,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     include: { companyAssignments: { select: { companyId: true } } },
   });
   if (!user || !user.isActive) return null;
+  if (!isIpAllowed(getClientIp(headers()), user.allowedIpRanges)) return null;
   // ตรวจลายเซ็นโดยผูกกับ passwordHash ปัจจุบัน (เปลี่ยนรหัส = โทเคนเก่าใช้ไม่ได้)
   const expected = signSession(user.id, parsed.issuedAt, user.passwordHash);
   const a = Buffer.from(parsed.sig);

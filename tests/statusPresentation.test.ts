@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { failureConfirmationText, mobileIncidentStatusText } from "../src/lib/statusPresentation";
+import { failureConfirmationText, mobileIncidentStatusText, mobileSourceLabel } from "../src/lib/statusPresentation";
 
 test("confirmed mobile failure is not rendered as an impossible x/2 counter", () => {
   assert.equal(failureConfirmationText("DOWN", 105), "ยืนยันแล้ว · เสียต่อเนื่อง 105 รอบ");
@@ -14,4 +14,9 @@ test("backup recovery explains that the primary URL is still unhealthy", () => {
     "ลิงก์หลักมีปัญหา · ใช้สำรองได้"
   );
   assert.equal(mobileIncidentStatusText({ status: "CLOSED" }), "จัดการเรียบร้อย");
+});
+
+test("mobile source identifies the carrier without exposing a precise location", () => {
+  assert.equal(mobileSourceLabel("TRUE-H", "TRUE"), "TRUE — ประเทศไทย");
+  assert.equal(mobileSourceLabel(null, "AIS"), "AIS — ประเทศไทย");
 });

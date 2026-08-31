@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { PageHeader } from "@/components/ui";
-import { failureConfirmationText } from "@/lib/statusPresentation";
+import { failureConfirmationText, mobileSourceLabel } from "@/lib/statusPresentation";
 
 type UrlStatus = {
   id: string; url: string; status: "UP" | "SLOW" | "DOWN" | "UNKNOWN";
@@ -236,8 +236,8 @@ export default function AgentsClient({
       />
 
       <div className="card mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border-brand-100 bg-brand-50/40">
-        <div><div className="font-semibold text-slate-700">1) ติดตั้งแอปบนโทรศัพท์ก่อน</div><div className="mt-1 text-xs text-slate-500">รองรับ Android 8 ขึ้นไป · รุ่น 1.0.4 · บันทึก Redirect และแยกหน้าปิดกั้นของเครือข่าย</div></div>
-        <a className="btn-primary whitespace-nowrap" href="/downloads/DomainWatch-Agent-v1.0.4.apk" download>⬇️ ดาวน์โหลด APK</a>
+        <div><div className="font-semibold text-slate-700">1) ติดตั้งแอปบนโทรศัพท์ก่อน</div><div className="mt-1 text-xs text-slate-500">รองรับ Android 8 ขึ้นไป · รุ่น 1.0.5 · ตรวจผ่านซิมโดยตรงและไม่ใช้ GPS</div></div>
+        <a className="btn-primary whitespace-nowrap" href="/downloads/DomainWatch-Agent-v1.0.5.apk" download>⬇️ ดาวน์โหลด APK</a>
       </div>
 
       {canManage && <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
@@ -270,7 +270,7 @@ export default function AgentsClient({
               return (
                 <button key={agent.id} onClick={() => selectAgent(agent.id)} className={`card w-full p-4 text-left transition ${selected?.id === agent.id ? "ring-2 ring-brand-500" : "hover:border-brand-200"}`}>
                   <div className="flex items-start justify-between gap-2">
-                    <div><div className="font-semibold text-slate-800">📱 {agent.name}</div><div className="text-xs text-slate-400 mt-1">ซิม {agent.carrier} · {since(agent.lastSeenAt, now)}</div></div>
+                    <div><div className="font-semibold text-slate-800">📱 {agent.name}</div><div className="text-xs text-slate-400 mt-1">{mobileSourceLabel(agent.reportedCarrier, agent.carrier)} · {since(agent.lastSeenAt, now)}</div></div>
                     <span className={`badge ${online ? "bg-emerald-50 text-emerald-700" : agent.isActive ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-400"}`}>{online ? "ออนไลน์" : agent.isActive && !agent.hasEnrollment ? "รอผูก QR ใหม่" : agent.isActive ? "ขาดการเชื่อมต่อ" : "ปิดใช้งาน"}</span>
                   </div>
                   {open > 0 && <div className="mt-3 text-xs font-medium text-red-600">🔴 มีปัญหาเครือข่ายค้าง {open} รายการ</div>}
@@ -309,7 +309,8 @@ export default function AgentsClient({
                       </div>
                     )}
                     <p className="text-xs text-slate-400 mt-1">{selected.deviceLabel || "ยังไม่มีข้อมูลรุ่นเครื่อง"} · แอป {selected.appVersion || "-"}</p>
-                    <p className="text-xs text-slate-400 mt-1">เครือข่ายที่รายงาน: {selected.reportedCarrier || selected.carrier} · {selected.networkType || "รอข้อมูล"}</p>
+                    <p className="text-xs text-slate-400 mt-1">จุดตรวจ: {mobileSourceLabel(selected.reportedCarrier, selected.carrier)} · ซิมโดยตรง · {selected.networkType || "รอข้อมูล"}</p>
+                    <p className="text-xs text-emerald-700 mt-1">🔒 ไม่ขอสิทธิ์ GPS · ไม่บันทึกพิกัด · ไม่แสดง IP ของโทรศัพท์</p>
                     {selected.isActive && !selected.hasEnrollment && (
                       <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-700">สิทธิ์โทรศัพท์เดิมหมดแล้ว ต้องสร้าง QR และสแกนผูกเครื่องใหม่</div>
                     )}
@@ -344,7 +345,7 @@ export default function AgentsClient({
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="font-semibold text-slate-700">สรุปและรายละเอียด — {FILTER_LABEL[resultFilter]}</div>
-                      <div className="mt-1 text-xs text-slate-400">{selected.name} · {(selected.reportedCarrier || selected.carrier)} · พบ {filteredResults.length} จากทั้งหมด {resultCounts.all} URL</div>
+                      <div className="mt-1 text-xs text-slate-400">{selected.name} · {mobileSourceLabel(selected.reportedCarrier, selected.carrier)} · พบ {filteredResults.length} จากทั้งหมด {resultCounts.all} URL</div>
                     </div>
                     {resultFilter !== "ALL" && <button type="button" className="btn-ghost text-xs" onClick={() => showResultDetails("ALL")}>ดูผลทั้งหมด</button>}
                   </div>

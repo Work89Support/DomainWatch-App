@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
 import { isAppRole } from "@/lib/permissions";
+import { getClientIp, isIpAllowed, normalizeAllowedIpRanges } from "@/lib/ipAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,12 @@ export async function PATCH(
     data.role = body.role;
   }
   if (body.name) data.name = String(body.name).trim();
+  if ("allowedIpRanges" in body) {
+    try { data.allowedIpRanges = normalizeAllowedIpRanges(body.allowedIpRanges); }
+    catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : "รูปแบบ IP ไม่ถูกต้อง" }, { status: 400 });
+    }
+  }
 
   // ต้องมีผู้ใช้จริง
   const target = await prisma.user.findUnique({
@@ -42,6 +49,12 @@ export async function PATCH(
   if (me.id === target.id && (willDeactivate || willDemote)) {
     return NextResponse.json(
       { error: "ห้ามปิดการใช้งานหรือลดสิทธิ์บัญชีของตัวเอง" },
+      { status: 400 }
+    );
+  }
+  if (me.id === target.id && "allowedIpRanges" in body && !isIpAllowed(getClientIp(req.headers), data.allowedIpRanges as string | null)) {
+    return NextResponse.json(
+      { error: "บันทึกไม่ได้: IP ปัจจุบันของคุณต้องอยู่ในรายการ เพื่อป้องกันการล็อกตัวเองออกจากระบบ" },
       { status: 400 }
     );
   }
@@ -71,7 +84,7 @@ export async function PATCH(
   const user = await prisma.$transaction(async (tx) => {
     const updated = await tx.user.update({
       where: { id: params.id }, data,
-      select: { id: true, name: true, username: true, role: true, isActive: true },
+      select: { id: true, name: true, username: true, role: true, isActive: true, allowedIpRanges: true },
     });
     if ("role" in body || "companyIds" in body) {
       await tx.userCompany.deleteMany({ where: { userId: params.id } });

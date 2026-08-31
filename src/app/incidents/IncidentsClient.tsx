@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { PageHeader, IncidentStatusBadge } from "@/components/ui";
 import { fmtDateTime, fmtMinutes } from "@/lib/format";
 import CompanyFilter from "@/components/CompanyFilter";
-import { mobileIncidentStatusText } from "@/lib/statusPresentation";
+import { mobileIncidentStatusText, mobileSourceLabel } from "@/lib/statusPresentation";
 
 type Incident = {
   id: string;
@@ -269,7 +269,7 @@ export default function IncidentsClient({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="badge bg-brand-50 text-brand-700">{incident.agent.reportedCarrier || incident.agent.carrier}</span>
+                      <span className="badge bg-brand-50 text-brand-700">{mobileSourceLabel(incident.agent.reportedCarrier, incident.agent.carrier)}</span>
                       <span className="font-semibold text-slate-800">{incident.link.name}</span>
                     </div>
                     <div className="mt-1 text-xs font-medium text-slate-500">เคส #{incident.id.slice(-8).toUpperCase()}</div>
@@ -549,13 +549,13 @@ function normalizeForComparison(value: string) {
 
 function MobileIncidentPanel({ incident, onClose }: { incident: MobileIncident; onClose: () => void }) {
   const dialogRef = useDialogFocus(onClose);
-  const carrier = incident.agent.reportedCarrier || incident.agent.carrier;
+  const carrier = mobileSourceLabel(incident.agent.reportedCarrier, incident.agent.carrier);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
       <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mobile-incident-title" className="card w-full max-w-xl p-6 max-h-[92vh] overflow-y-auto outline-none" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-xs font-semibold text-brand-700">📱 ตรวจจากซิม {carrier}</div>
+            <div className="text-xs font-semibold text-brand-700">📱 ตรวจจาก {carrier} · ซิมโดยตรง</div>
             <h3 id="mobile-incident-title" className="mt-1 text-lg font-semibold text-slate-800">{incident.link.name}</h3>
             <div className="text-xs text-slate-400">เคส #{incident.id.slice(-8).toUpperCase()}</div>
           </div>

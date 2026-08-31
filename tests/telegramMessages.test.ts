@@ -87,7 +87,7 @@ test("mobile carrier outage message identifies TRUE and the exact room", () => {
     detectedAt: new Date("2026-08-26T00:00:00Z"),
     appBaseUrl: "https://watch.example.com",
   });
-  assert.match(message.text, /TRUE เปิดลิงก์ไม่ได้/);
+  assert.match(message.text, /TRUE — ประเทศไทย เปิดลิงก์ไม่ได้/);
   assert.match(message.text, /Room A/);
   assert.match(message.text, /ยืนยันจากซิม 2 รอบ/);
   assert.match(message.text, /blockpage\.true\.example/);
@@ -167,7 +167,7 @@ test("daily mobile summary separates carrier, agent and open incident", () => {
     }],
   }).join("\n");
 
-  assert.match(lines, /TRUE-H.*เครื่องห้อง IT/);
+  assert.match(lines, /TRUE — ประเทศไทย.*เครื่องห้อง IT/);
   assert.match(lines, /ใช้ได้ 7 · ช้า 2 · ใช้ไม่ได้ 1 · เคสค้าง 1/);
   assert.match(lines, /#ABCDEFGH/);
   assert.match(lines, /Example Co.*Room A/);
