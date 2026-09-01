@@ -10,7 +10,7 @@ from docx.shared import Inches, Pt, RGBColor
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "public" / "downloads" / "DomainWatch-User-Manual-v2.1.docx"
+OUT = ROOT / "public" / "downloads" / "DomainWatch-User-Manual-v2.3.docx"
 ASSETS = ROOT / "public" / "help"
 FONT = "Kanit"
 NAVY = "172554"
@@ -281,7 +281,7 @@ def build():
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.runs[0].font.color.rgb = RGBColor.from_string(BLUE)
     p.runs[0].bold = True
-    p2 = doc.add_paragraph("ฉบับ 2.2 • 30 สิงหาคม 2569 • เอกสารสำหรับส่งมอบงาน")
+    p2 = doc.add_paragraph("ฉบับ 2.3 • 1 กันยายน 2569 • เอกสารสำหรับส่งมอบงาน")
     p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p2.runs[0].font.size = Pt(9.5)
     p2.runs[0].font.color.rgb = RGBColor.from_string(MUTED)
@@ -294,7 +294,7 @@ def build():
         "3. แดชบอร์ด — อ่านยอดสถานะและรายการที่ต้องดำเนินการ",
         "4. Master Data — เพิ่ม แก้ไข พักเฝ้าดู และจัดการลิงก์สำรอง",
         "5. เหตุการณ์ — แยกปัญหาระบบกลางกับปัญหาเครือข่ายซิม",
-        "6. เครื่องตรวจเครือข่าย — ดาวน์โหลด APK สร้าง QR และดูผลรายเครื่อง",
+        "6. เครื่องตรวจเครือข่าย — ติดตั้ง APK เปิด VPN กรุงเทพฯ สร้าง QR และดูผลรายเครื่อง",
         "7. รายงานรอบวัน / KPI / Telegram — ตรวจสอบและส่งมอบรายงาน",
         "8. วิธีแก้ปัญหาที่พบบ่อยและรายการตรวจรับงาน",
     ])
@@ -387,12 +387,31 @@ def build():
     doc.add_heading("ติดตั้งและผูกเครื่อง", level=2)
     add_bullets(doc, [
         "ใส่ซิม เปิด Mobile data และปิด Wi‑Fi ระหว่างตรวจรับครั้งแรก",
-        "ดาวน์โหลด APK จากหน้า เครื่องตรวจเครือข่าย และอนุญาตติดตั้งจากแหล่งนี้เมื่อ Android ถาม",
-        "แอดมินสร้างชื่อเครื่องและ QR ซึ่งใช้ครั้งเดียวภายใน 15 นาที",
-        "เปิดแอป DomainWatch Agent แล้วสแกน QR เพื่อผูกเครื่อง",
+        "แอดมินสร้างชื่อเครื่องและ QR ติดตั้งครบชุด ซึ่งใช้ครั้งเดียวภายใน 30 นาที",
+        "สแกน QR จากมือถือ หน้าเดียวมีทั้งดาวน์โหลด APK 1.0.6 และปุ่มเปิดแอปผูกเครื่อง",
+        "ติดตั้งเสร็จแล้วกลับหน้าเดิม กด ติดตั้งหรือเปิดแอป แล้วผูกเครื่อง ระบบกรอก URL, token, ชื่อเครื่อง, ค่าย และโหมดตรวจให้อัตโนมัติ",
         "กด อนุญาตให้ทำงานเบื้องหลัง และยกเว้นการประหยัดแบตเตอรี่",
         "กด เริ่มตรวจตลอดเวลา แล้วรอให้หน้าเว็บแสดง ออนไลน์ และมีผลรอบแรก",
     ], numbered=True)
+    doc.add_heading("แอป VPN ที่ใช้", level=2)
+    add_bullets(doc, [
+        "DomainWatch Agent เป็นแอปตรวจ URL ของระบบ ไม่ใช่แอป VPN",
+        "แนะนำ Surfshark VPN สำหรับขั้นตอนนี้ เพราะมีแอป Android และเลือก Thailand → Bangkok ได้",
+        "ดาวน์โหลดจาก Google Play: https://play.google.com/store/apps/details?id=com.surfshark.vpnclient.android",
+        "Surfshark เป็นบริการสมัครสมาชิก ต้องใช้บัญชี/แพ็กเกจของบริษัท DomainWatch ไม่ได้รวมค่าบริการ VPN",
+    ])
+    add_picture(doc, "vpn-mobile-flow.png", "Flow เปิด Surfshark VPN กรุงเทพก่อนเริ่ม DomainWatch Agent", width=6.55)
+    doc.add_heading("วิธีเปิด VPN กรุงเทพฯ", level=2)
+    add_bullets(doc, [
+        "ปิด Wi‑Fi และเปิด Mobile data ของซิม TRUE",
+        "เปิด Surfshark และเข้าสู่ระบบด้วยบัญชีของบริษัท",
+        "ค้นหา Thailand แล้วเลือก Bangkok จากนั้นกด Connect",
+        "อนุญาตคำขอสร้าง VPN ของ Android ครั้งแรก และรอจนขึ้น Connected/มีรูปกุญแจ",
+        "เปิด DomainWatch Agent กด เริ่มตรวจตลอดเวลา และรอประมาณ 5 นาที",
+        "ในหน้าเครื่องตรวจเลือก VPN ที่เปิดอยู่บนมือถือ แล้วตรวจเมือง/ภูมิภาค/ประเทศของ IP ทางออก",
+    ], numbered=True)
+    add_callout(doc, "ตำแหน่งที่ระบบแสดง", "เป็นตำแหน่งโดยประมาณของ Public IP เซิร์ฟเวอร์ VPN ไม่ใช่ GPS หรือที่ตั้งจริงของมือถือ ฐานข้อมูล IP อาจแสดงเพียง Bangkok/Thailand ไม่ถึงระดับสยาม", "EFF6FF", BLUE)
+    add_callout(doc, "เมื่อ VPN หลุด", "แอปจะไม่ใช้ผลจากซิมมาแทนในโหมด VPN ให้เชื่อม Surfshark ใหม่และรอรอบถัดไป ทั้ง Surfshark และ DomainWatch ต้องได้รับอนุญาตทำงานเบื้องหลัง", "FEF3C7", "92400E")
     add_callout(doc, "ปิดหน้าจอได้ไหม", "ปิดหน้าจอได้เมื่ออนุญาตการทำงานเบื้องหลังและยกเว้นการประหยัดแบตเตอรี่แล้ว หากระบบขึ้น ขาดการเชื่อมต่อ ให้เปิดแอป ตรวจ Mobile data และกดเริ่มตรวจตลอดเวลาอีกครั้ง", "FEF3C7", "92400E")
     doc.add_heading("ความหมายของยอดรายเครื่อง", level=2)
     add_bullets(doc, [
@@ -441,6 +460,7 @@ def build():
     troubleshooting = [
         ("ไม่เห็นเมนู", "ตรวจว่าเข้าสู่ระบบแล้ว บนมือถือแตะปุ่มเมนูมุมซ้ายบน และตรวจบทบาทผู้ใช้"),
         ("เครื่องขึ้นขาดการเชื่อมต่อ", "เปิดแอป ตรวจ Mobile data ยกเว้นประหยัดแบตเตอรี่ และกดเริ่มตรวจตลอดเวลา"),
+        ("VPN ไม่แสดงตำแหน่ง", "ตรวจว่า Surfshark ขึ้น Connected และเลือก Thailand/Bangkok, อัปเดต Agent เป็นรุ่น 1.0.6 ขึ้นไป แล้วรอผลรอบใหม่ประมาณ 5 นาที"),
         ("Unauthorized", "QR หมดอายุหรือเครื่องถูกย้าย ให้สร้าง QR ใหม่แล้วผูกอีกครั้ง"),
         ("Cleartext HTTP not permitted", "อัปเดต Agent เป็นรุ่นล่าสุด และตรวจว่า URL ใช้ https เมื่อเว็บไซต์รองรับ"),
         ("UnknownHostException", "ตรวจ DNS/โดเมนผ่านซิม หาก URL หลักถูกบล็อกให้ใส่ลิงก์สำรองที่ใช้งานได้"),

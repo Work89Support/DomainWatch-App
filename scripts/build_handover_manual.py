@@ -159,7 +159,7 @@ def make_transfer():
             d.polygon([(x+400,410),(x+370,392),(x+370,428)],fill="#94A3B8")
     rounded(d,(80,690,1520,790),20,"#FEF3C7")
     text(d,(110,724),"หมายเหตุ",22,"#92400E",True)
-    text(d,(275,724),"QR เป็นสิทธิ์ใช้ครั้งเดียว อายุ 15 นาที และจะยกเลิกสิทธิ์เครื่องเดิมอัตโนมัติเมื่อผูกเครื่องใหม่",22,"#78350F")
+    text(d,(275,724),"QR เป็นสิทธิ์ใช้ครั้งเดียว อายุ 30 นาที และจะยกเลิกสิทธิ์เครื่องเดิมอัตโนมัติเมื่อผูกเครื่องใหม่",22,"#78350F")
     p=ASSETS/"transfer.png"; im.save(p); return p
 
 
@@ -395,7 +395,7 @@ def build_doc():
         for i,v in enumerate(row): cells[i].text=v
     doc.add_paragraph()
     doc.add_heading("สิทธิ์ระบบ",1)
-    add_checklist(doc,["สร้าง/ย้าย/ปิด Mobile Agent: ADMIN เท่านั้น","QR ใช้ครั้งเดียว อายุ 15 นาที และเก็บเฉพาะ hash ฝั่ง server","token โทรศัพท์เก็บแบบเข้ารหัสด้วย Android Keystore","เปลี่ยนเครื่องแล้ว token เครื่องเดิมถูกยกเลิก","อย่าใส่ URL enrollment หรือ QR จริงในคู่มือ/แชตสาธารณะ"])
+    add_checklist(doc,["สร้าง/ย้าย/ปิด Mobile Agent: ADMIN เท่านั้น","QR ใช้ครั้งเดียว อายุ 30 นาที และเก็บเฉพาะ hash ฝั่ง server","token โทรศัพท์เก็บแบบเข้ารหัสด้วย Android Keystore","เปลี่ยนเครื่องแล้ว token เครื่องเดิมถูกยกเลิก","อย่าใส่ URL enrollment หรือ QR จริงในคู่มือ/แชตสาธารณะ"])
 
     add_page(doc,"Troubleshooting และเช็กลิสต์ส่งมอบ","ใช้หน้านี้เป็นใบตรวจรับก่อนปิดงาน")
     issues=[

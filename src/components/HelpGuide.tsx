@@ -56,8 +56,8 @@ export default function HelpGuide() {
               <span className="text-sm font-semibold sm:text-base">📘 คู่มือการใช้งาน DomainWatch</span>
               <span className="hidden text-xs font-light opacity-80 sm:inline">— โหมดอ่านเต็มจอ</span>
               <span className="flex-1" />
-              <a href="/downloads/DomainWatch-User-Manual-v2.1.pdf" target="_blank" rel="noreferrer" className="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold text-white hover:bg-white/30">PDF</a>
-              <a href="/downloads/DomainWatch-User-Manual-v2.1.docx" download className="hidden rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold text-white hover:bg-white/30 sm:inline-flex">Word</a>
+              <a href="/downloads/DomainWatch-User-Manual-v2.3.pdf" target="_blank" rel="noreferrer" className="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold text-white hover:bg-white/30">PDF</a>
+              <a href="/downloads/DomainWatch-User-Manual-v2.3.docx" download className="hidden rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold text-white hover:bg-white/30 sm:inline-flex">Word</a>
               <button onClick={() => setOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/20 text-xl text-white hover:bg-white/30" title="ปิดคู่มือ" aria-label="ปิดคู่มือ">×</button>
             </div>
             <iframe title="คู่มือการใช้งาน DomainWatch" srcDoc={MANUAL_HTML} className="min-h-0 w-full flex-1 border-0 bg-white" />
