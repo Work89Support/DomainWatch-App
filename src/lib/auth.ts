@@ -59,10 +59,11 @@ export type SessionUser = {
   username: string;
   role: AppRole;
   companyIds: string[];
+  mustChangePassword: boolean;
 };
 
-// อ่านผู้ใช้ปัจจุบันจาก cookie (server component / route handler)
-export async function getCurrentUser(): Promise<SessionUser | null> {
+// อ่าน session ที่ยืนยันตัวตนแล้ว แม้ผู้ใช้ยังต้องเปลี่ยนรหัสผ่านครั้งแรก
+export async function getSessionUser(): Promise<SessionUser | null> {
   const parsed = parseSessionToken(cookies().get(COOKIE_NAME)?.value);
   if (!parsed) return null;
   // หมดอายุแล้ว?
@@ -84,12 +85,20 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     username: user.username,
     role: user.role,
     companyIds: user.companyAssignments.map((item) => item.companyId),
+    mustChangePassword: user.mustChangePassword,
   };
+}
+
+// ผู้ใช้ที่ผ่านขั้นตอนเปลี่ยนรหัสแล้วเท่านั้นจึงเข้าหน้าระบบ/API เดิมได้
+export async function getCurrentUser(): Promise<SessionUser | null> {
+  const user = await getSessionUser();
+  return user && !user.mustChangePassword ? user : null;
 }
 
 // บังคับต้องล็อกอิน (ใช้ต้นหน้า server component) — ถ้าไม่ล็อกอินเด้งไป /login
 export async function requireUser(): Promise<SessionUser> {
-  const user = await getCurrentUser();
+  const user = await getSessionUser();
   if (!user) redirect("/login");
+  if (user.mustChangePassword) redirect("/change-password");
   return user;
 }

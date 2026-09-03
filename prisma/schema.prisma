@@ -11,18 +11,18 @@ datasource db {
 
 /// บริษัท/ลูกค้า — หนึ่งบริษัทมีได้หลายห้อง LINE และหลายลิงก์
 model Company {
-  id        String   @id @default(cuid())
-  name      String
-  note      String?
-  isActive  Boolean  @default(true)
+  id         String   @id @default(cuid())
+  name       String
+  note       String?
+  isActive   Boolean  @default(true)
   // แจ้งเตือน Telegram แยกต่อบริษัท (ถ้าไม่ตั้ง = ใช้กลุ่มกลางจาก env)
   tgBotToken String?
   tgChatId   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  lineGroups LineGroup[]
-  links      Link[]
+  lineGroups      LineGroup[]
+  links           Link[]
   userAssignments UserCompany[]
 
   @@index([isActive])
@@ -30,17 +30,17 @@ model Company {
 
 /// ห้อง LINE ภายใต้บริษัท (ที่มาของลิงก์)
 model LineGroup {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name      String // ชื่อห้อง เช่น "ห้องแอดมิน A"
   note      String?
-  isActive  Boolean  @default(true)
+  isActive  Boolean @default(true)
 
   // ---- ตรวจ LINE OA ด้วย Channel Access Token ----
   channelAccessToken String? // token ของ OA (ข้อมูลลับ)
   expectedOaName     String? // ชื่อ OA ที่คาดหวัง (ไว้เทียบว่าถูกเปลี่ยนไหม)
-  oaStatus           String   @default("UNKNOWN") // OK | MISMATCH | NO_PICTURE | TOKEN_INVALID | ERROR | UNKNOWN
+  oaStatus           String    @default("UNKNOWN") // OK | MISMATCH | NO_PICTURE | TOKEN_INVALID | ERROR | UNKNOWN
   oaDisplayName      String? // ชื่อจริงที่อ่านได้จาก LINE
   oaHasPicture       Boolean?
   oaLastCheckedAt    DateTime?
@@ -55,23 +55,23 @@ model LineGroup {
 
 /// Master data ของลิงก์/หน้าเว็บที่ต้องเฝ้าดู
 model Link {
-  id          String   @id @default(cuid())
+  id          String     @id @default(cuid())
   companyId   String // สังกัดบริษัท
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   lineGroupId String? // มาจากห้อง LINE ไหน (ถ้าระบุ)
   lineGroup   LineGroup? @relation(fields: [lineGroupId], references: [id], onDelete: SetNull)
 
-  name        String // ชื่อที่พนักงานเข้าใจง่าย เช่น "หน้าเข้าเล่นหลัก"
-  url         String // ลิงก์หลัก
-  category    String?  @default("ทั่วไป") // หมวดหมู่ เช่น หน้าหลัก / ทางเข้า / โปรโมชัน
-  backupUrl   String? // ลิงก์สำรอง (IT เตรียมไว้)
-  note        String? // หมายเหตุ
-  isActive    Boolean  @default(true) // เปิดการเฝ้าดูหรือไม่
+  name      String // ชื่อที่พนักงานเข้าใจง่าย เช่น "หน้าเข้าเล่นหลัก"
+  url       String // ลิงก์หลัก
+  category  String? @default("ทั่วไป") // หมวดหมู่ เช่น หน้าหลัก / ทางเข้า / โปรโมชัน
+  backupUrl String? // ลิงก์สำรอง (IT เตรียมไว้)
+  note      String? // หมายเหตุ
+  isActive  Boolean @default(true) // เปิดการเฝ้าดูหรือไม่
 
   // สถานะล่าสุดจากการเช็ค
-  lastStatus    LinkStatus @default(UNKNOWN)
-  lastCheckedAt DateTime?
-  lastHttpCode  Int?
+  lastStatus     LinkStatus @default(UNKNOWN)
+  lastCheckedAt  DateTime?
+  lastHttpCode   Int?
   lastResponseMs Int?
   failureStreak  Int        @default(0) // จำนวนรอบที่ตรวจไม่ผ่านติดต่อกัน
   recoveryStreak Int        @default(0) // จำนวนรอบที่ตอบเร็วปกติติดต่อกัน
@@ -79,8 +79,8 @@ model Link {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  checkLogs CheckLog[]
-  incidents Incident[]
+  checkLogs        CheckLog[]
+  incidents        Incident[]
   networkIncidents NetworkIncident[]
 
   @@index([companyId])
@@ -91,18 +91,18 @@ model Link {
 
 /// โทรศัพท์ตรวจเครือข่ายมือถือ — token เก็บเฉพาะ hash และผูกได้ทีละเครื่อง
 model MobileAgent {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   name            String
-  carrier         String   @default("TRUE")
-  isActive        Boolean  @default(true)
-  tokenHash       String?  @unique
-  deviceId        String?  @unique
+  carrier         String    @default("TRUE")
+  isActive        Boolean   @default(true)
+  tokenHash       String?   @unique
+  deviceId        String?   @unique
   deviceLabel     String?
   appVersion      String?
   networkType     String?
   reportedCarrier String?
   /// เส้นทางที่แอดมินกำหนด: CELLULAR_DIRECT หรือ VPN_DEFAULT
-  routeMode       String   @default("CELLULAR_DIRECT")
+  routeMode       String    @default("CELLULAR_DIRECT")
   /// เส้นทางที่แอปใช้จริงในรอบล่าสุด
   lastRouteMode   String?
   /// ตำแหน่งโดยประมาณของ Public IP ทางออกเท่านั้น — ไม่ใช่ GPS และไม่เก็บ IP
@@ -112,12 +112,12 @@ model MobileAgent {
   egressUpdatedAt DateTime?
   enrolledAt      DateTime?
   lastSeenAt      DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  enrollments     MobileEnrollment[]
-  urlStatuses     MobileUrlStatus[]
-  checkLogs       MobileCheckLog[]
+  enrollments      MobileEnrollment[]
+  urlStatuses      MobileUrlStatus[]
+  checkLogs        MobileCheckLog[]
   networkIncidents NetworkIncident[]
 
   @@index([isActive])
@@ -126,38 +126,38 @@ model MobileAgent {
 
 /// QR ผูกเครื่องแบบใช้ครั้งเดียว มีอายุสั้น และไม่เก็บรหัสจริง
 model MobileEnrollment {
-  id        String   @id @default(cuid())
+  id        String      @id @default(cuid())
   agentId   String
   agent     MobileAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  codeHash  String   @unique
+  codeHash  String      @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime    @default(now())
 
   @@index([agentId, expiresAt])
 }
 
 /// ผลล่าสุดต่อ URL ของแต่ละเครื่อง ใช้ยืนยัน 2 รอบก่อนแจ้งเตือน
 model MobileUrlStatus {
-  id             String     @id @default(cuid())
-  agentId        String
-  agent          MobileAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  urlHash        String
-  url            String
-  status         LinkStatus @default(UNKNOWN)
-  httpCode       Int?
-  responseMs     Int?
-  error          String?
-  finalUrl       String?
-  redirectCount Int        @default(0)
-  redirectType  String?
-  redirectChain Json?
-  pageTitle      String?
-  blockPageDetected Boolean @default(false)
-  failureStreak  Int        @default(0)
-  recoveryStreak Int        @default(0)
-  checkedAt      DateTime
-  updatedAt      DateTime   @updatedAt
+  id                String      @id @default(cuid())
+  agentId           String
+  agent             MobileAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  urlHash           String
+  url               String
+  status            LinkStatus  @default(UNKNOWN)
+  httpCode          Int?
+  responseMs        Int?
+  error             String?
+  finalUrl          String?
+  redirectCount     Int         @default(0)
+  redirectType      String?
+  redirectChain     Json?
+  pageTitle         String?
+  blockPageDetected Boolean     @default(false)
+  failureStreak     Int         @default(0)
+  recoveryStreak    Int         @default(0)
+  checkedAt         DateTime
+  updatedAt         DateTime    @updatedAt
 
   @@unique([agentId, urlHash])
   @@index([status, checkedAt])
@@ -165,23 +165,23 @@ model MobileUrlStatus {
 
 /// บันทึกเฉพาะตอนสถานะเปลี่ยน เพื่อลดขนาดฐานข้อมูล
 model MobileCheckLog {
-  id         String     @id @default(cuid())
-  agentId    String
-  agent      MobileAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  urlHash    String
-  url        String
-  status     LinkStatus
-  httpCode   Int?
-  responseMs Int?
-  error      String?
-  finalUrl   String?
-  redirectCount Int     @default(0)
-  redirectType String?
-  redirectChain Json?
-  pageTitle  String?
-  blockPageDetected Boolean @default(false)
-  checkedAt  DateTime
-  createdAt  DateTime   @default(now())
+  id                String      @id @default(cuid())
+  agentId           String
+  agent             MobileAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  urlHash           String
+  url               String
+  status            LinkStatus
+  httpCode          Int?
+  responseMs        Int?
+  error             String?
+  finalUrl          String?
+  redirectCount     Int         @default(0)
+  redirectType      String?
+  redirectChain     Json?
+  pageTitle         String?
+  blockPageDetected Boolean     @default(false)
+  checkedAt         DateTime
+  createdAt         DateTime    @default(now())
 
   @@index([agentId, checkedAt])
   @@index([urlHash, checkedAt])
@@ -189,29 +189,29 @@ model MobileCheckLog {
 
 /// เหตุการณ์ที่ตรวจพบจากเครือข่ายซิม แยกจากเคส cloud เพื่อไม่ทำให้ dashboard ล่มผิด
 model NetworkIncident {
-  id         String          @id @default(cuid())
-  agentId    String
-  agent      MobileAgent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  linkId     String
-  link       Link            @relation(fields: [linkId], references: [id], onDelete: Cascade)
-  status     IncidentStatus  @default(OPEN)
-  detectedAt DateTime        @default(now())
-  resolvedAt DateTime?
-  adminUpdatedAt DateTime?
-  adminResponseMin Int?
-  adminUserId String?
-  adminUser   User?           @relation("AdminNetworkIncidents", fields: [adminUserId], references: [id])
-  httpCode   Int?
-  responseMs Int?
-  error      String?
-  finalUrl   String?
-  redirectCount Int     @default(0)
-  redirectType String?
-  redirectChain Json?
-  pageTitle  String?
-  blockPageDetected Boolean @default(false)
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
+  id                String         @id @default(cuid())
+  agentId           String
+  agent             MobileAgent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  linkId            String
+  link              Link           @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  status            IncidentStatus @default(OPEN)
+  detectedAt        DateTime       @default(now())
+  resolvedAt        DateTime?
+  adminUpdatedAt    DateTime?
+  adminResponseMin  Int?
+  adminUserId       String?
+  adminUser         User?          @relation("AdminNetworkIncidents", fields: [adminUserId], references: [id])
+  httpCode          Int?
+  responseMs        Int?
+  error             String?
+  finalUrl          String?
+  redirectCount     Int            @default(0)
+  redirectType      String?
+  redirectChain     Json?
+  pageTitle         String?
+  blockPageDetected Boolean        @default(false)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
   @@index([agentId, status])
   @@index([linkId, detectedAt])
@@ -248,13 +248,13 @@ model Incident {
   status IncidentStatus @default(OPEN)
 
   // ---- Timeline หลัก (ใช้คำนวณ KPI) ----
-  detectedAt   DateTime  @default(now()) // บอทตรวจพบว่าล่ม + เริ่มใช้ไม่ได้ตอนไหน
-  notifiedAt   DateTime? // ส่งแจ้งเตือนสำเร็จ
-  adminAckAt   DateTime? // แอดมินรับทราบ (กดรับเรื่อง)
+  detectedAt     DateTime  @default(now()) // บอทตรวจพบว่าล่ม + เริ่มใช้ไม่ได้ตอนไหน
+  notifiedAt     DateTime? // ส่งแจ้งเตือนสำเร็จ
+  adminAckAt     DateTime? // แอดมินรับทราบ (กดรับเรื่อง)
   adminUpdatedAt DateTime? // แอดมินอัพเดต/บันทึกลิงก์ใหม่ในระบบ = จบหน้าที่แอดมิน
-  itAckAt      DateTime? // IT รับเรื่อง
-  itResolvedAt DateTime? // IT ชี้แจงสาเหตุ + ให้ลิงก์สำรองแล้ว
-  resolvedAt   DateTime? // ปิดเคส (ลิงก์กลับมาใช้ได้)
+  itAckAt        DateTime? // IT รับเรื่อง
+  itResolvedAt   DateTime? // IT ชี้แจงสาเหตุ + ให้ลิงก์สำรองแล้ว
+  resolvedAt     DateTime? // ปิดเคส (ลิงก์กลับมาใช้ได้)
 
   // ---- รายละเอียด ----
   cause       String? // สาเหตุที่ IT ชี้แจง เช่น โดนบล็อกโดเมน
@@ -286,21 +286,37 @@ enum IncidentStatus {
 
 /// ผู้ใช้ระบบ (แอดมิน/ไอที) — ใช้ล็อกอินและผูก KPI รายคน
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  username     String   @unique
-  passwordHash String
-  role         Role     @default(ADMIN)
-  isActive     Boolean  @default(true)
-  allowedIpRanges String? // IP/CIDR ที่อนุญาต คั่นด้วยบรรทัดว่าง = เข้าได้จากทุก IP
-  lastLoginIp  String?
-  lastLoginAt  DateTime?
-  createdAt    DateTime @default(now())
+  id                 String    @id @default(cuid())
+  name               String
+  username           String    @unique
+  email              String?   @unique
+  passwordHash       String
+  mustChangePassword Boolean   @default(false)
+  passwordChangedAt  DateTime?
+  role               Role      @default(ADMIN)
+  isActive           Boolean   @default(true)
+  allowedIpRanges    String? // IP/CIDR ที่อนุญาต คั่นด้วยบรรทัดว่าง = เข้าได้จากทุก IP
+  lastLoginIp        String?
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
 
-  adminIncidents Incident[] @relation("AdminIncidents")
-  itIncidents    Incident[] @relation("ITIncidents")
-  adminNetworkIncidents NetworkIncident[] @relation("AdminNetworkIncidents")
-  companyAssignments UserCompany[]
+  adminIncidents        Incident[]           @relation("AdminIncidents")
+  itIncidents           Incident[]           @relation("ITIncidents")
+  adminNetworkIncidents NetworkIncident[]    @relation("AdminNetworkIncidents")
+  companyAssignments    UserCompany[]
+  passwordResetTokens   PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, expiresAt])
 }
 
 enum Role {
@@ -318,8 +334,8 @@ model UserCompany {
   companyId  String
   assignedAt DateTime @default(now())
 
-  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@id([userId, companyId])
   @@index([companyId])

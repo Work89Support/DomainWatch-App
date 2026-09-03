@@ -18,9 +18,11 @@ export async function PATCH(
   const body = await req.json().catch(() => ({}));
   const data: Record<string, unknown> = {};
   if (body.password) {
-    if (String(body.password).length < 6)
-      return NextResponse.json({ error: "รหัสผ่านอย่างน้อย 6 ตัวอักษร" }, { status: 400 });
+    if (String(body.password).length < 10)
+      return NextResponse.json({ error: "รหัสผ่านอย่างน้อย 10 ตัวอักษร" }, { status: 400 });
     data.passwordHash = hashPassword(String(body.password));
+    data.mustChangePassword = true;
+    data.passwordChangedAt = null;
   }
   if ("isActive" in body) data.isActive = !!body.isActive;
   if ("role" in body) {
@@ -28,6 +30,14 @@ export async function PATCH(
     data.role = body.role;
   }
   if (body.name) data.name = String(body.name).trim();
+  if ("email" in body) {
+    const email = String(body.email || "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      return NextResponse.json({ error: "รูปแบบอีเมลไม่ถูกต้อง" }, { status: 400 });
+    const duplicate = await prisma.user.findFirst({ where: { email, id: { not: params.id } }, select: { id: true } });
+    if (duplicate) return NextResponse.json({ error: "อีเมลนี้ผูกกับบัญชีอื่นแล้ว" }, { status: 400 });
+    data.email = email;
+  }
   if ("allowedIpRanges" in body) {
     try { data.allowedIpRanges = normalizeAllowedIpRanges(body.allowedIpRanges); }
     catch (error) {
@@ -81,8 +91,13 @@ export async function PATCH(
   const user = await prisma.$transaction(async (tx) => {
     const updated = await tx.user.update({
       where: { id: params.id }, data,
-      select: { id: true, name: true, username: true, role: true, isActive: true, allowedIpRanges: true },
+      select: { id: true, name: true, username: true, email: true, role: true, isActive: true, allowedIpRanges: true, mustChangePassword: true },
     });
+    if (body.password) {
+      await tx.passwordResetToken.updateMany({
+        where: { userId: params.id, usedAt: null }, data: { usedAt: new Date() },
+      });
+    }
     if ("role" in body || "companyIds" in body) {
       await tx.userCompany.deleteMany({ where: { userId: params.id } });
     }

@@ -6,7 +6,8 @@ import { PageHeader } from "@/components/ui";
 import { canManageUserRole, ROLE_LABELS, ROLES, type AppRole } from "@/lib/permissions";
 
 type U = {
-  id: string; name: string; username: string; role: AppRole; isActive: boolean;
+  id: string; name: string; username: string; email: string | null; role: AppRole; isActive: boolean;
+  mustChangePassword: boolean;
   allowedIpRanges: string | null; lastLoginIp: string | null; lastLoginAt: string | null;
   companyAssignments: { companyId: string }[];
 };
@@ -14,14 +15,14 @@ type U = {
 export default function UsersClient({ initial, currentUserId, currentUserRole, currentIp }: { initial: U[]; currentUserId: string; currentUserRole: AppRole; currentIp: string | null }) {
   const router = useRouter();
   const availableRoles = ROLES.filter((role) => canManageUserRole(currentUserRole, role));
-  const [form, setForm] = useState<{ name: string; username: string; password: string; role: AppRole; allowedIpRanges: string }>({ name: "", username: "", password: "", role: "SITE_STAFF", allowedIpRanges: "" });
+  const [form, setForm] = useState<{ name: string; username: string; email: string; password: string; role: AppRole; allowedIpRanges: string }>({ name: "", username: "", email: "", password: "", role: "SITE_STAFF", allowedIpRanges: "" });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [editing, setEditing] = useState<U | null>(null);
-  const [accessForm, setAccessForm] = useState<{ role: AppRole; allowedIpRanges: string }>({ role: "IT", allowedIpRanges: "" });
+  const [accessForm, setAccessForm] = useState<{ email: string; role: AppRole; allowedIpRanges: string }>({ email: "", role: "IT", allowedIpRanges: "" });
 
   async function add() {
-    if (!form.name || !form.username || !form.password) return alert("กรอกให้ครบ");
+    if (!form.name || !form.username || !form.email || !form.password) return alert("กรอกชื่อ ชื่อผู้ใช้ อีเมล และรหัสชั่วคราวให้ครบ");
     setBusy(true);
     setMsg(null);
     const res = await fetch("/api/users", {
@@ -31,7 +32,7 @@ export default function UsersClient({ initial, currentUserId, currentUserRole, c
     });
     setBusy(false);
     if (res.ok) {
-      setForm({ name: "", username: "", password: "", role: "SITE_STAFF", allowedIpRanges: "" });
+      setForm({ name: "", username: "", email: "", password: "", role: "SITE_STAFF", allowedIpRanges: "" });
       router.refresh();
     } else {
       const e = await res.json();
@@ -40,14 +41,14 @@ export default function UsersClient({ initial, currentUserId, currentUserRole, c
   }
 
   async function resetPwd(u: U) {
-    const p = prompt(`ตั้งรหัสผ่านใหม่ให้ ${u.name} (อย่างน้อย 6 ตัว)`);
+    const p = prompt(`ตั้งรหัสผ่านชั่วคราวใหม่ให้ ${u.name} (อย่างน้อย 10 ตัว)\nผู้ใช้จะต้องเปลี่ยนรหัสเมื่อเข้าสู่ระบบครั้งถัดไป`);
     if (!p) return;
     const res = await fetch(`/api/users/${u.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password: p }),
     });
-    if (res.ok) alert("เปลี่ยนรหัสแล้ว");
+    if (res.ok) { alert("ตั้งรหัสชั่วคราวแล้ว ผู้ใช้ต้องเปลี่ยนเมื่อเข้าสู่ระบบครั้งถัดไป"); router.refresh(); }
     else alert("ไม่สำเร็จ");
   }
 
@@ -63,7 +64,7 @@ export default function UsersClient({ initial, currentUserId, currentUserRole, c
   function openAccess(u: U) {
     if (!canManageUserRole(currentUserRole, u.role)) return;
     setEditing(u);
-    setAccessForm({ role: u.role, allowedIpRanges: u.allowedIpRanges || "" });
+    setAccessForm({ email: u.email || "", role: u.role, allowedIpRanges: u.allowedIpRanges || "" });
   }
 
   async function saveAccess() {
@@ -87,10 +88,11 @@ export default function UsersClient({ initial, currentUserId, currentUserRole, c
       <div className="card p-5 mb-6">
         <div className="text-sm font-semibold text-slate-700 mb-3">เพิ่มผู้ใช้ใหม่</div>
         {msg && <div className="mb-3 text-sm text-red-600">{msg}</div>}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <input className="input" placeholder="ชื่อ-นามสกุล" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <input className="input" placeholder="username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
-          <input className="input" type="password" placeholder="รหัสผ่าน" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+          <input className="input" type="email" placeholder="อีเมลสำหรับรีเซ็ตรหัส" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <input className="input" type="password" placeholder="รหัสชั่วคราว (อย่างน้อย 10 ตัว)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
           <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as AppRole })}>
             {availableRoles.map((role) => <option key={role} value={role}>{ROLE_LABELS[role]}</option>)}
           </select>
@@ -98,6 +100,7 @@ export default function UsersClient({ initial, currentUserId, currentUserRole, c
             {busy ? "กำลังเพิ่ม..." : "+ เพิ่ม"}
           </button>
         </div>
+        <div className="mt-2 text-xs text-amber-600">บัญชีใหม่ต้องเปลี่ยนรหัสชั่วคราวเมื่อเข้าสู่ระบบครั้งแรก · การลืมรหัสจะส่งลิงก์ไปยังอีเมลนี้เท่านั้น</div>
         <div className="mt-3">
           <label className="label">จำกัด IP สำหรับเข้าใช้ (ไม่กรอก = เข้าได้จากทุก IP)</label>
           <textarea
@@ -125,7 +128,10 @@ export default function UsersClient({ initial, currentUserId, currentUserRole, c
             {initial.map((u) => (
               <tr key={u.id} className="border-t border-slate-50">
                 <td className="py-3 px-4 font-medium text-slate-700">{u.name}</td>
-                <td className="py-3 px-4 text-slate-500">@{u.username}</td>
+                <td className="py-3 px-4 text-slate-500">
+                  <div>@{u.username}</div>
+                  <div className="text-[11px] text-slate-400">{u.email || "ยังไม่ผูกอีเมล"}</div>
+                </td>
                 <td className="py-3 px-4">
                   <span className={`badge ${u.role === "ADMIN" ? "bg-brand-50 text-brand-700" : "bg-amber-50 text-amber-700"}`}>
                     {ROLE_LABELS[u.role]}
@@ -136,6 +142,7 @@ export default function UsersClient({ initial, currentUserId, currentUserRole, c
                   <span className={`badge ${u.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
                     {u.isActive ? "ใช้งาน" : "ปิด"}
                   </span>
+                  {u.mustChangePassword && <div className="mt-1"><span className="badge bg-amber-50 text-amber-700">รอเปลี่ยนรหัสครั้งแรก</span></div>}
                   <div className="mt-1 text-[11px] text-slate-400">
                     {u.allowedIpRanges ? `🔒 ${u.allowedIpRanges.split(/\s+/).filter(Boolean).length} IP/วง` : "🌐 ทุก IP"}
                     {u.lastLoginIp ? ` · ล่าสุด ${u.lastLoginIp}` : ""}
@@ -157,6 +164,8 @@ export default function UsersClient({ initial, currentUserId, currentUserRole, c
           <div className="card w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-slate-800">กำหนดสิทธิ์ — {editing.name}</h3>
             <p className="text-xs text-slate-400 mt-1 mb-4">กำหนดบทบาทสำหรับทุกบริษัท และ IP ที่อนุญาตให้เข้าใช้</p>
+            <label className="label">อีเมลสำหรับลืมรหัสผ่าน</label>
+            <input className="input mb-4" type="email" value={accessForm.email} onChange={(e) => setAccessForm({ ...accessForm, email: e.target.value })} />
             <label className="label">บทบาท</label>
             <select
               className="input"

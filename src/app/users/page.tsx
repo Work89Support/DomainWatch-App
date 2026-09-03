@@ -15,7 +15,8 @@ export default async function UsersPage() {
     where: me.role === "ADMIN" ? {} : { role: { not: "ADMIN" } },
     orderBy: { createdAt: "asc" },
     select: {
-      id: true, name: true, username: true, role: true, isActive: true,
+      id: true, name: true, username: true, email: true, role: true, isActive: true,
+      mustChangePassword: true,
       allowedIpRanges: true, lastLoginIp: true, lastLoginAt: true,
       companyAssignments: { select: { companyId: true } },
     },

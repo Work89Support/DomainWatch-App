@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 export default function LoginClient() {
+  const searchParams = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -39,6 +42,7 @@ export default function LoginClient() {
             <div className="text-xs text-slate-400">เข้าสู่ระบบ</div>
           </div>
         </div>
+        {searchParams.get("reset") === "1" && <div className="mb-3 rounded-lg bg-emerald-50 text-emerald-700 text-sm px-3 py-2">ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว กรุณาเข้าสู่ระบบ</div>}
         {err && <div className="mb-3 rounded-lg bg-red-50 text-red-600 text-sm px-3 py-2">{err}</div>}
         <label className="label">ชื่อผู้ใช้</label>
         <input className="input mb-3" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
@@ -47,6 +51,9 @@ export default function LoginClient() {
         <button className="btn-primary w-full disabled:opacity-60" disabled={busy}>
           {busy ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
         </button>
+        <div className="mt-4 text-center">
+          <Link href="/forgot-password" className="text-sm text-brand-600 hover:underline">ลืมรหัสผ่าน?</Link>
+        </div>
       </form>
     </div>
   );
