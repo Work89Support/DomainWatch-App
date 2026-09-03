@@ -1,9 +1,13 @@
-export const ROLES = ["ADMIN", "ADMIN_LEAD", "ADMIN_COMPANY", "IT", "MANAGEMENT", "SITE_STAFF"] as const;
-export type AppRole = (typeof ROLES)[number];
+// บทบาทที่เปิดให้เลือกใช้งานในระบบปัจจุบัน
+export const ROLES = ["ADMIN", "ADMIN_LEAD", "IT", "MANAGEMENT", "SITE_STAFF"] as const;
+type ActiveAppRole = (typeof ROLES)[number];
+
+// คงค่าเดิมไว้เฉพาะเพื่อให้บัญชีเก่าเข้าใช้ได้จนกว่าจะถูกย้ายบทบาท
+export type AppRole = ActiveAppRole | "ADMIN_COMPANY";
 
 export const ROLE_LABELS: Record<AppRole, string> = {
-  ADMIN: "แอดมินดูแลระบบ",
-  ADMIN_LEAD: "หัวหน้าแอดมิน",
+  ADMIN: "หัวหน้าแอดมิน",
+  ADMIN_LEAD: "ผู้ช่วยหัวหน้าแอดมิน",
   ADMIN_COMPANY: "ผู้ช่วยหัวหน้าแอดมิน",
   IT: "ไอที",
   MANAGEMENT: "Management",
@@ -11,7 +15,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
 };
 
 export function isAppRole(value: unknown): value is AppRole {
-  return typeof value === "string" && ROLES.includes(value as AppRole);
+  return typeof value === "string" && ROLES.includes(value as ActiveAppRole);
 }
 
 export function isCompanyScoped(role: AppRole): boolean {
@@ -19,11 +23,11 @@ export function isCompanyScoped(role: AppRole): boolean {
 }
 
 export function canManageUsers(role: AppRole): boolean {
-  return role === "ADMIN" || role === "ADMIN_LEAD";
+  return role === "ADMIN";
 }
 
 export function canManageUserRole(actorRole: AppRole, targetRole: AppRole): boolean {
-  return actorRole === "ADMIN" || (actorRole === "ADMIN_LEAD" && targetRole !== "ADMIN");
+  return actorRole === "ADMIN";
 }
 
 export function canManageCompanies(role: AppRole): boolean {

@@ -16,7 +16,7 @@ const baseNav = [
 
 const allowedByRole: Record<AppRole, string[]> = {
   ADMIN: ["/", "/companies", "/links", "/incidents", "/report", "/kpi", "/agents", "/users"],
-  ADMIN_LEAD: ["/", "/links", "/incidents", "/kpi", "/users"],
+  ADMIN_LEAD: ["/", "/links", "/incidents", "/kpi"],
   ADMIN_COMPANY: ["/", "/links", "/incidents", "/kpi"],
   IT: ["/", "/links", "/incidents"],
   MANAGEMENT: ["/", "/incidents", "/report", "/kpi"],

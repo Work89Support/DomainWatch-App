@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "รูปแบบอีเมลไม่ถูกต้อง" }, { status: 400 });
   if (!isAppRole(role)) return NextResponse.json({ error: "บทบาทไม่ถูกต้อง" }, { status: 400 });
   if (!canManageUserRole(me.role, role))
-    return NextResponse.json({ error: "เฉพาะแอดมินดูแลระบบเท่านั้นที่สร้างบัญชีระดับแอดมินดูแลระบบได้" }, { status: 403 });
+    return NextResponse.json({ error: "เฉพาะหัวหน้าแอดมินเท่านั้นที่สร้างหรือกำหนดบทบาทผู้ใช้ได้" }, { status: 403 });
   const exists = await prisma.user.findFirst({ where: { OR: [
     { username: String(username).trim() }, { email: normalizedEmail },
   ] } });

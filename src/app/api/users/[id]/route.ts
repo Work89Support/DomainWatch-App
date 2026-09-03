@@ -52,10 +52,10 @@ export async function PATCH(
   });
   if (!target) return NextResponse.json({ error: "ไม่พบผู้ใช้" }, { status: 404 });
 
-  // หัวหน้าแอดมินจัดการผู้ใช้ทั่วไปได้ แต่แตะบัญชี/มอบบทบาทแอดมินดูแลระบบไม่ได้
+  // มีเพียงหัวหน้าแอดมินเท่านั้นที่จัดการบัญชีและบทบาทผู้ใช้ได้
   if (!canManageUserRole(me.role, target.role) || (body.role && !canManageUserRole(me.role, body.role))) {
     return NextResponse.json(
-      { error: "เฉพาะแอดมินดูแลระบบเท่านั้นที่จัดการบัญชีแอดมินดูแลระบบได้" },
+      { error: "เฉพาะหัวหน้าแอดมินเท่านั้นที่จัดการบัญชีและบทบาทผู้ใช้ได้" },
       { status: 403 }
     );
   }

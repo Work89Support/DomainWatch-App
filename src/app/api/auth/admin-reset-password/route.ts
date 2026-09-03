@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   const admin = await getCurrentUser();
   if (!admin || admin.role !== "ADMIN")
-    return NextResponse.json({ error: "เฉพาะแอดมินดูแลระบบเท่านั้น" }, { status: 403 });
+    return NextResponse.json({ error: "เฉพาะหัวหน้าแอดมินเท่านั้น" }, { status: 403 });
 
   const { token } = await req.json().catch(() => ({}));
   if (typeof token !== "string" || !token)

@@ -322,6 +322,7 @@ model PasswordResetToken {
 enum Role {
   ADMIN
   ADMIN_LEAD
+  // Legacy only: retained for existing rows; no longer selectable in the UI/API.
   ADMIN_COMPANY
   IT
   MANAGEMENT

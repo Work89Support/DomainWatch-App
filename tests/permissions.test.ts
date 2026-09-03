@@ -17,6 +17,7 @@ import {
   canRunCheck,
   canViewKpi,
   canViewReport,
+  isAppRole,
 } from "../src/lib/permissions";
 
 test("ADMIN has unrestricted management access", () => {
@@ -29,13 +30,13 @@ test("ADMIN has unrestricted management access", () => {
   assert.equal(canRunCheck("ADMIN"), true);
 });
 
-test("ADMIN_LEAD manages users, links and incidents for every company", () => {
+test("ADMIN_LEAD is the assistant admin and cannot manage users", () => {
   assert.equal(canEditLinks("ADMIN_LEAD"), true);
   assert.equal(canEditBackup("ADMIN_LEAD"), true);
   assert.equal(canActAsAdmin("ADMIN_LEAD"), true);
   assert.equal(canViewKpi("ADMIN_LEAD"), true);
-  assert.equal(canManageUsers("ADMIN_LEAD"), true);
-  assert.equal(canManageUserRole("ADMIN_LEAD", "IT"), true);
+  assert.equal(canManageUsers("ADMIN_LEAD"), false);
+  assert.equal(canManageUserRole("ADMIN_LEAD", "IT"), false);
   assert.equal(canManageUserRole("ADMIN_LEAD", "ADMIN"), false);
   assert.equal(canManageCompanies("ADMIN_LEAD"), false);
   assert.equal(canManageMobileAgents("ADMIN_LEAD"), false);
@@ -43,7 +44,7 @@ test("ADMIN_LEAD manages users, links and incidents for every company", () => {
   assert.equal(canAccessCompany("ADMIN_LEAD", [], "company-b"), true);
 });
 
-test("ADMIN_COMPANY is the assistant admin role with all-company scope", () => {
+test("legacy ADMIN_COMPANY keeps assistant access but is not assignable", () => {
   assert.equal(canEditLinks("ADMIN_COMPANY"), true);
   assert.equal(canCreateLinks("ADMIN_COMPANY"), true);
   assert.equal(canEditBackup("ADMIN_COMPANY"), true);
@@ -53,6 +54,7 @@ test("ADMIN_COMPANY is the assistant admin role with all-company scope", () => {
   assert.equal(canManageMobileAgents("ADMIN_COMPANY"), false);
   assert.equal(canAccessCompany("ADMIN_COMPANY", ["company-a"], "company-a"), true);
   assert.equal(canAccessCompany("ADMIN_COMPANY", ["company-a"], "company-b"), true);
+  assert.equal(isAppRole("ADMIN_COMPANY"), false);
 });
 
 test("IT can only perform IT incident work and edit backup links", () => {
