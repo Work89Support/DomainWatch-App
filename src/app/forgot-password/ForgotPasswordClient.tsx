@@ -20,7 +20,7 @@ export default function ForgotPasswordClient() {
   return <div className="min-h-screen flex items-center justify-center bg-brand-800 p-4">
     <form onSubmit={submit} className="card w-full max-w-md p-8">
       <div className="text-xl font-semibold text-slate-800">ลืมรหัสผ่าน</div>
-      <p className="mt-1 mb-6 text-sm text-slate-500">กรอกอีเมลที่ผูกกับบัญชี ระบบจะส่งลิงก์ที่ใช้ได้ครั้งเดียวและหมดอายุใน 30 นาที</p>
+      <p className="mt-1 mb-6 text-sm text-slate-500">กรอกอีเมลที่ผูกกับบัญชี ระบบจะส่งคำขอไปยังแอดมินเพื่อสร้างรหัสผ่านชั่วคราว</p>
       {message && <div className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</div>}
       <label className="label">อีเมล</label>
       <input className="input mb-5" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
