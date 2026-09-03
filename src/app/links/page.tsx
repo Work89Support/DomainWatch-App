@@ -15,11 +15,9 @@ export default async function LinksPage({
   const me = await requireUser();
   if (!canViewLinks(me.role)) redirect("/");
   const requestedCompany = searchParams.company || undefined;
-  const currentCompany = me.role === "ADMIN_COMPANY"
-    ? (requestedCompany && me.companyIds.includes(requestedCompany) ? requestedCompany : undefined)
-    : requestedCompany;
+  const currentCompany = requestedCompany;
   const focusId = searchParams.edit || undefined;
-  const companyScope = me.role === "ADMIN_COMPANY" ? { companyId: { in: me.companyIds } } : {};
+  const companyScope = {};
   // โหลดลิงก์ทั้งหมด แล้วค่อยกรอง/ฟิลเตอร์ฝั่งหน้าเว็บ (ลื่นกว่า)
   const [links, companies, mobileAgents] = await Promise.all([
     prisma.link.findMany({
@@ -44,7 +42,7 @@ export default async function LinksPage({
       },
     }),
     prisma.company.findMany({
-      where: me.role === "ADMIN_COMPANY" ? { id: { in: me.companyIds } } : {},
+      where: {},
       orderBy: { createdAt: "asc" },
       select: {
         id: true,

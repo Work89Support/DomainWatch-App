@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const companyId = url.searchParams.get("companyId") || undefined;
   if (companyId && !canAccessCompany(me.role, me.companyIds, companyId)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const groups = await prisma.lineGroup.findMany({
-    where: me.role === "ADMIN_COMPANY" ? { companyId: companyId || { in: me.companyIds } } : (companyId ? { companyId } : {}),
+    where: companyId ? { companyId } : {},
     orderBy: { createdAt: "asc" },
     select: {
       id: true,

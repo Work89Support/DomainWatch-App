@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const companyId = url.searchParams.get("companyId") || undefined;
   if (companyId && !canAccessCompany(me.role, me.companyIds, companyId))
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  const companyScope = me.role === "ADMIN_COMPANY" ? (companyId || { in: me.companyIds }) : companyId;
+  const companyScope = companyId;
   const where: Prisma.IncidentWhereInput = {
     ...(status === "open" ? { status: { notIn: ["CLOSED", "PAUSED"] } } : {}),
     ...(companyScope ? { link: { companyId: companyScope } } : {}),

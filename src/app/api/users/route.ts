@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
-import { isAppRole } from "@/lib/permissions";
+import { canManageUserRole, canManageUsers, isAppRole } from "@/lib/permissions";
 import { normalizeAllowedIpRanges } from "@/lib/ipAccess";
 
 export const dynamic = "force-dynamic";
@@ -9,9 +9,10 @@ export const dynamic = "force-dynamic";
 // GET /api/users — รายชื่อผู้ใช้ (แอดมินเท่านั้น)
 export async function GET() {
   const me = await getCurrentUser();
-  if (!me || me.role !== "ADMIN")
+  if (!me || !canManageUsers(me.role))
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const users = await prisma.user.findMany({
+    where: me.role === "ADMIN" ? {} : { role: { not: "ADMIN" } },
     orderBy: { createdAt: "asc" },
     select: {
       id: true, name: true, username: true, role: true, isActive: true, createdAt: true,
@@ -25,9 +26,9 @@ export async function GET() {
 // POST /api/users — เพิ่มผู้ใช้ (แอดมินเท่านั้น)
 export async function POST(req: NextRequest) {
   const me = await getCurrentUser();
-  if (!me || me.role !== "ADMIN")
+  if (!me || !canManageUsers(me.role))
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  const { name, username, password, role, companyIds, allowedIpRanges } = await req.json().catch(() => ({}));
+  const { name, username, password, role, allowedIpRanges } = await req.json().catch(() => ({}));
   if (!name || !username || !password) {
     return NextResponse.json({ error: "กรอกชื่อ, ชื่อผู้ใช้ และรหัสผ่าน" }, { status: 400 });
   }
@@ -35,16 +36,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "รหัสผ่านอย่างน้อย 6 ตัวอักษร" }, { status: 400 });
   }
   if (!isAppRole(role)) return NextResponse.json({ error: "บทบาทไม่ถูกต้อง" }, { status: 400 });
-  const assignedCompanyIds: string[] = Array.isArray(companyIds)
-    ? [...new Set<string>(companyIds.map((value: unknown) => String(value)))]
-    : [];
-  if (role === "ADMIN_COMPANY" && assignedCompanyIds.length === 0)
-    return NextResponse.json({ error: "แอดมินบริษัทต้องถูกมอบหมายอย่างน้อย 1 บริษัท" }, { status: 400 });
-  if (role === "ADMIN_COMPANY") {
-    const validCompanies = await prisma.company.count({ where: { id: { in: assignedCompanyIds } } });
-    if (validCompanies !== assignedCompanyIds.length)
-      return NextResponse.json({ error: "พบบริษัทที่เลือกไม่ถูกต้อง" }, { status: 400 });
-  }
+  if (!canManageUserRole(me.role, role))
+    return NextResponse.json({ error: "เฉพาะแอดมินดูแลระบบเท่านั้นที่สร้างบัญชีระดับแอดมินดูแลระบบได้" }, { status: 403 });
   const exists = await prisma.user.findUnique({ where: { username: String(username).trim() } });
   if (exists) {
     return NextResponse.json({ error: "ชื่อผู้ใช้นี้มีอยู่แล้ว" }, { status: 400 });
@@ -61,9 +54,6 @@ export async function POST(req: NextRequest) {
       passwordHash: hashPassword(String(password)),
       role,
       allowedIpRanges: normalizedIpRanges,
-      companyAssignments: role === "ADMIN_COMPANY"
-        ? { create: assignedCompanyIds.map((companyId) => ({ companyId })) }
-        : undefined,
     },
     select: { id: true, name: true, username: true, role: true, isActive: true, allowedIpRanges: true },
   });

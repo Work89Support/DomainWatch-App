@@ -9,7 +9,10 @@ import {
   canEditLinks,
   canManageCompanies,
   canManageUsers,
+  canManageUserRole,
   canManageMobileAgents,
+  canViewIncidents,
+  canViewLinks,
   canViewMobileAgents,
   canRunCheck,
   canViewKpi,
@@ -26,23 +29,30 @@ test("ADMIN has unrestricted management access", () => {
   assert.equal(canRunCheck("ADMIN"), true);
 });
 
-test("ADMIN_LEAD manages links and incidents but not users or companies", () => {
+test("ADMIN_LEAD manages users, links and incidents for every company", () => {
   assert.equal(canEditLinks("ADMIN_LEAD"), true);
+  assert.equal(canEditBackup("ADMIN_LEAD"), true);
   assert.equal(canActAsAdmin("ADMIN_LEAD"), true);
   assert.equal(canViewKpi("ADMIN_LEAD"), true);
-  assert.equal(canManageUsers("ADMIN_LEAD"), false);
+  assert.equal(canManageUsers("ADMIN_LEAD"), true);
+  assert.equal(canManageUserRole("ADMIN_LEAD", "IT"), true);
+  assert.equal(canManageUserRole("ADMIN_LEAD", "ADMIN"), false);
   assert.equal(canManageCompanies("ADMIN_LEAD"), false);
   assert.equal(canManageMobileAgents("ADMIN_LEAD"), false);
   assert.equal(canViewReport("ADMIN_LEAD"), false);
+  assert.equal(canAccessCompany("ADMIN_LEAD", [], "company-b"), true);
 });
 
-test("ADMIN_COMPANY is limited to assigned companies and has no KPI", () => {
+test("ADMIN_COMPANY is the assistant admin role with all-company scope", () => {
   assert.equal(canEditLinks("ADMIN_COMPANY"), true);
+  assert.equal(canCreateLinks("ADMIN_COMPANY"), true);
+  assert.equal(canEditBackup("ADMIN_COMPANY"), true);
   assert.equal(canActAsAdmin("ADMIN_COMPANY"), true);
-  assert.equal(canViewKpi("ADMIN_COMPANY"), false);
+  assert.equal(canViewKpi("ADMIN_COMPANY"), true);
+  assert.equal(canManageUsers("ADMIN_COMPANY"), false);
   assert.equal(canManageMobileAgents("ADMIN_COMPANY"), false);
   assert.equal(canAccessCompany("ADMIN_COMPANY", ["company-a"], "company-a"), true);
-  assert.equal(canAccessCompany("ADMIN_COMPANY", ["company-a"], "company-b"), false);
+  assert.equal(canAccessCompany("ADMIN_COMPANY", ["company-a"], "company-b"), true);
 });
 
 test("IT can only perform IT incident work and edit backup links", () => {
@@ -57,6 +67,8 @@ test("IT can only perform IT incident work and edit backup links", () => {
 test("MANAGEMENT is read-only for dashboard, report and KPI", () => {
   assert.equal(canViewReport("MANAGEMENT"), true);
   assert.equal(canViewKpi("MANAGEMENT"), true);
+  assert.equal(canViewLinks("MANAGEMENT"), true);
+  assert.equal(canViewIncidents("MANAGEMENT"), true);
   assert.equal(canEditLinks("MANAGEMENT"), false);
   assert.equal(canEditBackup("MANAGEMENT"), false);
   assert.equal(canActAsAdmin("MANAGEMENT"), false);

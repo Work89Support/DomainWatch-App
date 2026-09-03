@@ -15,12 +15,8 @@ export default async function IncidentsPage({
   const me = await requireUser();
   if (!canViewIncidents(me.role)) redirect("/");
   const requestedCompany = searchParams.company || undefined;
-  const companyId = me.role === "ADMIN_COMPANY"
-    ? (requestedCompany && me.companyIds.includes(requestedCompany) ? requestedCompany : undefined)
-    : requestedCompany;
-  const companyWhere = me.role === "ADMIN_COMPANY"
-    ? (companyId ? { companyId } : { companyId: { in: me.companyIds } })
-    : (companyId ? { companyId } : {});
+  const companyId = requestedCompany;
+  const companyWhere = companyId ? { companyId } : {};
   const include = { link: { include: { company: true, lineGroup: true } } } as const;
   const pageSize = 100;
   const page = Math.max(1, Number.parseInt(searchParams.page || "1", 10) || 1);
@@ -59,7 +55,7 @@ export default async function IncidentsPage({
         })
       : Promise.resolve(null),
     prisma.company.findMany({
-      where: me.role === "ADMIN_COMPANY" ? { id: { in: me.companyIds } } : {},
+      where: {},
       orderBy: { createdAt: "asc" },
       select: {
         id: true,

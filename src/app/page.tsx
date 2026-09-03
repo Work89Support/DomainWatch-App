@@ -22,10 +22,8 @@ export default async function DashboardPage({
   const me = await requireUser();
   if (me.role === "SITE_STAFF") redirect("/agents");
   const requestedCompany = searchParams.company || undefined;
-  const companyId = me.role === "ADMIN_COMPANY"
-    ? (requestedCompany && me.companyIds.includes(requestedCompany) ? requestedCompany : undefined)
-    : requestedCompany;
-  const allowedCompanyIds = me.role === "ADMIN_COMPANY" ? me.companyIds : undefined;
+  const companyId = requestedCompany;
+  const allowedCompanyIds = undefined;
   const [d, companies, companyTelegramRoutes] = await Promise.all([
     getDashboardData(companyId, allowedCompanyIds),
     prisma.company.findMany({

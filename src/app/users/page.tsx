@@ -3,14 +3,16 @@ import { requireUser } from "@/lib/auth";
 import { headers } from "next/headers";
 import { getClientIp } from "@/lib/ipAccess";
 import { redirect } from "next/navigation";
+import { canManageUsers } from "@/lib/permissions";
 import UsersClient from "./UsersClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function UsersPage() {
   const me = await requireUser();
-  if (me.role !== "ADMIN") redirect("/");
+  if (!canManageUsers(me.role)) redirect("/");
   const users = await prisma.user.findMany({
+    where: me.role === "ADMIN" ? {} : { role: { not: "ADMIN" } },
     orderBy: { createdAt: "asc" },
     select: {
       id: true, name: true, username: true, role: true, isActive: true,
@@ -18,13 +20,10 @@ export default async function UsersPage() {
       companyAssignments: { select: { companyId: true } },
     },
   });
-  const companies = await prisma.company.findMany({
-    where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true },
-  });
   return <UsersClient
     initial={JSON.parse(JSON.stringify(users))}
-    companies={companies}
     currentUserId={me.id}
+    currentUserRole={me.role}
     currentIp={getClientIp(headers())}
   />;
 }

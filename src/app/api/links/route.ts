@@ -14,9 +14,7 @@ export async function GET(req: NextRequest) {
   const companyId = url.searchParams.get("companyId") || undefined;
   if (companyId && !canAccessCompany(me.role, me.companyIds, companyId))
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  const where = me.role === "ADMIN_COMPANY"
-    ? { companyId: companyId || { in: me.companyIds } }
-    : (companyId ? { companyId } : {});
+  const where = companyId ? { companyId } : {};
   const links = await prisma.link.findMany({
     where,
     orderBy: { createdAt: "desc" },

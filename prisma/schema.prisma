@@ -312,7 +312,7 @@ enum Role {
   SITE_STAFF
 }
 
-/// บริษัทที่มอบหมายให้ ADMIN_COMPANY — บทบาทอื่นไม่ใช้ขอบเขตนี้
+/// ข้อมูลมอบหมายบริษัทเดิม (เก็บไว้เพื่อรองรับข้อมูลเก่า; บทบาทปัจจุบันเห็นทุกบริษัท)
 model UserCompany {
   userId     String
   companyId  String

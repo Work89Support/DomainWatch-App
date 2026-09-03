@@ -11,7 +11,7 @@ export async function GET() {
   if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!canViewLinks(me.role) && !canManageCompanies(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const companies = await prisma.company.findMany({
-    where: me.role === "ADMIN_COMPANY" ? { id: { in: me.companyIds } } : {},
+    where: {},
     orderBy: { createdAt: "asc" },
     select: {
       id: true,
