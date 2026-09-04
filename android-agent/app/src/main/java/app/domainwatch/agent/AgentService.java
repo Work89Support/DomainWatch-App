@@ -180,7 +180,9 @@ public class AgentService extends Service {
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(NOTIFICATION_ID, notification(text));
     }
 
-    private void broadcastUpdate() { sendBroadcast(new Intent(MainActivity.ACTION_STATUS)); }
+    private void broadcastUpdate() {
+        sendBroadcast(new Intent(MainActivity.ACTION_STATUS).setPackage(getPackageName()));
+    }
     @Override public void onDestroy() { prefs.setServiceRunning(false); super.onDestroy(); }
     @Override public IBinder onBind(Intent intent) { return null; }
 }

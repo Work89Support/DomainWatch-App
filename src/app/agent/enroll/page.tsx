@@ -20,7 +20,7 @@ export default async function AgentEnrollPage({ searchParams }: { searchParams: 
     : host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https";
   const base = resolvePublicBaseUrl(host ? `${protocol}://${host}` : undefined);
   const appUrl = `domainwatch-agent://enroll?base=${encodeURIComponent(base)}&code=${encodeURIComponent(code)}`;
-  const apkUrl = `${base}/downloads/DomainWatch-Agent-v1.0.6.apk`;
+  const apkUrl = `${base}/downloads/DomainWatch-Agent-v1.0.7.apk`;
   const intentUrl = `intent://enroll?base=${encodeURIComponent(base)}&code=${encodeURIComponent(code)}#Intent;scheme=domainwatch-agent;package=app.domainwatch.agent;S.browser_fallback_url=${encodeURIComponent(apkUrl)};end`;
 
   return (
@@ -37,7 +37,7 @@ export default async function AgentEnrollPage({ searchParams }: { searchParams: 
             <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-left text-sm text-slate-600">
               <div className="font-semibold text-slate-700">ทำตาม 3 ขั้นตอนบนมือถือเครื่องนี้</div>
               <ol className="mt-2 list-decimal space-y-2 pl-5 text-xs leading-5">
-                <li>กดปุ่มสีน้ำเงินด้านล่าง หากยังไม่มีแอป ระบบจะดาวน์โหลด APK 1.0.6 ให้</li>
+                <li>กดปุ่มสีน้ำเงินด้านล่าง หากยังไม่มีแอป ระบบจะดาวน์โหลด APK 1.0.7 ให้</li>
                 <li>กดยืนยันติดตั้งจาก Android แล้วกลับมาหน้านี้</li>
                 <li>กดปุ่มเดิมอีกครั้ง แอปจะรับชื่อเครื่อง เครือข่าย และค่าระบบให้อัตโนมัติ</li>
               </ol>

@@ -260,8 +260,8 @@ export default function AgentsClient({
       />
 
       <div className="card mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border-brand-100 bg-brand-50/40">
-        <div><div className="font-semibold text-slate-700">1) ติดตั้งแอปบนโทรศัพท์ก่อน</div><div className="mt-1 text-xs text-slate-500">รองรับ Android 8 ขึ้นไป · รุ่น 1.0.6 · เลือกตรวจผ่านซิมหรือ VPN ได้ และไม่ใช้ GPS</div></div>
-        <a className="btn-primary whitespace-nowrap" href="/downloads/DomainWatch-Agent-v1.0.6.apk" download>⬇️ ดาวน์โหลด APK</a>
+        <div><div className="font-semibold text-slate-700">1) ติดตั้งแอปบนโทรศัพท์ก่อน</div><div className="mt-1 text-xs text-slate-500">รองรับ Android 8 ขึ้นไป · รุ่น 1.0.7 · มีปุ่มตั้งค่าเครื่องและเริ่มตรวจในครั้งเดียว</div></div>
+        <a className="btn-primary whitespace-nowrap" href="/downloads/DomainWatch-Agent-v1.0.7.apk" download>⬇️ ดาวน์โหลด APK</a>
       </div>
 
       {canManage && <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
