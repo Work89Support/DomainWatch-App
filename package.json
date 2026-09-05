@@ -6,7 +6,7 @@
   "scripts": {
     "go": "bash start.sh",
     "dev": "next dev",
-    "build": "prisma generate && prisma db push --skip-generate --accept-data-loss && next build",
+    "build": "prisma generate && prisma db push --skip-generate && tsx scripts/backfill-case-history.ts && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "node --import tsx --test tests/*.test.ts",

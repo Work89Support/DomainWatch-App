@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canAccessCompany, canDeleteLinks, canEditBackup, canEditLinks } from "@/lib/permissions";
 import type { Prisma } from "@prisma/client";
+import { caseActivity } from "@/lib/caseActivity";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export async function PATCH(
 ) {
   const me = await getCurrentUser();
   if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const existing = await prisma.link.findUnique({ where: { id: params.id }, select: { companyId: true, isActive: true } });
+  const existing = await prisma.link.findUnique({ where: { id: params.id }, include: { company: true } });
   if (!existing) return NextResponse.json({ error: "ไม่พบลิงก์" }, { status: 404 });
   if (!canAccessCompany(me.role, me.companyIds, existing.companyId))
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -63,6 +64,14 @@ export async function PATCH(
   }
 
   try {
+    const [systemCases, mobileCases] = await Promise.all([
+      prisma.incident.findMany({ where: { linkId: params.id, status: { notIn: ["CLOSED", "PAUSED"] } }, select: { id: true } }),
+      prisma.networkIncident.findMany({ where: { linkId: params.id, status: { notIn: ["CLOSED", "PAUSED"] } }, select: { id: true } }),
+    ]);
+    const audit = [
+      ...systemCases.map(i => caseActivity("SYSTEM", i.id, existing, isPausing ? "PAUSED" : "MASTER_UPDATED", isPausing ? "พักการเฝ้าดูจาก Master Data" : "ปรับข้อมูล Master Data", me, { before: { url: existing.url, backupUrl: existing.backupUrl }, after: JSON.parse(JSON.stringify(data)) })),
+      ...mobileCases.map(i => caseActivity("MOBILE", i.id, existing, isPausing ? "PAUSED" : "MASTER_UPDATED", isPausing ? "พักการเฝ้าดูจาก Master Data" : "ปรับข้อมูล Master Data", me, { before: { url: existing.url, backupUrl: existing.backupUrl }, after: JSON.parse(JSON.stringify(data)) })),
+    ];
     const updateLink = prisma.link.update({
       where: { id: params.id },
       data: data as unknown as Prisma.LinkUpdateInput,
@@ -70,6 +79,7 @@ export async function PATCH(
     const link = isPausing
       ? (await prisma.$transaction([
           updateLink,
+          ...audit,
           prisma.incident.updateMany({
             where: { linkId: params.id, status: { notIn: ["CLOSED", "PAUSED"] } },
             data: { status: "PAUSED" },
@@ -79,7 +89,7 @@ export async function PATCH(
             data: { status: "PAUSED" },
           }),
         ]))[0]
-      : await updateLink;
+      : (await prisma.$transaction([updateLink, ...audit]))[0];
     return NextResponse.json(link);
   } catch (e) {
     return NextResponse.json(

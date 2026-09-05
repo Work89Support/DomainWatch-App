@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { caseActivity } from "@/lib/caseActivity";
+import { randomUUID } from "crypto";
 import {
   sendTelegram,
   sendTelegramTo,
@@ -407,9 +409,10 @@ export async function runCheck(): Promise<CheckSummary> {
     const now = checkedAt;
 
     if (state.shouldOpenIncident) {
-      const incident = await prisma.incident.create({
-        data: { linkId: link.id, detectedAt: now, status: "OPEN" },
-      });
+      const caseId = randomUUID();
+      const [incident] = await prisma.$transaction([prisma.incident.create({
+        data: { id: caseId, linkId: link.id, detectedAt: now, status: "OPEN" },
+      }), caseActivity("SYSTEM", caseId, link, "OPEN", "ตรวจพบปัญหาและเปิดเคส", undefined, { detectedAt: now.toISOString(), error: result.error ?? null })]);
       summary.newIncidents++;
 
       const msg = downAlertMessage({
@@ -441,10 +444,11 @@ export async function runCheck(): Promise<CheckSummary> {
           1,
           Math.round((now.getTime() - newestOpen.detectedAt.getTime()) / 60000)
         );
-        await prisma.incident.updateMany({
+        await prisma.$transaction([prisma.incident.updateMany({
           where: { id: { in: openIncidents.map((incident) => incident.id) } },
           data: { status: "CLOSED", resolvedAt: now },
-        });
+        }), ...openIncidents.map(item => caseActivity("SYSTEM", item.id, link, "CLOSED", "ตัวตรวจยืนยันกลับมาใช้งานได้", undefined,
+          { checkedAt: now.toISOString(), httpCode: result.httpCode ?? null }))]);
         summary.recovered += openIncidents.length;
         // Incident ของลิงก์ถูกเปิดหลังยืนยัน DOWN หลายรอบแล้ว จึงต้องมีข้อความปิดวงจรเสมอ
         // ยกเว้น timeout เก่าที่เคยถูกตีความผิดเป็น DOWN ก่อนกติกาใหม่ เพื่อไม่ให้สแปม recovery เท็จ

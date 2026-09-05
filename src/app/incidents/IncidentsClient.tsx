@@ -5,9 +5,13 @@ import { useRouter } from "next/navigation";
 import { PageHeader, IncidentStatusBadge } from "@/components/ui";
 import { fmtDateTime, fmtMinutes } from "@/lib/format";
 import CompanyFilter from "@/components/CompanyFilter";
+import CaseWorkflow from "@/components/CaseWorkflow";
 import { mobileIncidentStatusText, mobileSourceLabel } from "@/lib/statusPresentation";
 
 type Incident = {
+  adminAckUserName?: string | null;
+  itAckUserName?: string | null;
+  adminUser?: { name: string } | null;
   id: string;
   status: string;
   detectedAt: string;
@@ -40,6 +44,9 @@ type Incident = {
 type Company = { id: string; name: string; lineGroups: Array<{ id: string; name: string }> };
 
 type MobileIncident = {
+  adminAckUserName?: string | null;
+  adminAckAt?: string | null;
+  adminUser?: { name: string } | null;
   id: string;
   status: string;
   detectedAt: string;
@@ -255,6 +262,8 @@ export default function IncidentsClient({
         }
       />
 
+      <div className="mb-5 rounded-xl bg-brand-50 p-4 text-sm text-brand-800">ตรวจพบ → รับเคส → แก้ไข / ส่งต่อ → ตรวจยืนยัน → ปิดเคส · เวลา KPI เริ่มจากตรวจพบ <a href="/case-history" className="ml-3 font-semibold underline">ค้นประวัติการดำเนินการย้อนหลัง →</a></div>
+
       {showMobile && mobileList.length > 0 && (
         <div className="mb-6">
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -295,6 +304,7 @@ export default function IncidentsClient({
                   <MobileIncidentStatusBadge incident={incident} />
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="w-full"><CaseWorkflow id={incident.id} source="MOBILE" status={incident.status} detectedAt={incident.detectedAt} ackAt={incident.adminAckAt} owner={incident.adminAckUserName || (incident.adminAckAt ? incident.adminUser?.name : null)} resolvedAt={incident.resolvedAt} canAct={canAdmin} /></div>
                   {canAdmin && <button className="btn-primary text-xs py-1.5" onClick={() => beginMobileEdit(incident)}>✏️ แก้ลิงก์ตรงนี้</button>}
                   {canAdmin && incident.status === "OPEN" && (
                     <button
@@ -352,6 +362,7 @@ export default function IncidentsClient({
             </div>
 
             {/* Timeline KPI */}
+            <CaseWorkflow id={i.id} source="SYSTEM" status={i.status} detectedAt={i.detectedAt} ackAt={canIt && !canAdmin ? i.itAckAt : i.adminAckAt} owner={canIt && !canAdmin ? i.itAckUserName : i.adminAckUserName || (i.adminAckAt ? i.adminUser?.name : null)} resolvedAt={i.resolvedAt} canAct={canAdmin || canIt} />
             {showKpi && <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
               <KpiPill label="แอดมินอัพเดต" value={fmtMinutes(i.adminResponseMin)} done={!!i.adminUpdatedAt} />
               <KpiPill label="ไอทีชี้แจง/สำรอง" value={fmtMinutes(i.itResponseMin)} done={!!i.itResolvedAt} />
@@ -622,13 +633,15 @@ function IncidentPanel({
   const [newUrl, setNewUrl] = useState(incident.newUrl || "");
   const [cause, setCause] = useState(incident.cause || "");
   const [backupUrl, setBackupUrl] = useState(incident.backupUrl || "");
+  const [closeNote, setCloseNote] = useState("");
 
   async function act(action: string, extra: Record<string, unknown> = {}) {
     setBusy(true);
-    const res = await fetch(`/api/incidents/${incident.id}`, {
-      method: "PATCH",
+    const isAck = action === "admin_ack" || action === "it_ack";
+    const res = await fetch(isAck ? `/api/cases/SYSTEM/${incident.id}` : `/api/incidents/${incident.id}`, {
+      method: isAck ? "POST" : "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, ...extra }),
+      body: JSON.stringify({ action: isAck ? "ACK" : action, ...extra }),
     });
     setBusy(false);
     if (res.ok) onDone();
@@ -663,18 +676,18 @@ function IncidentPanel({
             uncertain={!incident.notifiedAt}
           />
           <TimelineRow label="แอดมินรับเรื่อง" time={incident.adminAckAt} />
-          <TimelineRow label="แอดมินอัพเดตลิงก์ (จบหน้าที่แอดมิน)" time={incident.adminUpdatedAt} />
+          <TimelineRow label="แอดมินบันทึกการแก้ไข" time={incident.adminUpdatedAt} />
           <TimelineRow label="ไอทีรับเรื่อง" time={incident.itAckAt} />
           <TimelineRow label="ไอทีชี้แจงสาเหตุ + ลิงก์สำรอง" time={incident.itResolvedAt} />
           <TimelineRow label="ปิดเคส (กลับมาใช้ได้)" time={incident.resolvedAt} />
         </div>
 
         {/* ส่วนแอดมิน */}
-        {canAdmin && <div className="border border-slate-100 rounded-xl p-4 mb-3">
+        {canAdmin && isOpenIncidentStatus(incident.status) && <div className="border border-slate-100 rounded-xl p-4 mb-3">
           <div className="text-sm font-semibold text-slate-700 mb-2">👤 ส่วนของแอดมิน</div>
           {!incident.adminAckAt && (
             <button className="btn-ghost text-xs mb-3" disabled={busy} onClick={() => act("admin_ack")}>
-              รับเรื่อง (เริ่มจับ KPI)
+              รับเรื่อง (KPI นับตั้งแต่ตรวจพบ)
             </button>
           )}
           <label className="label">เปลี่ยนเป็นลิงก์ใหม่ (จะอัพเดตใน Master data ให้บอทอ่านใหม่)</label>
@@ -689,11 +702,11 @@ function IncidentPanel({
         </div>}
 
         {/* ส่วนไอที */}
-        {canIt && <div className="border border-slate-100 rounded-xl p-4 mb-3">
+        {canIt && isOpenIncidentStatus(incident.status) && <div className="border border-slate-100 rounded-xl p-4 mb-3">
           <div className="text-sm font-semibold text-slate-700 mb-2">🛠️ ส่วนของไอที</div>
           {!incident.itAckAt && (
             <button className="btn-ghost text-xs mb-3" disabled={busy} onClick={() => act("it_ack")}>
-              รับเรื่อง (เริ่มจับ KPI)
+              รับเรื่อง (KPI นับตั้งแต่ตรวจพบ)
             </button>
           )}
           <label className="label">สาเหตุ</label>
@@ -709,10 +722,11 @@ function IncidentPanel({
           </button>
         </div>}
 
+        {canAdmin && isOpenIncidentStatus(incident.status) && <label className="label">เหตุผลปิดเคส<textarea className="input" maxLength={2000} value={closeNote} onChange={e => setCloseNote(e.target.value)} placeholder="แก้ไขอะไร และตรวจหน้าใช้งานใดแล้ว" /></label>}
         <div className="flex justify-between gap-2 mt-4">
           {canAdmin && isOpenIncidentStatus(incident.status) ? (
-            <button className="btn-danger text-xs" disabled={busy} onClick={() => act("close")}>
-              ปิดเคส (ลิงก์กลับมาใช้ได้)
+            <button className="btn-danger text-xs" disabled={busy || !closeNote.trim()} onClick={() => act("close", { note: closeNote })}>
+              ตรวจซ้ำและปิดเคส
             </button>
           ) : <span />}
           <button className="btn-ghost text-xs" onClick={onClose}>ปิดหน้าต่าง</button>

@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { caseActivity } from "@/lib/caseActivity";
 import type { LinkStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
@@ -337,8 +338,10 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
           where: { agentId, linkId: link.id, status: { notIn: ["CLOSED", "PAUSED"] } },
         });
         if (existing) continue;
-        const incident = await prisma.networkIncident.create({
+        const caseId = crypto.randomUUID();
+        const [incident] = await prisma.$transaction([prisma.networkIncident.create({
           data: {
+            id: caseId,
             agentId,
             linkId: link.id,
             detectedAt: result.checkedAt,
@@ -352,7 +355,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
             pageTitle: result.pageTitle ?? null,
             blockPageDetected: redirectType === "NETWORK_BLOCK",
           },
-        });
+        }), caseActivity("MOBILE", caseId, link, "OPEN", "ซิมยืนยันปัญหาและเปิดเคส", undefined, { detectedAt: result.checkedAt.toISOString(), agentName: agent.name, error: normalizedError ?? null })]);
         await notifyCompany(routes, link.company.id, networkDownMessage({
           incidentId: incident.id,
           carrier: agent.carrier,
@@ -381,10 +384,11 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
           },
         });
         for (const incident of incidents) {
-          await prisma.networkIncident.update({
+          await prisma.$transaction([prisma.networkIncident.update({
             where: { id: incident.id },
             data: { status: "CLOSED", resolvedAt: result.checkedAt },
-          });
+          }), caseActivity("MOBILE", incident.id, link, "CLOSED", "เครื่องซิมยืนยันการกลับมาใช้งานได้", undefined,
+            { checkedAt: result.checkedAt.toISOString(), url: link.url, httpCode: result.httpCode ?? null })]);
           const downMinutes = Math.max(0, Math.round((result.checkedAt.getTime() - incident.detectedAt.getTime()) / 60_000));
           // เคส timeout เดิมเป็น false positive: ปิดสถานะ แต่ไม่ยิงข้อความ
           // "กลับมาแล้ว" หลายสิบรายการไปรบกวนกลุ่ม Telegram
@@ -420,8 +424,10 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
           where: { agentId, linkId: link.id, status: { notIn: ["CLOSED", "PAUSED"] } },
         });
         if (existing) continue;
-        const incident = await prisma.networkIncident.create({
+        const caseId = crypto.randomUUID();
+        const [incident] = await prisma.$transaction([prisma.networkIncident.create({
           data: {
+            id: caseId,
             agentId,
             linkId: link.id,
             detectedAt: result.checkedAt,
@@ -435,7 +441,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
             pageTitle: result.pageTitle ?? null,
             blockPageDetected: redirectType === "NETWORK_BLOCK",
           },
-        });
+        }), caseActivity("MOBILE", caseId, link, "OPEN", "ลิงก์หลักและสำรองใช้ไม่ได้", undefined, { detectedAt: result.checkedAt.toISOString(), agentName: agent.name, backupUrl: link.backupUrl })]);
         await notifyCompany(routes, link.company.id, networkDownMessage({
           incidentId: incident.id,
           carrier: agent.carrier,
@@ -458,7 +464,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
         where: { agentId, linkId: link.id, status: { notIn: ["CLOSED", "PAUSED"] } },
       });
       for (const incident of incidents) {
-        await prisma.networkIncident.update({
+        await prisma.$transaction([prisma.networkIncident.update({
           where: { id: incident.id },
           data: {
             status: "CLOSED",
@@ -466,7 +472,8 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
             finalUrl: link.backupUrl,
             redirectType: "BACKUP_USED",
           },
-        });
+        }), caseActivity("MOBILE", incident.id, link, "CLOSED", "ยืนยันว่าใช้บริการผ่านลิงก์สำรองได้", undefined,
+          { checkedAt: result.checkedAt.toISOString(), primaryUrl: link.url, backupUrl: link.backupUrl, httpCode: result.httpCode ?? null })]);
         const downMinutes = Math.max(0, Math.round((result.checkedAt.getTime() - incident.detectedAt.getTime()) / 60_000));
         await notifyCompany(routes, link.company.id, networkRecoveredMessage({
           incidentId: incident.id,

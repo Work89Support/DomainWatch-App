@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { caseActivity, isCaseClosed } from "@/lib/caseActivity";
 import { minutesBetween } from "@/lib/format";
 import { getCurrentUser } from "@/lib/auth";
 import { classifyProbeStatus, probe } from "@/lib/checker";
@@ -31,7 +32,7 @@ export async function PATCH(
   const action = body.action as string;
   const incident = await prisma.incident.findUnique({
     where: { id: params.id },
-    include: { link: true },
+    include: { link: { include: { company: true } } },
   });
   if (!incident) {
     return NextResponse.json({ error: "ไม่พบเหตุการณ์" }, { status: 404 });
@@ -39,17 +40,15 @@ export async function PATCH(
   if (!canAccessCompany(me.role, me.companyIds, incident.link.companyId))
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
+  if (isCaseClosed(incident.status)) return NextResponse.json({ error: "เคสปิดหรือพักแล้ว ไม่สามารถแก้ประวัติเดิมได้" }, { status: 409 });
+  if (action === "admin_ack" || action === "it_ack") return NextResponse.json({ error: "กรุณาใช้ปุ่มรับเรื่องรุ่นล่าสุดและรีเฟรชหน้าจอ" }, { status: 409 });
   const now = new Date();
-  const baseTime = incident.notifiedAt || incident.detectedAt;
+  const baseTime = incident.detectedAt;
   const data: Record<string, unknown> = {};
+  const operations: Prisma.PrismaPromise<unknown>[] = [];
+  let proof: Prisma.InputJsonValue = {};
 
   switch (action) {
-    case "admin_ack":
-      if (!canActAsAdmin(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
-      data.adminAckAt = incident.adminAckAt || now;
-      data.adminUserId = me.id;
-      break;
-
     case "admin_update": {
       if (!canActAsAdmin(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
       const newUrl = normalizeReplacementUrl(body.newUrl);
@@ -71,9 +70,9 @@ export async function PATCH(
       data.resolvedAt = new Date();
       data.adminResponseMin = minutesBetween(baseTime, now);
       data.adminUserId = me.id;
-      if (!incident.adminAckAt) data.adminAckAt = now;
       data.newUrl = newUrl;
-      await applyVerifiedLink(incident.linkId, newUrl, verification);
+      operations.push(...applyVerifiedLink(incident.linkId, newUrl, verification));
+      proof = { url: newUrl, httpCode: verification.httpCode, checkedAt: new Date().toISOString() };
       break;
     }
 
@@ -105,51 +104,58 @@ export async function PATCH(
       data.adminResponseMin = minutesBetween(baseTime, now);
       data.adminUserId = me.id;
       data.newUrl = backupUrl;
-      if (!incident.adminAckAt) data.adminAckAt = now;
-      await applyVerifiedLink(incident.linkId, backupUrl, verification);
+      operations.push(...applyVerifiedLink(incident.linkId, backupUrl, verification));
+      proof = { url: backupUrl, httpCode: verification.httpCode, checkedAt: new Date().toISOString() };
       break;
     }
-
-    case "it_ack":
-      if (!canActAsIt(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
-      data.itAckAt = incident.itAckAt || now;
-      data.itUserId = me.id;
-      break;
 
     case "it_resolve": {
       if (!canActAsIt(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
       data.itResolvedAt = now;
       data.itResponseMin = minutesBetween(baseTime, now);
       data.itUserId = me.id;
-      if (!incident.itAckAt) data.itAckAt = now;
       if (incident.status === "OPEN") data.status = "IT_RESOLVED";
       if (body.cause) data.cause = String(body.cause).trim();
       if (body.backupUrl) data.backupUrl = String(body.backupUrl).trim();
       if (body.backupUrl) {
-        await prisma.link.update({
+        operations.push(prisma.link.update({
           where: { id: incident.linkId },
           data: { backupUrl: String(body.backupUrl).trim() },
-        });
+        }));
       }
       break;
     }
 
-    case "close":
+    case "close": {
       if (!canActAsAdmin(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+      if (typeof body.note !== "string" || !body.note.trim() || body.note.length > 2000) return NextResponse.json({ error: "กรุณาระบุเหตุผลปิดเคส (ไม่เกิน 2,000 ตัวอักษร)" }, { status: 400 });
+      const result = await verifyReplacementLink(incident.link.url);
+      if (!result.ok) return NextResponse.json({ error: "ยังปิดเคสไม่ได้: ตรวจลิงก์ปัจจุบันไม่ผ่าน" }, { status: 422 });
       data.status = "CLOSED";
-      data.resolvedAt = incident.resolvedAt || now;
+      data.resolvedAt = new Date();
+      proof = { url: incident.link.url, httpCode: result.httpCode, checkedAt: new Date().toISOString() };
       break;
+    }
 
     default:
       return NextResponse.json({ error: "action ไม่ถูกต้อง" }, { status: 400 });
   }
 
-  const updated = await prisma.incident.update({
-    where: { id: params.id },
+  try {
+  const [updated] = await prisma.$transaction([prisma.incident.update({
+    where: { id: params.id, status: incident.status, updatedAt: incident.updatedAt },
     data: data as unknown as Prisma.IncidentUpdateInput,
-    include: { link: { include: { company: true } }, adminUser: true, itUser: true },
-  });
+    include: { link: { include: { company: true } }, adminUser: { select: { id: true, name: true } }, itUser: { select: { id: true, name: true } } },
+  }), caseActivity("SYSTEM", incident.id, incident.link, action,
+    typeof body.note === "string" ? body.note.trim() : action === "admin_update" || action === "admin_use_backup" ? "ตรวจลิงก์ผ่านและบันทึกการแก้ไข" : "บันทึกการดำเนินการ", me,
+    { before: { status: incident.status, url: incident.link.url, backupUrl: incident.link.backupUrl }, after: JSON.parse(JSON.stringify(data)), verification: proof }), ...operations]);
   return NextResponse.json(updated);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2025") {
+      return NextResponse.json({ error: "เคสนี้มีการเปลี่ยนแปลงแล้ว กรุณารีเฟรชและตรวจสอบก่อนดำเนินการอีกครั้ง" }, { status: 409 });
+    }
+    throw error;
+  }
 }
 
 async function verifyReplacementLink(url: string) {
@@ -160,13 +166,13 @@ async function verifyReplacementLink(url: string) {
   };
 }
 
-async function applyVerifiedLink(
+function applyVerifiedLink(
   linkId: string,
   url: string,
   verification: Awaited<ReturnType<typeof verifyReplacementLink>>
 ) {
   const checkedAt = new Date();
-  await prisma.$transaction([
+  return [
     prisma.link.update({
       where: { id: linkId },
       data: {
@@ -188,5 +194,5 @@ async function applyVerifiedLink(
         error: verification.error,
       },
     }),
-  ]);
+  ];
 }

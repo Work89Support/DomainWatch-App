@@ -7,6 +7,7 @@ import { canAccessCompany, canActAsAdmin } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { normalizeReplacementUrl } from "@/lib/replacementLink";
 import { minutesBetween } from "@/lib/format";
+import { caseActivity, isCaseClosed } from "@/lib/caseActivity";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export async function PATCH(
 
   const incident = await prisma.networkIncident.findUnique({
     where: { id: params.id },
-    include: { link: true },
+    include: { link: { include: { company: true } } },
   });
   if (!incident) return NextResponse.json({ error: "ไม่พบเหตุการณ์จากซิม" }, { status: 404 });
   if (!canAccessCompany(me.role, me.companyIds, incident.link.companyId)) {
@@ -29,13 +30,11 @@ export async function PATCH(
   }
 
   const body = await req.json().catch(() => ({}));
+  if (isCaseClosed(incident.status)) return NextResponse.json({ error: "เคสปิดหรือพักแล้ว กรุณาแก้ข้อมูลปัจจุบันที่ Master Data" }, { status: 409 });
   if (body.action === "mark_updated") {
-    if (incident.status === "CLOSED") {
-      return NextResponse.json({ error: "เคสนี้ปิดเรียบร้อยแล้ว" }, { status: 409 });
-    }
     const markedAt = new Date();
-    const updated = await prisma.networkIncident.update({
-      where: { id: incident.id },
+    const [updated] = await prisma.$transaction([prisma.networkIncident.update({
+      where: { id: incident.id, updatedAt: incident.updatedAt, status: incident.status },
       data: {
         status: "ADMIN_UPDATED",
         resolvedAt: null,
@@ -43,7 +42,7 @@ export async function PATCH(
         adminResponseMin: minutesBetween(incident.detectedAt, markedAt),
         adminUserId: me.id,
       },
-    });
+    }), caseActivity("MOBILE", incident.id, incident.link, "mark_updated", "ปรับแก้แล้ว รอผลยืนยันจากเครื่องซิม", me)]);
     return NextResponse.json({ ok: true, incidentStatus: updated.status });
   }
   if (body.action !== "admin_update") {
@@ -91,12 +90,12 @@ export async function PATCH(
   };
   const nextIncidentStatus = linkData.isActive === false ? "PAUSED" : "ADMIN_UPDATED";
   const affectedIncidents = await prisma.networkIncident.findMany({
-    where: { linkId: incident.linkId, status: { not: "CLOSED" } },
-    select: { id: true, detectedAt: true },
+    where: { linkId: incident.linkId, status: { notIn: ["CLOSED", "PAUSED"] } },
+    select: { id: true, detectedAt: true, updatedAt: true },
   });
-  const markAffectedIncidents = () => affectedIncidents.map((item) =>
+  const markAffectedIncidents = () => affectedIncidents.flatMap((item) => [
     prisma.networkIncident.update({
-      where: { id: item.id },
+      where: { id: item.id, updatedAt: item.updatedAt, status: { notIn: ["CLOSED", "PAUSED"] } },
       data: {
         status: nextIncidentStatus,
         resolvedAt: null,
@@ -104,7 +103,8 @@ export async function PATCH(
         adminResponseMin: minutesBetween(item.detectedAt, checkedAt),
         adminUserId: me.id,
       },
-    })
+    }), caseActivity("MOBILE", item.id, incident.link, nextIncidentStatus === "PAUSED" ? "PAUSED" : "admin_update", nextIncidentStatus === "PAUSED" ? "พักการเฝ้าดู เก็บประวัติ ไม่ใช่การแก้สำเร็จ" : "แก้ไขข้อมูล รอยืนยันจากซิม", me,
+      { before: { url: oldUrl, backupUrl: incident.link.backupUrl }, after: JSON.parse(JSON.stringify(linkData)) })]
   );
   if (result) {
     Object.assign(linkData, {

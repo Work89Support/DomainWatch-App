@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { elapsedMinutes } from "@/lib/caseActivity";
 
 export type UserStat = {
   userId: string;
@@ -37,6 +38,7 @@ export type TrendPoint = {
 };
 
 export type UserKpiData = {
+  lifecycle: { received: number; missingAck: number; avgAck: number | null; avgResolution: number | null; paused: number };
   users: UserStat[];
   userOptions: { id: string; name: string; role: string }[];
   log: IncidentLogRow[];
@@ -84,23 +86,12 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
     ? []
     : allNetworkIncidents.filter((i) => inPeriod(i.detectedAt));
 
-  // เคสซิมรุ่นเดิมยังไม่มี adminUserId ในฐานข้อมูล หากระบบมีผู้จัดการเพียงคนเดียว
-  // สามารถนับเคสที่ถูกปรับแก้/พักด้วยมือให้คนนั้นได้อย่างไม่กำกวม
-  const adminUsers = users.filter((u) =>
-    ["ADMIN", "ADMIN_LEAD", "ADMIN_COMPANY"].includes(u.role)
-  );
-  const soleLegacyAdminId = adminUsers.length === 1 ? adminUsers[0].id : null;
-  const isLegacyHandledNetworkIncident = (i: (typeof networkIncidents)[number]) =>
-    !i.adminUserId &&
-    !!soleLegacyAdminId &&
-    (i.status === "ADMIN_UPDATED" || i.status === "PAUSED");
+  // Only recorded user attribution counts toward individual performance.
+  const isLegacyHandledNetworkIncident = (_i: (typeof networkIncidents)[number]) => false;
   const networkOwnerId = (i: (typeof networkIncidents)[number]) =>
-    i.adminUserId || (isLegacyHandledNetworkIncident(i) ? soleLegacyAdminId : null);
+    i.adminUserId;
   const networkResponseMinutes = (i: (typeof networkIncidents)[number]) =>
-    i.adminResponseMin ?? Math.max(
-      0,
-      Math.round(((i.adminUpdatedAt || i.updatedAt).getTime() - i.detectedAt.getTime()) / 60_000)
-    );
+    i.adminResponseMin ?? (i.adminUpdatedAt ? Math.max(0, Math.round((i.adminUpdatedAt.getTime() - i.detectedAt.getTime()) / 60_000)) : null);
   const scopedIncidents = filters.userId
     ? incidents.filter((i) => i.adminUserId === filters.userId || i.itUserId === filters.userId)
     : incidents;
@@ -111,18 +102,18 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
   // ---- สรุปรายคน ----
   const users_ = users.filter((u) => !filters.userId || u.id === filters.userId).map((u) => {
     const asAdmin = scopedIncidents.filter(
-      (i) => i.adminUserId === u.id && i.adminResponseMin !== null
+      (i) => i.adminUserId === u.id && i.adminResponseMin !== null && i.status !== "PAUSED"
     );
     const asIt = scopedIncidents.filter(
-      (i) => i.itUserId === u.id && i.itResponseMin !== null
+      (i) => i.itUserId === u.id && i.itResponseMin !== null && i.status !== "PAUSED"
     );
     const asNetworkAdmin = scopedNetworkIncidents.filter(
-      (i) => networkOwnerId(i) === u.id
+      (i) => networkOwnerId(i) === u.id && !!i.adminUpdatedAt && i.status !== "PAUSED"
     );
     const legacyNetworkCount = asNetworkAdmin.filter(isLegacyHandledNetworkIncident).length;
     const adminMinutes = [
       ...asAdmin.map((i) => i.adminResponseMin as number),
-      ...asNetworkAdmin.map(networkResponseMinutes),
+      ...asNetworkAdmin.map(networkResponseMinutes).filter((v): v is number => v !== null),
     ];
     return {
       userId: u.id,
@@ -135,7 +126,7 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
       adminAvgMin: avg(adminMinutes),
       itCount: asIt.length,
       itAvgMin: avg(asIt.map((i) => i.itResponseMin as number)),
-      totalHandled: asAdmin.length + asNetworkAdmin.length + asIt.length,
+      totalHandled: new Set([...asAdmin.map(i => `SYSTEM:${i.id}`), ...asIt.map(i => `SYSTEM:${i.id}`), ...asNetworkAdmin.map(i => `MOBILE:${i.id}`)]).size,
     };
   })
     .sort((a, b) => b.totalHandled - a.totalHandled);
@@ -190,8 +181,8 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
     const b = buckets.find((x) => x.key === ws);
     if (b) {
       b.inc.push(1);
-      if (i.adminResponseMin !== null) b.adm.push(i.adminResponseMin);
-      if (i.itResponseMin !== null) b.it.push(i.itResponseMin);
+      if (i.status !== "PAUSED" && i.adminResponseMin !== null) b.adm.push(i.adminResponseMin);
+      if (i.status !== "PAUSED" && i.itResponseMin !== null) b.it.push(i.itResponseMin);
     }
   }
   for (const i of scopedNetworkIncidents) {
@@ -199,7 +190,7 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
     const b = buckets.find((x) => x.key === ws);
     if (b) {
       b.inc.push(1);
-      if (i.adminResponseMin !== null) b.adm.push(i.adminResponseMin);
+      if (i.status !== "PAUSED" && i.adminUpdatedAt && i.adminResponseMin !== null) b.adm.push(i.adminResponseMin);
     }
   }
   const trend: TrendPoint[] = buckets.map((b) => ({
@@ -210,14 +201,21 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
   }));
 
   const allAdmin = [
-    ...scopedIncidents.map((i) => i.adminResponseMin),
+    ...scopedIncidents.filter(i => i.status !== "PAUSED").map((i) => i.adminResponseMin),
     ...scopedNetworkIncidents
-      .filter((i) => !!networkOwnerId(i))
+      .filter((i) => !!networkOwnerId(i) && !!i.adminUpdatedAt && i.status !== "PAUSED")
       .map(networkResponseMinutes),
   ].filter((v): v is number => v !== null);
-  const allIt = scopedIncidents.map((i) => i.itResponseMin).filter((v): v is number => v !== null);
+  const allIt = scopedIncidents.filter(i => i.status !== "PAUSED").map((i) => i.itResponseMin).filter((v): v is number => v !== null);
 
   return {
+    lifecycle: (() => {
+      const cases = [...scopedIncidents, ...scopedNetworkIncidents];
+      const active = cases.filter(i => i.status !== "PAUSED");
+      const ack = active.map(i => elapsedMinutes(i.detectedAt, i.adminAckAt)).filter((n): n is number => n !== null);
+      const resolved = active.filter(i => i.status === "CLOSED").map(i => elapsedMinutes(i.detectedAt, i.resolvedAt)).filter((n): n is number => n !== null);
+      return { received: ack.length, missingAck: active.length - ack.length, avgAck: avg(ack), avgResolution: avg(resolved), paused: cases.length - active.length };
+    })(),
     users: users_,
     userOptions: users.map((u) => ({ id: u.id, name: u.name, role: u.role })),
     log,

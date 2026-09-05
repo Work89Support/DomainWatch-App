@@ -90,6 +90,17 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
 
       {/* กราฟแนวโน้ม */}
       <div className="card p-5 mb-6">
+        <h2 className="font-semibold mb-3">การรับเรื่องและปิดเคสตามช่วงเวลาที่เลือก</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard label="มีเวลารับเรื่องแอดมิน" value={d.lifecycle.received} tone="brand" />
+          <StatCard label="ตรวจพบ → รับเรื่องเฉลี่ย" value={fmtMinutes(d.lifecycle.avgAck)} tone="brand" />
+          <StatCard label="ตรวจพบ → ปิดเคสเฉลี่ย" value={fmtMinutes(d.lifecycle.avgResolution)} tone="green" />
+          <StatCard label="ไม่มีเวลารับเรื่อง" value={d.lifecycle.missingAck} tone="amber" />
+        </div>
+        <p className="mt-3 text-xs text-slate-500">ช่วงเวลายึดวันตรวจพบ · พักการเฝ้าดู {d.lifecycle.paused} เคส ไม่รวมเวลาแก้สำเร็จ · เวลาปิดรวมการปิดอัตโนมัติและเวลารอเครื่องตรวจยืนยัน ไม่ใช่เวลาทำงานของพนักงานทั้งหมด · เคสเก่าที่ไม่ทราบผู้ทำรายการไม่ถูกเดาชื่อผู้รับผิดชอบ</p>
+        <Link href="/case-history" className="mt-3 inline-block text-brand-600">ตรวจหลักฐานการดำเนินการย้อนหลัง →</Link>
+      </div>
+      <div className="card p-5 mb-6">
         <h2 className="text-lg font-semibold text-slate-800 mb-4">แนวโน้ม 8 สัปดาห์</h2>
         <KpiTrend data={d.trend} />
       </div>
@@ -165,7 +176,7 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
                 {d.log.map((r) => (
                   <tr key={r.id} className="border-b border-slate-50">
                     <td className="py-2.5 pr-4">
-                      <div className="font-medium text-slate-700">{r.linkName}</div>
+                      <Link href={`/incidents?incident=${r.id}`} className="font-medium text-brand-600 hover:underline">{r.linkName} →</Link>
                       <div className="text-xs text-slate-400">
                         {r.company} · {r.source === "MOBILE" ? `เครือข่ายซิม${r.agentName ? ` (${r.agentName})` : ""}` : "ระบบกลาง"}
                       </div>

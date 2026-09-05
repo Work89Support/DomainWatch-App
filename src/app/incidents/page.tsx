@@ -17,7 +17,7 @@ export default async function IncidentsPage({
   const requestedCompany = searchParams.company || undefined;
   const companyId = requestedCompany;
   const companyWhere = companyId ? { companyId } : {};
-  const include = { link: { include: { company: true, lineGroup: true } } } as const;
+  const include = { adminUser: { select: { name: true } }, link: { include: { company: true, lineGroup: true } } } as const;
   const pageSize = 100;
   const page = Math.max(1, Number.parseInt(searchParams.page || "1", 10) || 1);
   const openStatusWhere = { status: { notIn: [IncidentStatus.CLOSED, IncidentStatus.PAUSED] } };
@@ -35,6 +35,7 @@ export default async function IncidentsPage({
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: {
+        adminUser: { select: { name: true } },
         agent: { select: { id: true, name: true, carrier: true, reportedCarrier: true, deviceLabel: true, appVersion: true } },
         link: { include: { company: true, lineGroup: true } },
       },
@@ -49,6 +50,7 @@ export default async function IncidentsPage({
       ? prisma.networkIncident.findFirst({
           where: { id: searchParams.incident, link: companyWhere },
           include: {
+            adminUser: { select: { name: true } },
             agent: { select: { id: true, name: true, carrier: true, reportedCarrier: true, deviceLabel: true, appVersion: true } },
             link: { include: { company: true, lineGroup: true } },
           },
@@ -72,6 +74,7 @@ export default async function IncidentsPage({
       where: { link: companyWhere, ...openStatusWhere },
       orderBy: { detectedAt: "desc" },
       include: {
+        adminUser: { select: { name: true } },
         agent: { select: { id: true, name: true, carrier: true, reportedCarrier: true, deviceLabel: true, appVersion: true } },
         link: { include: { company: true, lineGroup: true } },
       },

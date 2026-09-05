@@ -198,6 +198,8 @@ model NetworkIncident {
   detectedAt        DateTime       @default(now())
   resolvedAt        DateTime?
   adminUpdatedAt    DateTime?
+  adminAckAt        DateTime?
+  adminAckUserName  String?
   adminResponseMin  Int?
   adminUserId       String?
   adminUser         User?          @relation("AdminNetworkIncidents", fields: [adminUserId], references: [id])
@@ -216,6 +218,27 @@ model NetworkIncident {
   @@index([agentId, status])
   @@index([linkId, detectedAt])
   @@index([adminUserId])
+}
+
+/// Append-only case evidence. No cascading relations: retained after a link/device is deleted.
+model CaseActivity {
+  id          String   @id @default(cuid())
+  source      String
+  caseId      String
+  companyId   String
+  companyName String
+  linkName    String
+  url         String
+  action      String
+  actorId     String?
+  actorName   String
+  note        String
+  details     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([source, caseId, createdAt])
+  @@index([companyId, createdAt])
+  @@index([actorId, createdAt])
 }
 
 enum LinkStatus {
@@ -251,6 +274,8 @@ model Incident {
   detectedAt     DateTime  @default(now()) // บอทตรวจพบว่าล่ม + เริ่มใช้ไม่ได้ตอนไหน
   notifiedAt     DateTime? // ส่งแจ้งเตือนสำเร็จ
   adminAckAt     DateTime? // แอดมินรับทราบ (กดรับเรื่อง)
+  adminAckUserName String?
+  itAckUserName String?
   adminUpdatedAt DateTime? // แอดมินอัพเดต/บันทึกลิงก์ใหม่ในระบบ = จบหน้าที่แอดมิน
   itAckAt        DateTime? // IT รับเรื่อง
   itResolvedAt   DateTime? // IT ชี้แจงสาเหตุ + ให้ลิงก์สำรองแล้ว
