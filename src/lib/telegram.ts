@@ -2,6 +2,7 @@
 // ตั้งค่า TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_IT_CHAT_ID ใน .env
 
 import { fmtMinutes } from "@/lib/format";
+import { explainProblem } from "@/lib/problemExplanation";
 import type { DailyReport } from "@/lib/report";
 import { mobileSourceLabel } from "@/lib/statusPresentation";
 
@@ -202,7 +203,8 @@ export function downAlertMessage(opts: {
   const t = opts.detectedAt.toLocaleString("th-TH", {
     timeZone: "Asia/Bangkok",
   });
-  const reason = opts.error || (opts.httpCode ? `HTTP ${opts.httpCode}` : "ไม่ตอบสนอง");
+  const explanation = explainProblem(opts.error, opts.httpCode);
+  const reason = `${explanation.reason}\nแนะนำ: ${explanation.next}`;
   const caseCode = opts.incidentId.slice(-8).toUpperCase();
   const text = [
     `🔴 <b>ลิงก์ใช้งานไม่ได้ — ต้องดำเนินการ</b>`,
@@ -289,7 +291,8 @@ export function networkDownMessage(opts: {
   egressLocation?: string | null;
 }): TgMessage {
   const detected = opts.detectedAt.toLocaleString("th-TH", { timeZone: "Asia/Bangkok" });
-  const reason = opts.error || (opts.httpCode ? `HTTP ${opts.httpCode}` : "เชื่อมต่อไม่ได้");
+  const explanation = explainProblem(opts.error, opts.httpCode);
+  const reason = `${explanation.reason}\nแนะนำ: ${explanation.next}`;
   return {
     text: [
       `🔴 <b>${escapeHtml(mobileSourceLabel(opts.carrier))} เปิดลิงก์ไม่ได้ — ยืนยันจากซิม 2 รอบ</b>`,

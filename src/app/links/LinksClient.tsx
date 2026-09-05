@@ -1,4 +1,5 @@
 "use client";
+import ProblemExplanation from "@/components/ProblemExplanation";
 
 import { useState, useMemo, useEffect, Fragment } from "react";
 import { useRouter } from "next/navigation";
@@ -278,7 +279,7 @@ export default function LinksClient({
           : <StatusBadge status={view.status} />}
         {view.status === "DOWN" && view.failureStreak > 0 && <div className="mt-1 text-[11px] font-medium text-red-600">ยืนยันแล้ว · เสียต่อเนื่อง {view.failureStreak} รอบ</div>}
         <div className="mt-1 text-[11px] text-slate-400">{view.detail}</div>
-        {view.error && <div className={`mt-1 max-w-[220px] text-[11px] line-clamp-2 ${view.status === "DOWN" ? "text-red-500" : "text-amber-600"}`}>{view.error}</div>}
+        {view.error && <div className="max-w-[320px]"><ProblemExplanation error={view.error} /></div>}
         {fSource === "MOBILE" && view.redirectCount > 0 && view.finalUrl && (
           <div className={`mt-1 max-w-[260px] text-[11px] break-all ${view.redirectType === "NETWORK_BLOCK" ? "text-red-600" : view.redirectType === "POSSIBLE_DOMAIN_MOVE" ? "text-amber-600" : "text-sky-600"}`}>
             ↪️ {view.redirectType === "NETWORK_BLOCK" ? "หน้าปิดกั้นเครือข่าย" : view.redirectType === "POSSIBLE_DOMAIN_MOVE" ? "อาจย้ายโดเมน (ยังไม่เปลี่ยนลิงก์หลัก)" : "Redirect ปกติ"}: {view.finalUrl}

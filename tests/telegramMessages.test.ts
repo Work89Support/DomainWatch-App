@@ -21,7 +21,8 @@ test("down alert identifies the exact incident, company, room and reason", () =>
   assert.match(message.text, /#ABCDEFGH/);
   assert.match(message.text, /Example Co/);
   assert.match(message.text, /Main room/);
-  assert.match(message.text, /HTTP 503/);
+  assert.match(message.text, /ระบบของเว็บไซต์ตอบกลับว่ามีข้อผิดพลาด/);
+  assert.match(message.text, /แนะนำ:/);
   assert.ok(
     message.buttons
       ?.flat()

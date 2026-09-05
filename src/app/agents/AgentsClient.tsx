@@ -1,4 +1,5 @@
 "use client";
+import ProblemExplanation from "@/components/ProblemExplanation";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -419,7 +420,7 @@ export default function AgentsClient({
                       </div>
                       {contexts.length > 0 && <div className="mt-1 flex flex-wrap gap-1.5">{contexts.map((context) => <span key={`${context.id}-${context.name}`} className="badge bg-brand-50 text-brand-700">{context.name} · {context.company}{context.room ? ` · ${context.room}` : ""}</span>)}</div>}
                       <div className="mt-1 text-xs text-slate-400">HTTP {row.httpCode ?? "-"} · {row.responseMs ?? "-"} ms · {since(row.checkedAt, now)}{row.failureStreak > 0 ? ` · ${failureConfirmationText(row.status, row.failureStreak)}` : ""}</div>
-                      {row.error && <div className="mt-1 break-words text-xs text-red-600">สาเหตุ: {row.error}</div>}
+                      {row.error && <ProblemExplanation error={row.error} />}
                       {row.redirectCount > 0 && row.finalUrl && (
                         <div className={`mt-2 rounded-lg p-2 text-xs ${row.redirectType === "NETWORK_BLOCK" && row.status === "DOWN" ? "bg-red-50 text-red-700" : row.redirectType === "NETWORK_BLOCK" || row.redirectType === "POSSIBLE_DOMAIN_MOVE" ? "bg-amber-50 text-amber-700" : "bg-sky-50 text-sky-700"}`}>
                           <div className="font-medium">↪️ {row.redirectType === "NETWORK_BLOCK" ? "Redirect ไปหน้าปิดกั้นเครือข่าย" : row.redirectType === "POSSIBLE_DOMAIN_MOVE" ? "อาจย้ายโดเมน — รอแอดมินยืนยัน" : "Redirect ปกติ"} · {row.redirectCount} ครั้ง</div>
@@ -484,7 +485,7 @@ export default function AgentsClient({
               <div className="rounded-xl border border-slate-100 p-3"><div className="text-xs text-slate-400">การยืนยัน</div><div className="mt-1 text-sm font-medium text-slate-700">{failureConfirmationText(selectedResult.status, selectedResult.failureStreak)}</div></div>
             </div>
 
-            {selectedResult.error && <div className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700"><div className="text-xs font-semibold">สาเหตุที่ตรวจพบ</div><div className="mt-1 break-words">{selectedResult.error}</div></div>}
+            {selectedResult.error && <ProblemExplanation error={selectedResult.error} />}
 
             {(selectedResult.redirectCount > 0 || selectedResult.finalUrl) && (
               <div className="mt-4 rounded-xl bg-sky-50 p-4 text-sm text-sky-800">
