@@ -19,7 +19,7 @@ export default function UsersClient({ initial, currentUserId, currentUserRole, c
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [editing, setEditing] = useState<U | null>(null);
-  const [accessForm, setAccessForm] = useState<{ email: string; role: AppRole; allowedIpRanges: string }>({ email: "", role: "IT", allowedIpRanges: "" });
+  const [accessForm, setAccessForm] = useState<{ name: string; username: string; email: string; role: AppRole; allowedIpRanges: string }>({ name: "", username: "", email: "", role: "IT", allowedIpRanges: "" });
 
   async function add() {
     if (!form.name || !form.username || !form.email || !form.password) return alert("กรอกชื่อ ชื่อผู้ใช้ อีเมล และรหัสชั่วคราวให้ครบ");
@@ -64,21 +64,27 @@ export default function UsersClient({ initial, currentUserId, currentUserRole, c
   function openAccess(u: U) {
     if (!canManageUserRole(currentUserRole, u.role)) return;
     setEditing(u);
-    setAccessForm({ email: u.email || "", role: u.role, allowedIpRanges: u.allowedIpRanges || "" });
+    setAccessForm({ name: u.name, username: u.username, email: u.email || "", role: u.role, allowedIpRanges: u.allowedIpRanges || "" });
   }
 
   async function saveAccess() {
     if (!editing) return;
     setBusy(true);
+    try {
     const res = await fetch(`/api/users/${editing.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(accessForm),
+      body: JSON.stringify(Object.fromEntries(Object.entries(accessForm).filter(([key, value]) => value !== (editing[key as keyof U] ?? "")))),
     });
     const data = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) return alert(data.error || "บันทึกไม่สำเร็จ");
     setEditing(null);
     router.refresh();
+    } catch {
+      alert("เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่ ข้อมูลในแบบฟอร์มยังอยู่");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -149,7 +155,7 @@ export default function UsersClient({ initial, currentUserId, currentUserRole, c
                   </div>
                 </td>
                 <td className="py-3 px-4 text-right whitespace-nowrap">
-                  <button disabled={!canManageUserRole(currentUserRole, u.role)} className="text-brand-600 hover:underline text-xs mr-3 disabled:opacity-30" onClick={() => openAccess(u)}>กำหนดสิทธิ์</button>
+                  <button disabled={!canManageUserRole(currentUserRole, u.role)} className="text-brand-600 hover:underline text-xs mr-3 disabled:opacity-30" onClick={() => openAccess(u)}>แก้ไขผู้ใช้ / สิทธิ์</button>
                   <button disabled={!canManageUserRole(currentUserRole, u.role)} className="text-brand-600 hover:underline text-xs mr-3 disabled:opacity-30" onClick={() => resetPwd(u)}>รีเซ็ตรหัส</button>
                   <button disabled={u.id === currentUserId || !canManageUserRole(currentUserRole, u.role)} className="text-slate-500 hover:underline text-xs disabled:opacity-30" onClick={() => toggle(u)}>{u.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}</button>
                 </td>
@@ -162,7 +168,12 @@ export default function UsersClient({ initial, currentUserId, currentUserRole, c
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={() => setEditing(null)}>
           <div className="card w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-slate-800">กำหนดสิทธิ์ — {editing.name}</h3>
+            <h3 className="text-lg font-semibold text-slate-800">แก้ไขผู้ใช้ / สิทธิ์ — {editing.name}</h3>
+            <label className="label" htmlFor="edit-display-name">ชื่อที่แสดง</label>
+            <input id="edit-display-name" className="input mb-3" maxLength={100} value={accessForm.name} onChange={e => setAccessForm({ ...accessForm, name: e.target.value })} />
+            <label className="label" htmlFor="edit-username">ชื่อผู้ใช้สำหรับเข้าสู่ระบบ (username)</label>
+            <input id="edit-username" className="input" maxLength={100} autoComplete="off" value={accessForm.username} onChange={e => setAccessForm({ ...accessForm, username: e.target.value })} />
+            <p className="my-2 text-xs text-amber-700">เมื่อเปลี่ยนแล้วต้องใช้ชื่อใหม่เข้าสู่ระบบ รหัสผ่านและประวัติ KPI ยังคงเดิม ชื่อผู้ใช้แยกตัวพิมพ์ใหญ่–เล็ก</p>
             <p className="text-xs text-slate-400 mt-1 mb-4">กำหนดบทบาทสำหรับทุกบริษัท และ IP ที่อนุญาตให้เข้าใช้</p>
             <label className="label">อีเมลสำหรับลืมรหัสผ่าน</label>
             <input className="input mb-4" type="email" value={accessForm.email} onChange={(e) => setAccessForm({ ...accessForm, email: e.target.value })} />
@@ -192,7 +203,7 @@ export default function UsersClient({ initial, currentUserId, currentUserRole, c
             </div>
             <div className="flex justify-end gap-2 mt-5">
               <button className="btn-ghost" onClick={() => setEditing(null)}>ยกเลิก</button>
-              <button className="btn-primary disabled:opacity-60" disabled={busy} onClick={saveAccess}>{busy ? "กำลังบันทึก..." : "บันทึกสิทธิ์"}</button>
+              <button className="btn-primary disabled:opacity-60" disabled={busy} onClick={saveAccess}>{busy ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}</button>
             </div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { normalizeUsername } from "@/lib/username";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
 import { canManageUserRole, canManageUsers, isAppRole } from "@/lib/permissions";
 import { getClientIp, isIpAllowed, normalizeAllowedIpRanges } from "@/lib/ipAccess";
@@ -29,7 +30,18 @@ export async function PATCH(
     if (!isAppRole(body.role)) return NextResponse.json({ error: "บทบาทไม่ถูกต้อง" }, { status: 400 });
     data.role = body.role;
   }
-  if (body.name) data.name = String(body.name).trim();
+  if ("name" in body) {
+    if (typeof body.name !== "string" || !body.name.trim() || body.name.trim().length > 100)
+      return NextResponse.json({ error: "กรุณาระบุชื่อที่แสดง 1–100 ตัวอักษร" }, { status: 400 });
+    data.name = body.name.trim();
+  }
+  if ("username" in body) {
+    const username = normalizeUsername(body.username);
+    if (!username) return NextResponse.json({ error: "ชื่อผู้ใช้ต้องมี 1–100 ตัวอักษร และไม่มีช่องว่าง" }, { status: 400 });
+    const duplicate = await prisma.user.findFirst({ where: { username, id: { not: params.id } }, select: { id: true } });
+    if (duplicate) return NextResponse.json({ error: "ชื่อผู้ใช้นี้มีผู้ใช้งานแล้ว กรุณาเลือกชื่ออื่น" }, { status: 409 });
+    data.username = username;
+  }
   if ("email" in body) {
     const email = String(body.email || "").trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -88,6 +100,7 @@ export async function PATCH(
     }
   }
 
+  try {
   const user = await prisma.$transaction(async (tx) => {
     const updated = await tx.user.update({
       where: { id: params.id }, data,
@@ -104,4 +117,10 @@ export async function PATCH(
     return updated;
   });
   return NextResponse.json(user);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+      return NextResponse.json({ error: "ชื่อผู้ใช้หรืออีเมลนี้มีผู้ใช้งานแล้ว กรุณาตรวจสอบอีกครั้ง" }, { status: 409 });
+    }
+    throw error;
+  }
 }
