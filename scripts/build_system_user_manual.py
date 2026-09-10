@@ -10,7 +10,7 @@ from docx.shared import Inches, Pt, RGBColor
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "public" / "downloads" / "DomainWatch-User-Manual-v2.3.docx"
+OUT = ROOT / "public" / "downloads" / "DomainWatch-User-Manual-v2.4.docx"
 ASSETS = ROOT / "public" / "help"
 FONT = "Kanit"
 NAVY = "172554"
@@ -83,7 +83,7 @@ def style_document(doc):
 
     normal = doc.styles["Normal"]
     normal.font.name = FONT
-    normal.font.size = Pt(10.5)
+    normal.font.size = Pt(11)
     normal.font.color.rgb = RGBColor.from_string(INK)
     normal.paragraph_format.space_after = Pt(6)
     normal.paragraph_format.line_spacing = 1.18
@@ -100,10 +100,14 @@ def style_document(doc):
         style.font.name = FONT
         style.font.size = Pt(size)
         style.font.bold = True
-        style.font.color.rgb = RGBColor.from_string(color)
+        style.font.color.rgb = RGBColor.from_string("000000")
         style.paragraph_format.space_before = Pt(before)
         style.paragraph_format.space_after = Pt(after)
         style.paragraph_format.keep_with_next = True
+        ppr = style.element.find(qn("w:pPr"))
+        if ppr is not None:
+            for border in list(ppr.findall(qn("w:pBdr"))):
+                ppr.remove(border)
 
     for style_name in ("List Bullet", "List Number"):
         style = doc.styles[style_name]
@@ -121,6 +125,43 @@ def style_document(doc):
 
 
 def force_fonts(doc):
+    # Finish shared print styling without changing screenshot contents.
+    import re
+    for root in (doc.element, doc.styles.element):
+        for border in list(root.iter(qn("w:pBdr"))):
+            border.getparent().remove(border)
+    for p in doc.paragraphs:
+        if p.style.name.startswith("Heading"):
+            for r in p.runs:
+                r.text = re.sub(r"^(\d+)\. ", r"\1 ", r.text)
+                r.font.color.rgb = RGBColor(0, 0, 0)
+    for section in doc.sections:
+        for p in section.header.paragraphs:
+            for r in p.runs:
+                r.font.color.rgb = RGBColor(0, 0, 0)
+    for table in doc.tables:
+        for col, cell in zip(table.columns, table.rows[0].cells):
+            col.width = cell.width
+        pr = table._tbl.tblPr
+        borders = OxmlElement("w:tblBorders")
+        for side in ("top", "left", "bottom", "right", "insideH", "insideV"):
+            border = OxmlElement("w:" + side)
+            for k, v in {"val": "single", "sz": "4", "color": "D9D9D9"}.items():
+                border.set(qn("w:" + k), v)
+            borders.append(border)
+        pr.append(borders)
+        for i, row in enumerate(table.rows):
+            for cell in row.cells:
+                cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+                margins = OxmlElement("w:tcMar")
+                for side in ("top", "left", "bottom", "right"):
+                    el = OxmlElement("w:" + side)
+                    el.set(qn("w:w"), "100")
+                    el.set(qn("w:type"), "dxa")
+                    margins.append(el)
+                cell._tc.get_or_add_tcPr().append(margins)
+                if i > 0 and i % 2 == 0:
+                    set_cell_fill(cell, "F5F7FC")
     def walk(parent):
         for paragraph in parent.paragraphs:
             yield paragraph
@@ -155,28 +196,20 @@ def add_title(doc, title, subtitle=None):
 
 
 def add_bullets(doc, items, numbered=False):
-    style = "List Number" if numbered else "List Bullet"
-    for item in items:
-        doc.add_paragraph(item, style=style)
+    for index, item in enumerate(items, 1):
+        if numbered:
+            p = doc.add_paragraph(f"{index}. {item}")
+            p.paragraph_format.left_indent = Inches(0.25)
+            p.paragraph_format.first_line_indent = Inches(-0.25)
+            p.paragraph_format.space_after = Pt(3)
+        else:
+            doc.add_paragraph(item, style="List Bullet")
 
 
 def add_callout(doc, title, text, color="EFF6FF", title_color=BLUE):
-    table = doc.add_table(rows=1, cols=1)
-    table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    table.autofit = False
-    set_repeat_table_header(table.rows[0])
-    cell = table.cell(0, 0)
-    set_cell_width(cell, 6.65)
-    set_cell_fill(cell, color)
-    cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-    p = cell.paragraphs[0]
-    p.paragraph_format.space_after = Pt(2)
-    r = p.add_run(title)
-    r.bold = True
-    r.font.color.rgb = RGBColor.from_string(title_color)
-    p2 = cell.add_paragraph(text)
-    p2.paragraph_format.space_after = Pt(0)
-    doc.add_paragraph().paragraph_format.space_after = Pt(0)
+    p = doc.add_paragraph()
+    p.add_run(title + " ").bold = True
+    p.add_run(text)
 
 
 def add_picture(doc, filename, caption, width=6.45):
@@ -280,7 +313,7 @@ def build():
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.runs[0].font.color.rgb = RGBColor.from_string(BLUE)
     p.runs[0].bold = True
-    p2 = doc.add_paragraph("ฉบับ 2.3 • 1 กันยายน 2569 • เอกสารสำหรับส่งมอบงาน")
+    p2 = doc.add_paragraph("ฉบับ 2.4 • 10 กันยายน 2569 • รองรับแอป 1.0.8")
     p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p2.runs[0].font.size = Pt(9.5)
     p2.runs[0].font.color.rgb = RGBColor.from_string(MUTED)
@@ -293,7 +326,7 @@ def build():
         "3. แดชบอร์ด — อ่านยอดสถานะและรายการที่ต้องดำเนินการ",
         "4. Master Data — เพิ่ม แก้ไข พักเฝ้าดู และจัดการลิงก์สำรอง",
         "5. เหตุการณ์ — แยกปัญหาระบบกลางกับปัญหาเครือข่ายซิม",
-        "6. เครื่องตรวจเครือข่าย — ติดตั้ง APK เปิด VPN กรุงเทพฯ สร้าง QR และดูผลรายเครื่อง",
+        "6. เครื่องตรวจเครือข่าย — ติดตั้ง อัปเดต ตรวจประจำวัน ล็อกฉุกเฉินและกลับมาใช้งาน",
         "7. รายงานรอบวัน / KPI / Telegram — ตรวจสอบและส่งมอบรายงาน",
         "8. วิธีแก้ปัญหาที่พบบ่อยและรายการตรวจรับงาน",
     ])
@@ -315,17 +348,18 @@ def build():
         "ตรวจโดเมนให้เป็น domain-watch-app-sandy.vercel.app ก่อนกรอกรหัสผ่าน",
         "QR นี้เปิดได้เพียงหน้าเข้าสู่ระบบ ไม่ได้บรรจุชื่อผู้ใช้หรือรหัสผ่าน",
     ], numbered=True)
-    add_callout(doc, "เข้าไม่ได้ทำอย่างไร", "ตรวจอินเทอร์เน็ตและตัวสะกดก่อน หากลืมรหัสผ่านให้ติดต่อ ADMIN ผู้ใช้ที่ยังไม่เข้าสู่ระบบจะไม่เห็นเมนูภายใน", "FEE2E2", RED)
+    add_callout(doc, "เข้าไม่ได้ทำอย่างไร", "ตรวจอินเทอร์เน็ตและตัวสะกดก่อน หากลืมรหัสผ่าน กด ลืมรหัสผ่าน แล้วกรอกอีเมลที่ลงทะเบียน คำขอจะส่งถึงอีเมลผู้ดูแลที่ตั้งค่าไว้ ให้ติดต่อผู้ดูแลเพื่อรับรหัสชั่วคราวผ่านช่องทางส่วนตัวและเปลี่ยนเมื่อเข้าใช้ อย่าถือข้อความส่งแล้วเป็นหลักฐานว่าอีเมลถึงสำเร็จ", "FEE2E2", RED)
+    doc.add_paragraph("หากพบ IP นี้ไม่ได้รับอนุญาต ให้ส่งหมายเลข IP ที่หน้าล็อกอินแสดงแก่แอดมินพร้อมชื่อบัญชี ห้ามส่งรหัสผ่าน IP นี้เป็นทางออกอินเทอร์เน็ต ไม่ใช่เลข 192.168.x.x ของเครื่อง และอาจเปลี่ยนเมื่อเปลี่ยนเครือข่ายหรือ VPN")
 
     add_title(doc, "2. เมนูและสิทธิ์ผู้ใช้")
     add_role_table(doc)
     doc.add_paragraph("หลักการ: สิทธิ์แค่ไหน เห็นและทำได้แค่นั้น ทั้งเมนู ปุ่ม และข้อมูลที่ API ส่งกลับ")
     doc.add_heading("เปิดเมนูบนโทรศัพท์", level=2)
-    add_picture(doc, "mobile-navigation.png", "หน้า Dashboard บนมือถือ — แตะปุ่มเมนูมุมซ้ายบน", width=3.0)
-    add_picture(doc, "mobile-menu-open.png", "แถบเมนูบนมือถือ — เลือกหน้าที่ต้องการแล้วเมนูจะปิดอัตโนมัติ", width=3.0)
+    doc.add_paragraph("แตะปุ่มสามขีดมุมซ้ายบนเพื่อเปิดเมนู เลือกหน้าที่ต้องการ เมนูที่เห็นขึ้นกับบทบาท รูปตัวอย่างเป็นบัญชีแอดมินในช่วงก่อนหน้า ชื่อบทบาทปัจจุบันให้ยึดตารางด้านบน")
+    add_picture(doc, "mobile-menu-open.png", "แถบเมนูบนมือถือ เลือกหน้าที่ต้องการแล้วเมนูจะปิดอัตโนมัติ", width=2.2)
 
     add_title(doc, "3. แดชบอร์ดและการอ่านยอด")
-    add_picture(doc, "dashboard.jpg", "Dashboard แสดงภาพรวมของลิงก์ที่เฝ้าดูและงานที่ต้องดำเนินการ", width=5.65)
+    add_picture(doc, "dashboard.jpg", "Dashboard ตัวอย่างในช่วงก่อนหน้า ตัวเลขไม่ใช่ข้อมูลสด", width=4.5)
     add_status_table(doc)
     doc.add_heading("ยอดที่ต้องอ่านให้ถูก", level=2)
     add_bullets(doc, [
@@ -375,50 +409,20 @@ def build():
     ])
     doc.add_heading("วิธีแก้จากหน้าการ์ดเหตุการณ์", level=2)
     add_bullets(doc, [
+        "เปิดเคสและกด รับเรื่อง ก่อนเริ่มแก้ ตรวจชื่อผู้รับและเวลารับเรื่อง ระบบเริ่มวัดเวลาจากตรวจพบ ไม่ใช่จากตอนกดรับ",
         "กด แก้ลิงก์ตรงนี้ ไม่ต้องย้อนกลับไป Master Data",
         "แก้ URL หลักหรือใส่ลิงก์สำรอง แล้วกดบันทึก",
         "ตรวจให้การ์ดเปลี่ยนเป็น ปรับแก้แล้ว · รอตรวจยืนยัน",
         "เมื่อผลผ่านตามเกณฑ์ เคสจะไปที่ประวัติทั้งหมดและแสดงเวลาที่แก้เสร็จ",
     ], numbered=True)
+    doc.add_heading("บันทึกงานและส่งต่อ", level=2)
+    doc.add_paragraph("เปิด ประวัติ / บันทึก / ส่งต่อ ระบุสิ่งที่ตรวจ สิ่งที่แก้ และผลทดสอบ แล้วกด บันทึกประวัติ หากแก้เองไม่ได้ ให้ระบุผู้รับและเหตุผล กด บันทึกส่งต่อผู้รับผิดชอบ และติดต่อผู้รับโดยตรง การบันทึกส่งต่อไม่ได้แทนการโทรหรือส่งข้อความแจ้งผู้รับ")
+    doc.add_paragraph("ก่อนใช้ ตรวจซ้ำและปิดเคส ให้ระบุเหตุผลปิดเคสและตรวจว่าเข้าถูกเว็บ ถูกหน้า และถูกห้องแล้ว ปิดผ่านลิงก์สำรองหมายถึงบริการใช้ต่อได้ แต่ URL หลักอาจยังเสียอยู่ ต้องติดตามแยกกัน ห้ามลบเคสเพื่อทำให้ KPI ดูดี")
+    doc.add_paragraph("ค้นย้อนหลังที่ ค้นประวัติการดำเนินการย้อนหลัง หรือเปิดประวัติในเคส ตรวจรหัสเคส ผู้ดำเนินการ เวลาและเหตุผล การแก้ซ้ำต้องเพิ่มบันทึกใหม่ ไม่ใช้ชื่อคนอื่นรับงานแทน")
 
-    add_title(doc, "6. เครื่องตรวจเครือข่ายมือถือ")
-    add_picture(doc, "mobile-agents.png", "หน้าเครื่องตรวจเครือข่ายบนมือถือ — ดาวน์โหลด APK สร้าง QR และเลือกดูเครื่อง", width=3.05)
-    doc.add_heading("ติดตั้งและผูกเครื่อง", level=2)
-    add_bullets(doc, [
-        "ใส่ซิม เปิด Mobile data และปิด Wi‑Fi ระหว่างตรวจรับครั้งแรก",
-        "แอดมินสร้างชื่อเครื่องและ QR ติดตั้งครบชุด ซึ่งใช้ครั้งเดียวภายใน 30 นาที",
-        "สแกน QR จากมือถือ หน้าเดียวมีทั้งดาวน์โหลด APK 1.0.6 และปุ่มเปิดแอปผูกเครื่อง",
-        "ติดตั้งเสร็จแล้วกลับหน้าเดิม กด ติดตั้งหรือเปิดแอป แล้วผูกเครื่อง ระบบกรอก URL, token, ชื่อเครื่อง, ค่าย และโหมดตรวจให้อัตโนมัติ",
-        "กด อนุญาตให้ทำงานเบื้องหลัง และยกเว้นการประหยัดแบตเตอรี่",
-        "กด เริ่มตรวจตลอดเวลา แล้วรอให้หน้าเว็บแสดง ออนไลน์ และมีผลรอบแรก",
-    ], numbered=True)
-    doc.add_heading("แอป VPN ที่ใช้", level=2)
-    add_bullets(doc, [
-        "DomainWatch Agent เป็นแอปตรวจ URL ของระบบ ไม่ใช่แอป VPN",
-        "แนะนำ Surfshark VPN สำหรับขั้นตอนนี้ เพราะมีแอป Android และเลือก Thailand → Bangkok ได้",
-        "ดาวน์โหลดจาก Google Play: https://play.google.com/store/apps/details?id=com.surfshark.vpnclient.android",
-        "Surfshark เป็นบริการสมัครสมาชิก ต้องใช้บัญชี/แพ็กเกจของบริษัท DomainWatch ไม่ได้รวมค่าบริการ VPN",
-    ])
-    add_picture(doc, "vpn-mobile-flow.png", "Flow เปิด Surfshark VPN กรุงเทพก่อนเริ่ม DomainWatch Agent", width=6.55)
-    doc.add_heading("วิธีเปิด VPN กรุงเทพฯ", level=2)
-    add_bullets(doc, [
-        "ปิด Wi‑Fi และเปิด Mobile data ของซิม TRUE",
-        "เปิด Surfshark และเข้าสู่ระบบด้วยบัญชีของบริษัท",
-        "ค้นหา Thailand แล้วเลือก Bangkok จากนั้นกด Connect",
-        "อนุญาตคำขอสร้าง VPN ของ Android ครั้งแรก และรอจนขึ้น Connected/มีรูปกุญแจ",
-        "เปิด DomainWatch Agent กด เริ่มตรวจตลอดเวลา และรอประมาณ 5 นาที",
-        "ในหน้าเครื่องตรวจเลือก VPN ที่เปิดอยู่บนมือถือ แล้วตรวจเมือง/ภูมิภาค/ประเทศของ IP ทางออก",
-    ], numbered=True)
-    add_callout(doc, "ตำแหน่งที่ระบบแสดง", "เป็นตำแหน่งโดยประมาณของ Public IP เซิร์ฟเวอร์ VPN ไม่ใช่ GPS หรือที่ตั้งจริงของมือถือ ฐานข้อมูล IP อาจแสดงเพียง Bangkok/Thailand ไม่ถึงระดับสยาม", "EFF6FF", BLUE)
-    add_callout(doc, "เมื่อ VPN หลุด", "แอปจะไม่ใช้ผลจากซิมมาแทนในโหมด VPN ให้เชื่อม Surfshark ใหม่และรอรอบถัดไป ทั้ง Surfshark และ DomainWatch ต้องได้รับอนุญาตทำงานเบื้องหลัง", "FEF3C7", "92400E")
-    add_callout(doc, "ปิดหน้าจอได้ไหม", "ปิดหน้าจอได้เมื่ออนุญาตการทำงานเบื้องหลังและยกเว้นการประหยัดแบตเตอรี่แล้ว หากระบบขึ้น ขาดการเชื่อมต่อ ให้เปิดแอป ตรวจ Mobile data และกดเริ่มตรวจตลอดเวลาอีกครั้ง", "FEF3C7", "92400E")
-    doc.add_heading("ความหมายของยอดรายเครื่อง", level=2)
-    add_bullets(doc, [
-        "ใช้งานได้ / โหลดช้า / ใช้ไม่ได้ / ยังไม่ทราบ รวมกันต้องเท่ากับ URL ที่เครื่องนั้นได้รับมอบหมาย",
-        "เคสค้างเป็นอีกมิติหนึ่ง ไม่ควรนำไปบวกกับจำนวน URL เพราะเคสนับแยกตามบริษัทและห้อง",
-        "กดการ์ดสถานะหรือ ดูรายละเอียด เพื่อกรองรายการด้านล่างตามสถานะ",
-    ])
-    add_picture(doc, "mobile-result-detail.png", "รายละเอียดผลตรวจบนมือถือ — ใช้ค้นหาและเปิดรายการแต่ละ URL", width=3.05)
+    from manual_mobile_content import mobile_chapters
+    import sys
+    mobile_chapters(doc, sys.modules[__name__])
 
     add_title(doc, "7. รายงานรอบวัน KPI และ Telegram")
     add_picture(doc, "report.jpg", "รายงานรอบวัน — สรุปจำนวนเคส แก้แล้ว ค้าง และแยกตามรอบ", width=5.55)
@@ -430,11 +434,19 @@ def build():
         "ส่งออก PNG หรือ PDF หลังจากเลือกข้อมูลที่ต้องการแล้ว",
     ], numbered=True)
     doc.add_heading("KPI รายคน", level=2)
+    doc.paragraphs[-1].paragraph_format.page_break_before = True
     add_bullets(doc, [
         "ใช้ดูจำนวนเคสที่รับ เวลาตอบสนอง เวลาปิดงาน และเคสค้าง",
         "MANAGEMENT อ่านได้อย่างเดียว ส่วนผู้ช่วยหัวหน้าแอดมินดู KPI ได้แต่จัดการผู้ใช้ไม่ได้",
         "ถ้ายอดไม่ตรง ให้ตรวจตัวกรองบริษัท วันที่ และแหล่งตรวจที่เลือก",
     ])
+    add_bullets(doc, [
+        "เลือก ผู้ใช้งาน เป็นคนที่ต้องการ หรือ ทุกคน แล้วเลือก ตั้งแต่วันที่ และ ถึงวันที่",
+        "เลือก แหล่งงาน เป็นระบบกลาง เครือข่ายซิม หรือทั้งหมด แล้วกด แสดงผล ตรวจบรรทัด กำลังแสดง ให้ตรง",
+        "กด Export CSV เพื่อดาวน์โหลดข้อมูลเคสตามตัวกรอง หรือ พิมพ์ / PDF แล้วเลือกบันทึกเป็น PDF ในหน้าพิมพ์",
+        "ช่วงเวลายึดวันตรวจพบ เคสเก่าที่ไม่ทราบผู้ทำรายการจะไม่เดาชื่อผู้รับผิดชอบ เวลาปิดรวมเวลารอเครื่องตรวจ ไม่ใช่เวลาที่พนักงานลงมือทำทั้งหมด",
+        "การหักคะแนนหรือมาตรการบุคคลต้องตรวจหลักฐานและใช้เกณฑ์บริษัท ไม่สรุปความผิดจากค่าเฉลี่ยเพียงตัวเดียว",
+    ], numbered=True)
     doc.add_heading("Telegram", level=2)
     add_bullets(doc, [
         "แจ้งเมื่อยืนยันปัญหาจริงตามเกณฑ์ ไม่แจ้งจาก timeout เพียงรอบเดียว",
@@ -458,11 +470,11 @@ def build():
     set_repeat_table_header(table.rows[0])
     troubleshooting = [
         ("ไม่เห็นเมนู", "ตรวจว่าเข้าสู่ระบบแล้ว บนมือถือแตะปุ่มเมนูมุมซ้ายบน และตรวจบทบาทผู้ใช้"),
-        ("เครื่องขึ้นขาดการเชื่อมต่อ", "เปิดแอป ตรวจ Mobile data ยกเว้นประหยัดแบตเตอรี่ และกดเริ่มตรวจตลอดเวลา"),
-        ("VPN ไม่แสดงตำแหน่ง", "ตรวจว่า Surfshark ขึ้น Connected และเลือก Thailand/Bangkok, อัปเดต Agent เป็นรุ่น 1.0.6 ขึ้นไป แล้วรอผลรอบใหม่ประมาณ 5 นาที"),
+        ("เครื่องขึ้นขาดการเชื่อมต่อ", "เปิดแอป ตรวจ Mobile data และสิทธิ์เบื้องหลัง กด เริ่มตรวจอีกครั้ง หนึ่งครั้ง แล้วรอผลรอบใหม่"),
+        ("VPN ไม่แสดงตำแหน่ง", "ตรวจว่า VPN ของบริษัทเชื่อมต่อแล้ว และแอดมินเลือกโหมด VPN บนเครื่องถูกต้อง รอผลรอบใหม่ประมาณ 5 นาที"),
         ("Unauthorized", "QR หมดอายุหรือเครื่องถูกย้าย ให้สร้าง QR ใหม่แล้วผูกอีกครั้ง"),
         ("Cleartext HTTP not permitted", "อัปเดต Agent เป็นรุ่นล่าสุด และตรวจว่า URL ใช้ https เมื่อเว็บไซต์รองรับ"),
-        ("UnknownHostException", "ตรวจ DNS/โดเมนผ่านซิม หาก URL หลักถูกบล็อกให้ใส่ลิงก์สำรองที่ใช้งานได้"),
+        ("UnknownHostException", "เครื่องหาที่อยู่เว็บไซต์ไม่พบ อาจเป็นชื่อโดเมน DNS หรือข้อจำกัดเครือข่าย ยังไม่ยืนยันว่าถูกบล็อก ให้ตรวจชื่อและลองลิงก์สำรองที่ได้รับอนุมัติ"),
         ("แก้แล้วเคสยังไม่ปิด", "ตรวจว่าอยู่สถานะรอยืนยัน รอผลเครื่องซิมรอบใหม่ และยืนยันว่าลิงก์สำรองถูกบันทึก"),
         ("ยอดไม่ตรง", "ตรวจตัวกรอง วันที่ บริษัท แหล่งตรวจ และแยกจำนวน URL ออกจากจำนวนเคส"),
         ("ดึง Rich Menu ไม่ได้", "บันทึก Channel Access Token ก่อน ตรวจว่าเป็น Messaging API channel และเมนูถูกสร้างผ่าน Messaging API; เมนูจาก OA Manager อาจดึงผ่าน API ไม่ได้"),
@@ -474,6 +486,7 @@ def build():
             set_cell_width(cell, width)
         cells[0].paragraphs[0].runs[0].bold = True
 
+    doc.add_page_break()
     doc.add_heading("รายการตรวจรับก่อนส่งมอบ", level=2)
     add_bullets(doc, [
         "ทดลองเข้าสู่ระบบทั้งจากลิงก์และ QR",

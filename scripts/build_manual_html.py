@@ -1,0 +1,61 @@
+"""Publish the verified manual content to the in-app reader from the DOCX sources."""
+from pathlib import Path
+from html import escape
+import hashlib
+import json
+from docx import Document
+from docx.oxml.ns import qn
+from docx.text.paragraph import Paragraph
+from docx.table import Table
+
+ROOT = Path(__file__).resolve().parents[1]
+ASSETS = ROOT / "public/help"
+
+
+def render(path, field=False):
+    doc = Document(path)
+    images = {hashlib.sha256(p.read_bytes()).hexdigest(): p.name for p in ASSETS.iterdir() if p.suffix.lower() in (".png", ".jpg")}
+    body, nav = [], []
+    for element in doc.element.body:
+        if element.tag == qn("w:p"):
+            p = Paragraph(element, doc)
+            for blip in element.iter(qn("a:blip")):
+                part = doc.part.related_parts[blip.get(qn("r:embed"))]
+                name = images[hashlib.sha256(part.blob).hexdigest()]
+                alt = next((x.get("descr", "ภาพประกอบคู่มือ") for x in element.iter(qn("wp:docPr"))), "ภาพประกอบคู่มือ")
+                phone = name.startswith(("staff-", "emergency-confirm", "emergency-success", "mobile-"))
+                body.append(f'<figure><img class="{"phone" if phone else "wide"}" src="/help/{escape(name)}" alt="{escape(alt)}" loading="lazy"></figure>')
+            if not p.text.strip():
+                continue
+            text = escape(p.text)
+            if p.style.name == "Title":
+                body.append(f"<h1>{text}</h1>")
+            elif p.style.name.startswith("Heading"):
+                level = min(3, int(p.style.name[-1]) + 1)
+                anchor = "part-" + str(len(nav))
+                if level == 2:
+                    nav.append((anchor, text))
+                body.append(f'<h{level} id="{anchor if level == 2 else "sub-"+str(len(body))}">{text}</h{level}>')
+            else:
+                body.append(f'<p>{text}</p>')
+        elif element.tag == qn("w:tbl"):
+            table = Table(element, doc)
+            body.append('<div class="table-scroll"><table>')
+            for index, row in enumerate(table.rows):
+                celltag = "th" if index == 0 else "td"
+                body.append("<tr>" + "".join(f"<{celltag}>{escape(c.text)}</{celltag}>" for c in row.cells) + "</tr>")
+            body.append("</table></div>")
+    name = "Field-Staff" if field else "User"
+    links = f'<a href="/downloads/DomainWatch-{name}-Manual-v2.4.pdf" target="_blank" rel="noopener">ดาวน์โหลด PDF</a><a href="/downloads/DomainWatch-{name}-Manual-v2.4.docx" download>ดาวน์โหลด Word</a>'
+    links += '<a href="/help/manual-staff.html" target="_blank" rel="noopener">คู่มือพนักงานหน้างาน</a>'
+    return '''<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>คู่มือ DomainWatch</title><style>
+@font-face{font-family:Kanit;src:url('/fonts/Kanit-Regular.ttf')}@font-face{font-family:Kanit;src:url('/fonts/Kanit-Bold.ttf');font-weight:700}*{box-sizing:border-box}body{margin:0;color:#1e293b;font:17px/1.8 Kanit,sans-serif;background:white}nav{position:fixed;inset:0 auto 0 0;width:250px;padding:24px;background:#f5f7fc;overflow:auto;border-right:1px solid #d9d9d9}nav a{display:block;padding:9px 0;color:#2344a5;text-decoration:none}main{margin-left:250px;max-width:1080px;padding:32px}h1,h2,h3{color:#111;line-height:1.5}h2{margin-top:48px;scroll-margin-top:20px}p{margin:12px 0}figure{text-align:center;margin:20px 0}img{max-width:100%;height:auto}.phone{max-height:700px;max-width:90%}.wide{max-width:100%;max-height:700px}.downloads{display:flex;flex-wrap:wrap;gap:12px}.downloads a{padding:10px 16px;border-radius:8px;background:#2458e6;color:white;text-decoration:none}.table-scroll{overflow-x:auto}table{border-collapse:collapse;width:100%}td,th{padding:12px;border:1px solid #d9d9d9;text-align:left}th{background:#172554;color:white}tr:nth-child(even){background:#f5f7fc}a:focus-visible{outline:3px solid #f59e0b} @media(max-width:700px){nav{position:static;width:auto;max-height:240px;border-bottom:1px solid #ddd}main{margin:0;padding:20px}body{font-size:16px}}@media print{nav,.downloads{display:none}main{margin:0}h2{break-after:avoid}img{max-height:500px}}
+</style></head><body><nav aria-label="สารบัญ"><b>DomainWatch คู่มือ 2.4</b>''' + "".join(f'<a href="#{a}">{t}</a>' for a,t in nav) + '</nav><main><div class="downloads">' + links + '</div>' + "".join(body) + '''</main><script>document.addEventListener('click',function(e){var a=e.target.closest('a');if(a&&a.getAttribute('href').startsWith('#')){e.preventDefault();var target=document.getElementById(a.getAttribute('href').slice(1));if(target)target.scrollIntoView({behavior:'smooth'});}});</script></body></html>'''
+
+
+if __name__ == "__main__":
+    full = render(ROOT / "public/downloads/DomainWatch-User-Manual-v2.4.docx")
+    staff = render(ROOT / "public/downloads/DomainWatch-Field-Staff-Manual-v2.4.docx", True)
+    (ROOT / "src/lib/manualHtml.ts").write_text("// Generated by scripts/build_manual_html.py from the employee manuals.\nexport const MANUAL_HTML = " + json.dumps(full, ensure_ascii=False) + ";\n")
+    (ASSETS / "manual-full.html").write_text(full)
+    (ASSETS / "manual-staff.html").write_text(staff)
