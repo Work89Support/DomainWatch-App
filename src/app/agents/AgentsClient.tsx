@@ -77,7 +77,7 @@ export default function AgentsClient({
   linkContexts: Record<string, LinkContext[]>;
 }) {
   const router = useRouter();
-  const [name, setName] = useState("เครื่องตรวจ TRUE 1");
+  const [name, setName] = useState("เครื่องตรวจเครือข่าย 1");
   const [busy, setBusy] = useState(false);
   const [qr, setQr] = useState<{ agentName: string; enrollment: Enrollment } | null>(null);
   const [selectedId, setSelectedId] = useState(initial[0]?.id || "");
@@ -235,7 +235,7 @@ export default function AgentsClient({
 
   async function changeRouteMode(agent: Agent, routeMode: Agent["routeMode"]) {
     if (routeMode === agent.routeMode) return;
-    const label = routeMode === "VPN_DEFAULT" ? "VPN ที่เปิดอยู่บนโทรศัพท์" : `ซิม ${agent.carrier} โดยตรง`;
+    const label = routeMode === "VPN_DEFAULT" ? "VPN ที่เปิดอยู่บนโทรศัพท์" : "ตรวจผ่านซิมโดยตรง";
     if (!confirm(`เปลี่ยนเส้นทางตรวจเป็น “${label}” ใช่หรือไม่?\n\nตำแหน่งที่ระบบแสดงจะเป็นตำแหน่งโดยประมาณของ Public IP ทางออก ไม่ใช่ GPS ของมือถือ`)) return;
     setBusy(true);
     const response = await fetch(`/api/mobile-agents/${agent.id}`, {
@@ -268,10 +268,10 @@ export default function AgentsClient({
 
       {canManage && <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
         <div className="card p-5 lg:col-span-2">
-          <div className="text-sm font-semibold text-slate-700">เพิ่มเครื่องตรวจ TRUE</div>
+          <div className="text-sm font-semibold text-slate-700">เพิ่มเครื่องตรวจเครือข่าย</div>
           <p className="mt-1 text-xs text-slate-400">สร้าง QR ติดตั้งครบชุด ใช้ครั้งเดียว อายุ 30 นาที แล้วสแกนด้วยกล้องโทรศัพท์</p>
           <div className="mt-4 flex flex-col sm:flex-row gap-2">
-            <input className="input" value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น เครื่องตรวจ TRUE ห้อง IT" />
+            <input className="input" value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น เครื่องตรวจเครือข่าย ห้อง IT" />
             <button className="btn-primary whitespace-nowrap" disabled={busy} onClick={createAgent}>{busy ? "กำลังสร้าง..." : "+ สร้างเครื่องและ QR"}</button>
           </div>
         </div>
@@ -357,10 +357,10 @@ export default function AgentsClient({
                     </div>
                     {canManage ? (
                       <select className="input sm:w-auto" disabled={busy} value={selected.routeMode} onChange={(event) => changeRouteMode(selected, event.target.value as Agent["routeMode"])} aria-label="เลือกเส้นทางตรวจ">
-                        <option value="CELLULAR_DIRECT">TRUE โดยตรง</option>
+                        <option value="CELLULAR_DIRECT">ตรวจผ่านซิมโดยตรง</option>
                         <option value="VPN_DEFAULT">VPN ที่เปิดอยู่บนมือถือ</option>
                       </select>
-                    ) : <span className="badge bg-brand-50 text-brand-700">{selected.routeMode === "VPN_DEFAULT" ? "VPN" : "TRUE โดยตรง"}</span>}
+                    ) : <span className="badge bg-brand-50 text-brand-700">{selected.routeMode === "VPN_DEFAULT" ? "VPN" : "ตรวจผ่านซิมโดยตรง"}</span>}
                   </div>
                   {selected.routeMode === "VPN_DEFAULT" && <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-700">ต้องเปิด VPN บนมือถือไว้ แอปจะตรวจและส่งผลผ่าน VPN เท่านั้น หาก VPN หลุด ระบบจะไม่เอาตำแหน่งจากซิมมาแสดงแทน</div>}
                 </div>
