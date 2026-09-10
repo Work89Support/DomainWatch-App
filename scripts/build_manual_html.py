@@ -24,8 +24,12 @@ def render(path, field=False):
                 name = images[hashlib.sha256(part.blob).hexdigest()]
                 alt = next((x.get("descr", "ภาพประกอบคู่มือ") for x in element.iter(qn("wp:docPr"))), "ภาพประกอบคู่มือ")
                 phone = name.startswith(("staff-", "emergency-confirm", "emergency-success", "mobile-"))
-                body.append(f'<figure><img class="{"phone" if phone else "wide"}" src="/help/{escape(name)}" alt="{escape(alt)}" loading="lazy"></figure>')
+                image_class = "qr" if name == "login-qr.png" else "phone" if phone else "wide"
+                body.append(f'<figure><img class="{image_class}" src="/help/{escape(name)}" alt="{escape(alt)}" loading="lazy"></figure>')
             if not p.text.strip():
+                continue
+            # The document cover's decorative letter is not a web logo.
+            if p.text.strip() == "D":
                 continue
             text = escape(p.text)
             if p.style.name == "Title":
@@ -50,6 +54,19 @@ def render(path, field=False):
     links += '<a href="/help/manual-staff.html" target="_blank" rel="noopener">คู่มือพนักงานหน้างาน</a>'
     return '''<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>คู่มือ DomainWatch</title><style>
 @font-face{font-family:Kanit;src:url('/fonts/Kanit-Regular.ttf')}@font-face{font-family:Kanit;src:url('/fonts/Kanit-Bold.ttf');font-weight:700}*{box-sizing:border-box}body{margin:0;color:#1e293b;font:17px/1.8 Kanit,sans-serif;background:white}nav{position:fixed;inset:0 auto 0 0;width:250px;padding:24px;background:#f5f7fc;overflow:auto;border-right:1px solid #d9d9d9}nav a{display:block;padding:9px 0;color:#2344a5;text-decoration:none}main{margin-left:250px;max-width:1080px;padding:32px}h1,h2,h3{color:#111;line-height:1.5}h2{margin-top:48px;scroll-margin-top:20px}p{margin:12px 0}figure{text-align:center;margin:20px 0}img{max-width:100%;height:auto}.phone{max-height:700px;max-width:90%}.wide{max-width:100%;max-height:700px}.downloads{display:flex;flex-wrap:wrap;gap:12px}.downloads a{padding:10px 16px;border-radius:8px;background:#2458e6;color:white;text-decoration:none}.table-scroll{overflow-x:auto}table{border-collapse:collapse;width:100%}td,th{padding:12px;border:1px solid #d9d9d9;text-align:left}th{background:#172554;color:white}tr:nth-child(even){background:#f5f7fc}a:focus-visible{outline:3px solid #f59e0b} @media(max-width:700px){nav{position:static;width:auto;max-height:240px;border-bottom:1px solid #ddd}main{margin:0;padding:20px}body{font-size:16px}}@media print{nav,.downloads{display:none}main{margin:0}h2{break-after:avoid}img{max-height:500px}}
+/* Size images by purpose, never by their source-photo resolution. */
+body{font-size:16px;line-height:1.75;overflow-wrap:anywhere}
+nav{width:220px;padding:20px 16px;font-size:14px;line-height:1.6}
+nav a{padding:8px 0}
+main{margin-left:220px;max-width:960px;padding:24px 32px;min-width:0}
+h1{font-size:clamp(24px,3vw,32px);margin:24px 0 16px}
+h2{font-size:24px;margin-top:36px}h3{font-size:19px}
+figure{margin:20px auto}img{display:block;margin:auto;object-fit:contain}
+.qr{width:200px;max-width:100%;height:auto}
+.phone{width:300px;max-width:100%;height:auto;max-height:560px}
+.wide{width:auto;max-width:100%;height:auto;max-height:520px}
+.downloads{gap:8px}.downloads a{font-size:14px;line-height:1.5;padding:10px 14px}
+@media(max-width:700px){nav{position:static;width:auto;max-height:180px;padding:12px 16px}main{margin:0;padding:20px 16px}h1{font-size:24px}h2{font-size:21px}.qr{width:180px}.phone{max-height:480px}.downloads a{flex:1 1 auto;text-align:center}}
 </style></head><body><nav aria-label="สารบัญ"><b>DomainWatch คู่มือ 2.4</b>''' + "".join(f'<a href="#{a}">{t}</a>' for a,t in nav) + '</nav><main><div class="downloads">' + links + '</div>' + "".join(body) + '''</main><script>document.addEventListener('click',function(e){var a=e.target.closest('a');if(a&&a.getAttribute('href').startsWith('#')){e.preventDefault();var target=document.getElementById(a.getAttribute('href').slice(1));if(target)target.scrollIntoView({behavior:'smooth'});}});</script></body></html>'''
 
 
