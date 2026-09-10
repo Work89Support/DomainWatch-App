@@ -18,3 +18,10 @@ Required physical-device checks (not replaced by unit tests):
 - Android uninstall needs user confirmation; Chrome remains separate and its limitation is visible.
 
 No production device has been locked or erased by implementation/testing.
+
+## Build verification — 2026-09-10
+
+- Signed release APK 1.0.8 (versionCode 9) built with Java 17, SDK 34 and Gradle 8.2.
+- `assembleRelease lintRelease`: successful; 0 errors, 13 warnings (see local Android lint report).
+- `apksigner verify`: passed; signing certificate SHA-256 matches 1.0.7: `100e88f36b805263a30b420bae26bbb50a93720cc73b586d85f3b9e99eb2bc8f`.
+- Physical-device checks above remain pending. Signature matching supports upgrade compatibility but is not a substitute for an actual upgrade/emergency/recovery test.
