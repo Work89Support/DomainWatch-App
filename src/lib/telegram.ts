@@ -1,7 +1,7 @@
 // ส่งข้อความแจ้งเตือนผ่าน Telegram Bot API
 // ตั้งค่า TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_IT_CHAT_ID ใน .env
 
-import { fmtMinutes } from "@/lib/format";
+import { fmtMinutes, fmtDateTime } from "@/lib/format";
 import { explainProblem } from "@/lib/problemExplanation";
 import type { DailyReport } from "@/lib/report";
 import { mobileSourceLabel } from "@/lib/statusPresentation";
@@ -320,6 +320,9 @@ export function networkDownMessage(opts: {
 }
 
 export function networkRecoveredMessage(opts: {
+  adminUpdatedAt?: Date | null;
+  confirmedAt?: Date;
+  adminResponseMin?: number | null;
   incidentId: string;
   carrier: string;
   agentName: string;
@@ -356,7 +359,13 @@ export function networkRecoveredMessage(opts: {
       `📄 <b>${escapeHtml(opts.name)}</b>`,
       ...(opts.usedBackup && opts.primaryUrl ? [`🔗 ลิงก์หลัก: ${escapeHtml(opts.primaryUrl)}`] : []),
       `${opts.usedBackup ? "♻️ ลิงก์สำรอง" : "🔗"} ${escapeHtml(opts.url)}`,
-      `⏱️ ใช้งานไม่ได้ประมาณ ${opts.downMinutes} นาที`,
+      `⏱️ ตรวจพบถึงยืนยันการกลับมาใช้ได้ ${opts.downMinutes} นาที (ไม่ใช่เวลาแก้ของแอดมิน)`,
+      ...(opts.confirmedAt ? [`✅ ตรวจยืนยันว่าใช้ได้: ${fmtDateTime(opts.confirmedAt)}`] : []),
+      ...(opts.adminUpdatedAt && opts.confirmedAt && opts.adminResponseMin != null ? [
+        `🛠️ แอดมินแก้เสร็จ: ${fmtDateTime(opts.adminUpdatedAt)}`,
+        `⏱️ เวลาแก้ไข: ${opts.adminResponseMin} นาที`,
+        `⌛ รอตรวจยืนยัน: ${Math.max(0, Math.round((opts.confirmedAt.getTime() - opts.adminUpdatedAt.getTime()) / 60_000))} นาที`,
+      ] : []),
       ...(opts.slow && responseSeconds ? [`🐢 เวลาตอบกลับ: ${responseSeconds} วินาที`] : []),
       ...(opts.slow ? ["🔎 ระบบจะตรวจติดตามต่ออัตโนมัติ"] : []),
     ].join("\n"),

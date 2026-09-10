@@ -45,6 +45,7 @@ type Incident = {
 type Company = { id: string; name: string; lineGroups: Array<{ id: string; name: string }> };
 
 type MobileIncident = {
+  adminUpdatedAt: string | null;
   adminAckUserName?: string | null;
   adminAckAt?: string | null;
   adminUser?: { name: string } | null;
@@ -308,7 +309,7 @@ export default function IncidentsClient({
                   <MobileIncidentStatusBadge incident={incident} />
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <div className="w-full"><CaseWorkflow id={incident.id} source="MOBILE" status={incident.status} detectedAt={incident.detectedAt} ackAt={incident.adminAckAt} owner={incident.adminAckUserName || (incident.adminAckAt ? incident.adminUser?.name : null)} resolvedAt={incident.resolvedAt} canAct={canAdmin} /></div>
+                  <div className="w-full"><CaseWorkflow id={incident.id} source="MOBILE" status={incident.status} detectedAt={incident.detectedAt} ackAt={incident.adminAckAt} owner={incident.adminAckUserName || (incident.adminAckAt ? incident.adminUser?.name : null)} resolvedAt={incident.resolvedAt} adminUpdatedAt={incident.adminUpdatedAt} canAct={canAdmin} /></div>
                   {canAdmin && <button className="btn-primary text-xs py-1.5" onClick={() => beginMobileEdit(incident)}>✏️ แก้ลิงก์ตรงนี้</button>}
                   {canAdmin && incident.status === "OPEN" && (
                     <button

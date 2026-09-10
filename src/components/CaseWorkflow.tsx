@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { fmtDateTime } from "@/lib/format";
 
 type Event = { id: string; createdAt: string; actorName: string; action: string; note: string; url: string; details: unknown };
-export default function CaseWorkflow({ id, source, status, detectedAt, ackAt, owner, resolvedAt, canAct }: {
+export default function CaseWorkflow({ id, source, status, detectedAt, ackAt, owner, resolvedAt, adminUpdatedAt, canAct }: {
   id: string; source: "SYSTEM" | "MOBILE"; status: string; detectedAt: string; ackAt?: string | null;
-  owner?: string | null; resolvedAt: string | null; canAct: boolean;
+  owner?: string | null; resolvedAt: string | null; adminUpdatedAt?: string | null; canAct: boolean;
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
@@ -41,6 +41,7 @@ export default function CaseWorkflow({ id, source, status, detectedAt, ackAt, ow
     <div className="font-semibold text-slate-700">{closed ? status === "PAUSED" ? "พักการเฝ้าดู · เก็บประวัติ" : "ปิดเคสแล้ว" : status === "ADMIN_UPDATED" ? "ปรับแก้แล้ว · รอตรวจยืนยัน" : ackAt ? "รับเรื่องแล้ว · กำลังดำเนินการ" : "รอรับเรื่อง"}</div>
     <div className="mt-1 text-slate-500">ผู้รับผิดชอบ: {owner || "ยังไม่ระบุ"} · รับเรื่อง: {ackAt ? fmtDateTime(ackAt) : "ยังไม่มีเวลารับเรื่อง"}</div>
     <div className="mt-1 text-slate-500">ตรวจพบ: {fmtDateTime(detectedAt)} · ปิดเคส: {resolvedAt ? fmtDateTime(resolvedAt) : "ยังไม่ปิด"}</div>
+    {adminUpdatedAt && <div className="mt-1 text-slate-600">แอดมินบันทึกแก้เสร็จ: {fmtDateTime(adminUpdatedAt)} · {status === "CLOSED" ? "ตรวจยืนยันแล้ว" : "รอเครื่องตรวจยืนยัน — ยังไม่รับรอง KPI"}</div>}
     <div className="mt-2 flex flex-wrap gap-2">
       {canAct && !closed && !ackAt && <button disabled={busy} className="btn-primary text-xs" onClick={() => act("ACK")}>รับเคสนี้</button>}
       <button className="btn-ghost text-xs" disabled={busy} onClick={() => { setExpanded(!expanded); if (!expanded) void load(); }}> {expanded ? "ซ่อนประวัติ" : "ประวัติ / บันทึก / ส่งต่อ →"}</button>

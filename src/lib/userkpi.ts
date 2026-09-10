@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { verifiedAdminMinutes } from "@/lib/verifiedAdminTiming";
 import { elapsedMinutes } from "@/lib/caseActivity";
 
 export type UserStat = {
@@ -91,7 +92,7 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
   const networkOwnerId = (i: (typeof networkIncidents)[number]) =>
     i.adminUserId;
   const networkResponseMinutes = (i: (typeof networkIncidents)[number]) =>
-    i.adminResponseMin ?? (i.adminUpdatedAt ? Math.max(0, Math.round((i.adminUpdatedAt.getTime() - i.detectedAt.getTime()) / 60_000)) : null);
+    verifiedAdminMinutes(i);
   const scopedIncidents = filters.userId
     ? incidents.filter((i) => i.adminUserId === filters.userId || i.itUserId === filters.userId)
     : incidents;
@@ -108,7 +109,7 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
       (i) => i.itUserId === u.id && i.itResponseMin !== null && i.status !== "PAUSED"
     );
     const asNetworkAdmin = scopedNetworkIncidents.filter(
-      (i) => networkOwnerId(i) === u.id && !!i.adminUpdatedAt && i.status !== "PAUSED"
+      (i) => networkOwnerId(i) === u.id && networkResponseMinutes(i) !== null
     );
     const legacyNetworkCount = asNetworkAdmin.filter(isLegacyHandledNetworkIncident).length;
     const adminMinutes = [
@@ -190,7 +191,8 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
     const b = buckets.find((x) => x.key === ws);
     if (b) {
       b.inc.push(1);
-      if (i.status !== "PAUSED" && i.adminUpdatedAt && i.adminResponseMin !== null) b.adm.push(i.adminResponseMin);
+      const minutes = networkResponseMinutes(i);
+      if (networkOwnerId(i) && minutes !== null) b.adm.push(minutes);
     }
   }
   const trend: TrendPoint[] = buckets.map((b) => ({
@@ -203,7 +205,7 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
   const allAdmin = [
     ...scopedIncidents.filter(i => i.status !== "PAUSED").map((i) => i.adminResponseMin),
     ...scopedNetworkIncidents
-      .filter((i) => !!networkOwnerId(i) && !!i.adminUpdatedAt && i.status !== "PAUSED")
+      .filter((i) => !!networkOwnerId(i) && networkResponseMinutes(i) !== null)
       .map(networkResponseMinutes),
   ].filter((v): v is number => v !== null);
   const allIt = scopedIncidents.filter(i => i.status !== "PAUSED").map((i) => i.itResponseMin).filter((v): v is number => v !== null);

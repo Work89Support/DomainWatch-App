@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { verifiedAdminMinutes } from "@/lib/verifiedAdminTiming";
 import type { Prisma } from "@prisma/client";
 
 export type DashboardData = {
@@ -83,6 +84,7 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
           adminResponseMin: true,
           adminUserId: true,
           adminUpdatedAt: true,
+          resolvedAt: true,
           detectedAt: true,
           updatedAt: true,
           status: true,
@@ -104,14 +106,8 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
     ]);
   const hasSoleAdmin = adminUsers.length === 1;
   const networkAdminMinutes = network30d.flatMap((incident) => {
-    if (incident.adminResponseMin !== null) return [incident.adminResponseMin];
-    const isLegacyHandled =
-      hasSoleAdmin &&
-      !incident.adminUserId &&
-      (incident.status === "ADMIN_UPDATED" || incident.status === "PAUSED");
-    if (!isLegacyHandled) return [];
-    const handledAt = incident.adminUpdatedAt || incident.updatedAt;
-    return [Math.max(0, Math.round((handledAt.getTime() - incident.detectedAt.getTime()) / 60_000))];
+    const minutes = verifiedAdminMinutes(incident);
+    return incident.adminUserId && minutes !== null ? [minutes] : [];
   });
   const incidents30d = centralIncidents30d + network30d.length;
 

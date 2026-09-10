@@ -4,6 +4,18 @@ import { downAlertMessage, mobileAgentReportLines, networkDownMessage, networkRe
 
 const incidentId = "cmtest00000000abcdefgh";
 
+test("mobile closure separates admin repair time from confirmation wait", () => {
+  const message = networkRecoveredMessage({
+    incidentId, carrier: "AIS", agentName: "Test", company: "Example", name: "Login",
+    url: "https://example.com", appBaseUrl: "https://watch.example.com", downMinutes: 30,
+    adminUpdatedAt: new Date("2026-09-10T07:05:00Z"),
+    confirmedAt: new Date("2026-09-10T07:30:00Z"), adminResponseMin: 5,
+  });
+  assert.match(message.text, /เวลาแก้ไข: 5 นาที/);
+  assert.match(message.text, /รอตรวจยืนยัน: 25 นาที/);
+  assert.match(message.text, /ตรวจยืนยันว่าใช้ได้/);
+});
+
 test("down alert identifies the exact incident, company, room and reason", () => {
   const message = downAlertMessage({
     incidentId,

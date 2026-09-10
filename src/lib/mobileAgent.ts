@@ -212,8 +212,30 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
   const routes = await loadRoutes();
   const pendingIncidents = await prisma.networkIncident.findMany({
     where: { agentId, status: { notIn: ["CLOSED", "PAUSED"] } },
-    select: { status: true, link: { select: { url: true, backupUrl: true } } },
+    include: { link: true },
   });
+  // Keep the failed attempt in history, but do not credit it as a successful fix.
+  for (const incident of pendingIncidents) {
+    if (incident.status !== "ADMIN_UPDATED" || !incident.adminUpdatedAt) continue;
+    const failedAfterEdit = (url: string) => results.some((result) =>
+      result.urlHash === mobileUrlHash(url)
+      && mobileUrlHash(result.url) === result.urlHash
+      && result.checkedAt > incident.adminUpdatedAt!
+      && result.status === "DOWN"
+      && !isInconclusiveMobileTimeout(result.error)
+    );
+    if (!failedAfterEdit(incident.link.url)) continue;
+    if (incident.link.backupUrl && !failedAfterEdit(incident.link.backupUrl)) continue;
+    await prisma.$transaction([
+      prisma.networkIncident.update({
+        where: { id: incident.id, status: "ADMIN_UPDATED", updatedAt: incident.updatedAt },
+        data: { status: "OPEN", adminUpdatedAt: null, adminResponseMin: null },
+      }),
+      caseActivity("MOBILE", incident.id, incident.link, "VERIFICATION_FAILED", "ตรวจหลังแก้แล้วยังใช้ไม่ได้ ต้องแก้ไขและส่งตรวจใหม่", undefined,
+        { attemptedAt: incident.adminUpdatedAt.toISOString(), adminUserId: incident.adminUserId }),
+    ]);
+    incident.status = "OPEN";
+  }
   const pendingAdminUrls = new Set(
     pendingIncidents
       .filter((incident) => incident.status === "ADMIN_UPDATED")
@@ -388,6 +410,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
           },
         });
         for (const incident of incidents) {
+          if (incident.adminUpdatedAt && (result.checkedAt <= incident.adminUpdatedAt || !previous || previous.checkedAt <= incident.adminUpdatedAt)) continue;
           await prisma.$transaction([prisma.networkIncident.update({
             where: { id: incident.id },
             data: { status: "CLOSED", resolvedAt: result.checkedAt },
@@ -406,6 +429,9 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
               name: link.name,
               url: link.url,
               downMinutes,
+              adminUpdatedAt: incident.adminUpdatedAt,
+              adminResponseMin: incident.adminResponseMin,
+              confirmedAt: result.checkedAt,
               slow: probeStatus === "SLOW",
               responseMs: result.responseMs,
               appBaseUrl: APP_BASE_URL,
@@ -468,6 +494,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
         where: { agentId, linkId: link.id, status: { notIn: ["CLOSED", "PAUSED"] } },
       });
       for (const incident of incidents) {
+        if (incident.adminUpdatedAt && (result.checkedAt <= incident.adminUpdatedAt || !previous || previous.checkedAt <= incident.adminUpdatedAt)) continue;
         await prisma.$transaction([prisma.networkIncident.update({
           where: { id: incident.id },
           data: {
@@ -490,6 +517,9 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
           primaryUrl: link.url,
           usedBackup: true,
           downMinutes,
+          adminUpdatedAt: incident.adminUpdatedAt,
+          adminResponseMin: incident.adminResponseMin,
+          confirmedAt: result.checkedAt,
           slow: probeStatus === "SLOW",
           responseMs: result.responseMs,
           appBaseUrl: APP_BASE_URL,
