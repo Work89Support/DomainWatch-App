@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyMobileRedirect, mobileUrlHash, nextMobileState, normalizeMobileProbeStatus, normalizeUrl, resolvePublicBaseUrl } from "../src/lib/mobileAgent";
+import { classifyMobileRedirect, mobileNotificationCarrier, mobileUrlHash, nextMobileState, normalizeMobileProbeStatus, normalizeUrl, resolvePublicBaseUrl } from "../src/lib/mobileAgent";
+import { mobileSourceLabel } from "../src/lib/statusPresentation";
+
+test("notifications follow the reported SIM rather than the configured carrier", () => {
+  assert.equal(mobileSourceLabel(mobileNotificationCarrier({ reportedCarrier: " AIS ", carrier: "TRUE" })), "AIS — ประเทศไทย");
+  assert.equal(mobileSourceLabel(mobileNotificationCarrier({ reportedCarrier: "TRUE-H", carrier: "AIS" })), "TRUE — ประเทศไทย");
+  for (const reportedCarrier of [null, "", "   "]) {
+    assert.equal(mobileNotificationCarrier({ reportedCarrier, carrier: "TRUE" }), "เครือข่ายมือถือ");
+  }
+});
 
 test("mobile URL hash ignores fragments but keeps a stable normalized URL", () => {
   assert.equal(normalizeUrl("https://example.com/path#section"), "https://example.com/path");

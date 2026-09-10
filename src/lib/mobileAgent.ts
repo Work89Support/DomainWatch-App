@@ -200,6 +200,10 @@ export function normalizeMobileProbeStatus(
   return status === "DOWN" && isInconclusiveMobileTimeout(error) ? "SLOW" : status;
 }
 
+export function mobileNotificationCarrier(agent: { reportedCarrier: string | null; carrier: string }): string {
+  return agent.reportedCarrier?.trim() || "เครือข่ายมือถือ";
+}
+
 export async function storeMobileResults(agentId: string, results: MobileResultInput[]) {
   const agent = await prisma.mobileAgent.findUniqueOrThrow({ where: { id: agentId } });
   const egressLocation = agent.lastRouteMode === agent.routeMode
@@ -358,7 +362,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
         }), caseActivity("MOBILE", caseId, link, "OPEN", "ซิมยืนยันปัญหาและเปิดเคส", undefined, { detectedAt: result.checkedAt.toISOString(), agentName: agent.name, error: normalizedError ?? null })]);
         await notifyCompany(routes, link.company.id, networkDownMessage({
           incidentId: incident.id,
-          carrier: agent.carrier,
+          carrier: mobileNotificationCarrier(agent),
           agentName: agent.name,
           company: link.company.name,
           room: link.lineGroup?.name,
@@ -395,7 +399,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
           if (!isInconclusiveMobileTimeout(incident.error)) {
             await notifyCompany(routes, link.company.id, networkRecoveredMessage({
               incidentId: incident.id,
-              carrier: agent.carrier,
+              carrier: mobileNotificationCarrier(agent),
               agentName: agent.name,
               company: link.company.name,
               room: link.lineGroup?.name,
@@ -444,7 +448,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
         }), caseActivity("MOBILE", caseId, link, "OPEN", "ลิงก์หลักและสำรองใช้ไม่ได้", undefined, { detectedAt: result.checkedAt.toISOString(), agentName: agent.name, backupUrl: link.backupUrl })]);
         await notifyCompany(routes, link.company.id, networkDownMessage({
           incidentId: incident.id,
-          carrier: agent.carrier,
+          carrier: mobileNotificationCarrier(agent),
           agentName: agent.name,
           company: link.company.name,
           room: link.lineGroup?.name,
@@ -477,7 +481,7 @@ export async function storeMobileResults(agentId: string, results: MobileResultI
         const downMinutes = Math.max(0, Math.round((result.checkedAt.getTime() - incident.detectedAt.getTime()) / 60_000));
         await notifyCompany(routes, link.company.id, networkRecoveredMessage({
           incidentId: incident.id,
-          carrier: agent.carrier,
+          carrier: mobileNotificationCarrier(agent),
           agentName: agent.name,
           company: link.company.name,
           room: link.lineGroup?.name,
