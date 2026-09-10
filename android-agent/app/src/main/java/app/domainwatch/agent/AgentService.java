@@ -30,6 +30,7 @@ public class AgentService extends Service {
     private volatile boolean stopped = false;
     private Thread worker;
     private SecurePrefs prefs;
+    private volatile ExecutorService probePool;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -38,6 +39,10 @@ public class AgentService extends Service {
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        if (prefs.emergencyLocked() || !prefs.isEnrolled()) {
+            stopMonitoring();
+            return START_NOT_STICKY;
+        }
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             stopMonitoring();
             return START_NOT_STICKY;
@@ -57,6 +62,7 @@ public class AgentService extends Service {
             long cycleStarted = System.currentTimeMillis();
             try { runCycle(); }
             catch (Exception error) {
+                if (stopped || prefs.emergencyLocked()) break;
                 String raw = String.valueOf(error.getMessage());
                 boolean unauthorized = raw.toLowerCase(java.util.Locale.US).contains("unauthorized");
                 String message = unauthorized
@@ -88,6 +94,7 @@ public class AgentService extends Service {
         updateNotification("กำลังขอเครือข่ายมือถือ...");
         try (CellularSession cellular = CellularSession.acquire(this, 25)) {
             JSONObject jobsResponse = ApiClient.jobs(cellular.network, prefs.baseUrl(), token);
+            if (stopped || prefs.emergencyLocked()) return;
             JSONArray jobs = jobsResponse.getJSONArray("jobs");
             int slowMs = jobsResponse.optInt("slowResponseMs", 5000);
             String routeMode = jobsResponse.optString("routeMode", "CELLULAR_DIRECT");
@@ -106,16 +113,22 @@ public class AgentService extends Service {
             updateNotification("กำลังตรวจ " + jobs.length() + " URL ผ่าน " + routeLabel);
 
             ExecutorService pool = Executors.newFixedThreadPool(Math.min(32, Math.max(1, jobs.length())));
+            probePool = pool;
             List<Future<JSONObject>> futures = new ArrayList<>();
             final Network selectedNetwork = probeNetwork;
             for (int index = 0; index < jobs.length(); index++) {
+                if (stopped || prefs.emergencyLocked()) { pool.shutdownNow(); return; }
                 JSONObject job = jobs.getJSONObject(index);
-                futures.add(pool.submit((Callable<JSONObject>) () -> ApiClient.probe(selectedNetwork, job, slowMs)));
+                futures.add(pool.submit((Callable<JSONObject>) () -> {
+                    if (stopped || prefs.emergencyLocked()) throw new InterruptedException();
+                    return ApiClient.probe(selectedNetwork, job, slowMs);
+                }));
             }
             pool.shutdown();
             JSONArray results = new JSONArray();
             int up = 0, slow = 0, down = 0;
             for (Future<JSONObject> future : futures) {
+                if (stopped || prefs.emergencyLocked()) { pool.shutdownNow(); return; }
                 JSONObject result = future.get();
                 results.put(result);
                 String status = result.optString("status");
@@ -135,6 +148,7 @@ public class AgentService extends Service {
             body.put("routeModeUsed", routeMode);
             body.put("results", results);
             // ส่งผลผ่านเส้นทางเดียวกับที่ตรวจ เพื่อให้ server อ่านเมือง/ประเทศของ IP ทางออกนั้นได้
+            if (stopped || prefs.emergencyLocked()) return;
             ApiClient.submit(probeNetwork, prefs.baseUrl(), token, body);
             String summary = "ปกติ " + up + " · ช้า " + slow + " · ใช้ไม่ได้ " + down;
             prefs.setLastSummary(summary, System.currentTimeMillis());
@@ -147,6 +161,7 @@ public class AgentService extends Service {
         stopped = true;
         prefs.setServiceRunning(false);
         if (worker != null) worker.interrupt();
+        if (probePool != null) probePool.shutdownNow();
         stopForeground(true);
         stopSelf();
         broadcastUpdate();
@@ -177,12 +192,19 @@ public class AgentService extends Service {
     }
 
     private void updateNotification(String text) {
+        if (stopped || prefs.emergencyLocked()) return;
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(NOTIFICATION_ID, notification(text));
     }
 
     private void broadcastUpdate() {
         sendBroadcast(new Intent(MainActivity.ACTION_STATUS).setPackage(getPackageName()));
     }
-    @Override public void onDestroy() { prefs.setServiceRunning(false); super.onDestroy(); }
+    @Override public void onDestroy() {
+        stopped = true;
+        if (worker != null) worker.interrupt();
+        if (probePool != null) probePool.shutdownNow();
+        prefs.setServiceRunning(false);
+        super.onDestroy();
+    }
     @Override public IBinder onBind(Intent intent) { return null; }
 }

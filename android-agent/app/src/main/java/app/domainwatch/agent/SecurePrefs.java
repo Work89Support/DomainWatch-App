@@ -31,13 +31,20 @@ public final class SecurePrefs {
         return value;
     }
 
-    public void saveEnrollment(String baseUrl, String token, String agentName, String carrier) throws Exception {
+    public int emergencyGeneration() { return prefs.getInt("emergency_generation", 0); }
+    public boolean emergencyLocked() { return prefs.getBoolean("emergency_locked", false); }
+
+    public void saveEnrollment(String baseUrl, String token, String agentName, String carrier, int generation) throws Exception {
+        synchronized (SecurePrefs.class) {
+        if (generation != emergencyGeneration()) throw new Exception("ยกเลิกการผูกเครื่องเนื่องจากคำสั่งฉุกเฉิน");
         prefs.edit()
                 .putString("base_url", baseUrl)
                 .putString("token", encrypt(token))
                 .putString("agent_name", agentName)
                 .putString("carrier", carrier)
+                .putBoolean("emergency_locked", false)
                 .apply();
+        }
     }
 
     public boolean isEnrolled() { return !prefs.getString("token", "").isEmpty(); }
@@ -49,12 +56,36 @@ public final class SecurePrefs {
         catch (Exception e) { return ""; }
     }
     public void clearEnrollment() {
+        synchronized (SecurePrefs.class) {
+        if (emergencyLocked()) return;
         String device = prefs.getString("device_id", "");
         prefs.edit().clear().putString("device_id", device).apply();
+        }
     }
-    public void setServiceRunning(boolean value) { prefs.edit().putBoolean("service_running", value).apply(); }
+    public boolean emergencyClear() {
+        synchronized (SecurePrefs.class) {
+            int generation = emergencyGeneration() + 1;
+            boolean saved = prefs.edit().clear().putBoolean("emergency_locked", true)
+                    .putInt("emergency_generation", generation).commit();
+            try {
+                KeyStore store = KeyStore.getInstance("AndroidKeyStore");
+                store.load(null);
+                if (store.containsAlias(KEY_ALIAS)) store.deleteEntry(KEY_ALIAS);
+            } catch (Exception ignored) { }
+            return saved;
+        }
+    }
+    public void setServiceRunning(boolean value) {
+        synchronized (SecurePrefs.class) {
+            if (!emergencyLocked()) prefs.edit().putBoolean("service_running", value).apply();
+        }
+    }
     public boolean serviceRunning() { return prefs.getBoolean("service_running", false); }
-    public void setLastSummary(String text, long time) { prefs.edit().putString("last_summary", text).putLong("last_time", time).apply(); }
+    public void setLastSummary(String text, long time) {
+        synchronized (SecurePrefs.class) {
+            if (!emergencyLocked()) prefs.edit().putString("last_summary", text).putLong("last_time", time).apply();
+        }
+    }
     public String lastSummary() { return prefs.getString("last_summary", "ยังไม่มีผลตรวจ"); }
     public long lastTime() { return prefs.getLong("last_time", 0L); }
 

@@ -95,6 +95,7 @@ model MobileAgent {
   name            String
   carrier         String    @default("TRUE")
   isActive        Boolean   @default(true)
+  emergencyLockedAt DateTime?
   tokenHash       String?   @unique
   deviceId        String?   @unique
   deviceLabel     String?

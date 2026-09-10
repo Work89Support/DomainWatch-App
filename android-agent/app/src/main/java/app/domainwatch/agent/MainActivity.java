@@ -40,12 +40,14 @@ public class MainActivity extends Activity {
     private Button stopButton;
     private boolean quickSetupPending = false;
     private boolean waitingForBatterySettings = false;
+    private boolean emergencyBusy = false;
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) { refresh(); }
     };
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
         prefs = new SecurePrefs(this);
         buildUi();
         handleIntent(getIntent());
@@ -146,6 +148,11 @@ public class MainActivity extends Activity {
                 }).show());
         root.addView(clear, params(-1, dp(50), 0, 0, 0, 20));
 
+        Button emergency = button("ฉุกเฉิน: ล้างข้อมูลและล็อกเครื่องนี้", Color.rgb(185, 28, 28), Color.WHITE);
+        emergency.setOnClickListener(v -> confirmEmergency());
+        root.addView(emergency, params(-1, dp(60), 0, 0, 0, 12));
+        root.addView(text("ปิดเฉพาะแอปเครื่องนี้ ไม่ระงับบัญชีหรือเครื่องอื่น ไม่ล้าง Chrome หรือข้อมูลส่วนตัว หากไม่มีอินเทอร์เน็ต ต้องให้แอดมินปิดเครื่องในระบบด้วย", 13, Color.rgb(153, 27, 27), false), params(-1, -2, 0, 0, 0, 20));
+
         TextView help = text("วิธีใช้งานแบบง่าย\n1. สแกน QR จากหน้าเครื่องตรวจเครือข่าย\n2. กด เปิดแอป DomainWatch Agent\n3. กด ตั้งค่าให้พร้อมและเริ่มตรวจ\n4. แตะ อนุญาต ในหน้าต่าง Android ที่แสดง\n5. เมื่อครบทุกข้อสามารถปิดหน้าจอได้", 14, Color.rgb(71, 85, 105), false);
         help.setLineSpacing(dp(3), 1.2f);
         LinearLayout helpCard = card();
@@ -155,25 +162,29 @@ public class MainActivity extends Activity {
     }
 
     private void handleIntent(Intent intent) {
+        if (emergencyBusy) return;
         Uri data = intent == null ? null : intent.getData();
         if (data == null || !"domainwatch-agent".equals(data.getScheme()) || !"enroll".equals(data.getHost())) return;
         String base = data.getQueryParameter("base");
         String code = data.getQueryParameter("code");
         if (base == null || code == null) return;
+        final int generation = prefs.emergencyGeneration();
         titleStatus.setText("กำลังผูกเครื่อง...");
         detail.setText("กำลังยืนยัน QR ผ่านเครือข่ายมือถือ");
         new Thread(() -> {
             try (CellularSession cellular = CellularSession.acquire(this, 25)) {
                 JSONObject response = ApiClient.enroll(cellular.network, base, code, prefs.deviceId(this), Build.MANUFACTURER + " " + Build.MODEL);
                 JSONObject agent = response.getJSONObject("agent");
-                prefs.saveEnrollment(base, response.getString("token"), agent.getString("name"), agent.getString("carrier"));
+                prefs.saveEnrollment(base, response.getString("token"), agent.getString("name"), agent.getString("carrier"), generation);
                 runOnUiThread(() -> {
+                    if (generation != prefs.emergencyGeneration() || emergencyBusy) return;
                     Toast.makeText(this, "ผูกเครื่องสำเร็จ", Toast.LENGTH_LONG).show();
                     refresh();
                     beginQuickSetup();
                 });
             } catch (Exception error) {
                 runOnUiThread(() -> {
+                    if (generation != prefs.emergencyGeneration() || emergencyBusy) return;
                     titleStatus.setText("ผูกเครื่องไม่สำเร็จ");
                     detail.setText(String.valueOf(error.getMessage()));
                     Toast.makeText(this, String.valueOf(error.getMessage()), Toast.LENGTH_LONG).show();
@@ -183,6 +194,7 @@ public class MainActivity extends Activity {
     }
 
     private void startMonitoring() {
+        if (emergencyBusy || prefs.emergencyLocked()) return;
         if (!prefs.isEnrolled()) {
             Toast.makeText(this, "กรุณาสแกน QR จากระบบก่อน", Toast.LENGTH_LONG).show();
             return;
@@ -209,6 +221,10 @@ public class MainActivity extends Activity {
             startButton.setEnabled(false);
             stopButton.setEnabled(false);
             refreshSetupStatus();
+            if (prefs.emergencyLocked()) {
+                titleStatus.setText("🔒 ปิดฉุกเฉินบนเครื่องนี้");
+                detail.setText("ข้อมูลเชื่อมต่อถูกล้างแล้ว ติดต่อแอดมินเพื่อตรวจการล็อกฝั่งระบบและออก QR ใหม่ ไม่ใช่การล็อก Chrome หรือถอนการติดตั้ง");
+            }
             return;
         }
         boolean running = prefs.serviceRunning();
@@ -225,6 +241,68 @@ public class MainActivity extends Activity {
         startButton.setEnabled(!running);
         stopButton.setEnabled(running);
         refreshSetupStatus();
+    }
+
+    private void confirmEmergency() {
+        if (emergencyBusy) return;
+        new AlertDialog.Builder(this)
+                .setTitle("ยืนยันปิดฉุกเฉินเฉพาะเครื่องนี้?")
+                .setMessage("จะหยุดตรวจ ล้างรหัสเชื่อมต่อและผลตรวจในแอป และขอล็อกเครื่องที่เซิร์ฟเวอร์ ต้องให้แอดมินออก QR ใหม่เพื่อกลับมาใช้\n\nไม่ลบเคส/ลิงก์ในระบบกลาง ไม่ระงับบัญชีหรือเครื่องอื่น และไม่ล้าง Chrome รูปภาพ หรือข้อมูลส่วนตัว\n\nหากส่งคำสั่งไม่สำเร็จ ข้อมูลในแอปจะยังถูกล้าง แต่ต้องแจ้งแอดมินให้ปิดเครื่องในระบบด้วย")
+                .setNegativeButton("ยกเลิก", null)
+                .setPositiveButton("ยืนยันล้างและล็อก", (dialog, which) -> emergencyShutdown())
+                .show();
+    }
+
+    private void emergencyShutdown() {
+        if (emergencyBusy) return;
+        emergencyBusy = true;
+        quickSetupPending = false;
+        waitingForBatterySettings = false;
+        // Keep the credential only in this short-lived request, never as a retry file.
+        final String base = prefs.baseUrl();
+        final String token = prefs.token();
+        final boolean cleared = prefs.emergencyClear();
+        stopService(new Intent(this, AgentService.class));
+        ((android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancelAll();
+        setIntent(new Intent(this, MainActivity.class)); // Remove any enrollment deep link.
+        refresh();
+        new Thread(() -> {
+            boolean revoked = false;
+            boolean cacheCleared = clearOwnCache(getCacheDir()) & clearOwnCache(getCodeCacheDir());
+            if (!token.isEmpty()) {
+                android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                android.net.Network network = cm == null ? null : cm.getActiveNetwork();
+                if (network != null) {
+                    try { ApiClient.emergency(network, base, token); revoked = true; }
+                    catch (Exception ignored) { /* Do not expose credentials or transport details. */ }
+                }
+            }
+            final boolean confirmed = revoked;
+            final boolean localCleared = cleared && cacheCleared;
+            runOnUiThread(() -> {
+                emergencyBusy = false;
+                refresh();
+                new AlertDialog.Builder(this)
+                        .setTitle(confirmed ? "ล็อกเครื่องที่ระบบแล้ว" : "ยังยืนยันการล็อกที่ระบบไม่ได้")
+                        .setMessage((localCleared ? "ล้างข้อมูลเชื่อมต่อ ผลตรวจ และแคชของแอปแล้ว\n\n" : "ล้างข้อมูลบางส่วนไม่สำเร็จ ให้ใช้การตั้งค่า Android เพื่อล้างข้อมูลแอป\n\n")
+                                + (confirmed ? "แอดมินต้องปลดล็อกเครื่องและออก QR ใหม่ก่อนกลับมาใช้" : "ติดต่อแอดมินให้กดปิดใช้งานเครื่องนี้ในหน้าเครื่องตรวจเครือข่ายทันที อย่าเข้าใจว่าเซิร์ฟเวอร์ล็อกแล้ว")
+                                + "\n\nหากเคยเข้าเว็บผ่าน Chrome ให้กดออกจากระบบและล้างข้อมูลเว็บไซต์ใน Chrome แยกต่างหาก")
+                        .setPositiveButton("รับทราบ", null)
+                        .setNeutralButton("ถอนการติดตั้งแอป", (dialog, which) -> startActivity(new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + getPackageName()))))
+                        .setCancelable(false).show();
+            });
+        }, "domainwatch-emergency").start();
+    }
+
+    private boolean clearOwnCache(java.io.File directory) {
+        java.io.File[] files = directory.listFiles();
+        if (files == null) return !directory.exists();
+        boolean ok = true;
+        for (java.io.File file : files) {
+            if (file.isDirectory()) ok &= clearOwnCache(file);
+            ok &= file.delete();
+        }
+        return ok;
     }
 
     private void beginQuickSetup() {

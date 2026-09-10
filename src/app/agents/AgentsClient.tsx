@@ -22,6 +22,7 @@ type NetworkIncident = {
 type Agent = {
   id: string; name: string; carrier: string; isActive: boolean; deviceLabel: string | null;
   hasEnrollment: boolean;
+  emergencyLockedAt: string | null;
   appVersion: string | null; networkType: string | null; reportedCarrier: string | null;
   routeMode: "CELLULAR_DIRECT" | "VPN_DEFAULT"; lastRouteMode: string | null;
   egressCountry: string | null; egressRegion: string | null; egressCity: string | null;
@@ -296,7 +297,7 @@ export default function AgentsClient({
                 <button key={agent.id} onClick={() => selectAgent(agent.id)} className={`card w-full p-4 text-left transition ${selected?.id === agent.id ? "ring-2 ring-brand-500" : "hover:border-brand-200"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div><div className="font-semibold text-slate-800">📱 {agent.name}</div><div className="text-xs text-slate-400 mt-1">{mobileSourceLabel(agent.reportedCarrier, agent.carrier)} · {since(agent.lastSeenAt, now)}</div></div>
-                    <span className={`badge ${online ? "bg-emerald-50 text-emerald-700" : agent.isActive ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-400"}`}>{online ? "ออนไลน์" : agent.isActive && !agent.hasEnrollment ? "รอผูก QR ใหม่" : agent.isActive ? "ขาดการเชื่อมต่อ" : "ปิดใช้งาน"}</span>
+                    <span className={`badge ${agent.emergencyLockedAt ? "bg-red-50 text-red-700" : online ? "bg-emerald-50 text-emerald-700" : agent.isActive ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-400"}`}>{agent.emergencyLockedAt ? "ล็อกฉุกเฉิน" : online ? "ออนไลน์" : agent.isActive && !agent.hasEnrollment ? "รอผูก QR ใหม่" : agent.isActive ? "ขาดการเชื่อมต่อ" : "ปิดใช้งาน"}</span>
                   </div>
                   {open > 0 && <div className="mt-3 text-xs font-medium text-red-600">🔴 มีปัญหาเครือข่ายค้าง {open} รายการ</div>}
                 </button>
@@ -339,10 +340,11 @@ export default function AgentsClient({
                     {selected.isActive && !selected.hasEnrollment && (
                       <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-700">สิทธิ์โทรศัพท์เดิมหมดแล้ว ต้องสร้าง QR และสแกนผูกเครื่องใหม่</div>
                     )}
+                    {selected.emergencyLockedAt && <div className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">🔒 ล็อกฉุกเฉินเฉพาะเครื่องนี้ ตั้งแต่ {new Date(selected.emergencyLockedAt).toLocaleString("th-TH")} · สิทธิ์เชื่อมต่อเดิมถูกยกเลิกแล้ว แอดมินต้องปลดล็อกและออก QR ใหม่ บัญชีผู้ใช้และเครื่องอื่นไม่ถูกระงับ ทั้งนี้ไม่ใช่การล็อก Chrome หรือยืนยันการล้างข้อมูลบนโทรศัพท์จากระยะไกล</div>}
                   </div>
                   {canManage && <div className="flex gap-2">
                     {selected.isActive && <button className="btn-ghost" disabled={busy} onClick={() => newQr(selected)}>{selected.hasEnrollment ? "สร้าง QR / ย้ายเครื่อง" : "สร้าง QR ผูกใหม่"}</button>}
-                    <button disabled={busy} className={selected.isActive ? "btn-danger" : "btn-primary"} onClick={() => toggle(selected)}>{selected.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน + QR ใหม่"}</button>
+                    <button disabled={busy} className={selected.isActive ? "btn-danger" : "btn-primary"} onClick={() => toggle(selected)}>{selected.isActive ? "ปิดใช้งาน" : selected.emergencyLockedAt ? "ปลดล็อกฉุกเฉิน + QR ใหม่" : "เปิดใช้งาน + QR ใหม่"}</button>
                     <button className="btn-ghost text-red-600" disabled={busy} onClick={() => deleteAgent(selected)}>🗑️ ลบเครื่อง</button>
                   </div>}
                 </div>

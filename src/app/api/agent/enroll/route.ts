@@ -20,13 +20,10 @@ export async function POST(req: NextRequest) {
   const now = new Date();
   try {
     await prisma.$transaction(async (tx) => {
-      const claimed = await tx.mobileEnrollment.updateMany({
-        where: { id: enrollment.id, usedAt: null, expiresAt: { gt: now } },
-        data: { usedAt: now },
-      });
-      if (claimed.count !== 1) throw new Error("enrollment_claimed");
-      await tx.mobileAgent.update({
-        where: { id: enrollment.agentId },
+      // Lock the agent before its QR rows, matching emergency/disable transactions.
+      // A failed QR claim rolls the token change back as part of this transaction.
+      const bound = await tx.mobileAgent.updateMany({
+        where: { id: enrollment.agentId, isActive: true, emergencyLockedAt: null },
         data: {
           tokenHash: hashSecret(token),
           deviceId,
@@ -36,6 +33,12 @@ export async function POST(req: NextRequest) {
           lastSeenAt: now,
         },
       });
+      if (bound.count !== 1) throw new Error("agent_locked");
+      const claimed = await tx.mobileEnrollment.updateMany({
+        where: { id: enrollment.id, usedAt: null, expiresAt: { gt: now } },
+        data: { usedAt: now },
+      });
+      if (claimed.count !== 1) throw new Error("enrollment_claimed");
     });
   } catch {
     return NextResponse.json({ error: "QR ถูกใช้งานไปแล้ว กรุณาสร้าง QR ใหม่" }, { status: 409 });

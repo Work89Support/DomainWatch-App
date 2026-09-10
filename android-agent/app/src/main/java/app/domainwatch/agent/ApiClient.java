@@ -26,6 +26,12 @@ import java.util.regex.Pattern;
 public final class ApiClient {
     private ApiClient() { }
 
+    public static void emergency(Network network, String baseUrl, String token) throws Exception {
+        String base = cleanBase(baseUrl);
+        if (!base.startsWith("https://")) throw new Exception("ต้องใช้ HTTPS");
+        jsonRequest(network, "POST", base + "/api/agent/emergency", token, new JSONObject());
+    }
+
     public static JSONObject enroll(Network network, String baseUrl, String code, String deviceId, String deviceLabel) throws Exception {
         JSONObject body = new JSONObject();
         body.put("code", code);
@@ -158,6 +164,7 @@ public final class ApiClient {
     private static JSONObject jsonRequest(Network network, String method, String url, String token, JSONObject body) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) network.openConnection(new URL(url));
         connection.setRequestMethod(method);
+        connection.setInstanceFollowRedirects(false);
         connection.setConnectTimeout(20000);
         connection.setReadTimeout(30000);
         connection.setRequestProperty("Accept", "application/json");

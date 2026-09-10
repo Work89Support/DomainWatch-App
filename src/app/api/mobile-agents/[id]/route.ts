@@ -40,12 +40,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     data.egressCity = null;
     data.egressUpdatedAt = null;
   }
-  const agent = await prisma.mobileAgent.update({
-    where: { id: params.id },
-    data: {
-      ...data,
-      ...(body.isActive === false ? { tokenHash: null, deviceId: null } : {}),
-    },
+  const agent = await prisma.$transaction(async (tx) => {
+    const updated = await tx.mobileAgent.update({
+      where: { id: params.id },
+      data: {
+        ...data,
+        ...(body.isActive === false ? { tokenHash: null, deviceId: null } : {}),
+        ...(body.isActive === true ? { emergencyLockedAt: null } : {}),
+      },
+    });
+    if (body.isActive === false) await tx.mobileEnrollment.updateMany({
+      where: { agentId: params.id, usedAt: null }, data: { usedAt: new Date() },
+    });
+    return updated;
   });
   return NextResponse.json({ agent });
 }

@@ -18,6 +18,7 @@ export default async function AgentsPage() {
         name: true,
         carrier: true,
         isActive: true,
+        emergencyLockedAt: true,
         tokenHash: true,
         deviceLabel: true,
         appVersion: true,
