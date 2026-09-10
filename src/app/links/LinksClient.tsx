@@ -568,7 +568,7 @@ export default function LinksClient({
               <input className="input" value={modal.backupUrl} onChange={(e) => setModal({ ...modal, backupUrl: e.target.value })} placeholder="https://... (ถ้ามี)" />
             </Field>
             <Field label="หมายเหตุ">
-              <textarea className="input" rows={2} value={modal.note} onChange={(e) => setModal({ ...modal, note: e.target.value })} />
+              <textarea aria-label="หมายเหตุ" className="input min-h-[144px] resize-y" rows={6} value={modal.note} onChange={(e) => setModal({ ...modal, note: e.target.value })} />
             </Field>
             <Field label="สถานะการเฝ้าดู">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

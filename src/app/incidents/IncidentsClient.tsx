@@ -88,12 +88,15 @@ const isOpenIncidentStatus = (status: string) => status !== "CLOSED" && status !
 
 function useDialogFocus(onClose: () => void) {
   const ref = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  // Focus only when the dialog mounts, not when a controlled field changes.
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const dialog = ref.current;
     dialog?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") onCloseRef.current();
       if (event.key !== "Tab" || !dialog) return;
       const focusable = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
       if (focusable.length === 0) return;
@@ -104,7 +107,7 @@ function useDialogFocus(onClose: () => void) {
     };
     document.addEventListener("keydown", onKeyDown);
     return () => { document.removeEventListener("keydown", onKeyDown); previous?.focus(); };
-  }, [onClose]);
+  }, []);
   return ref;
 }
 
@@ -494,7 +497,7 @@ function MobileLinkEditModal({
             <input className="input" value={form.backupUrl} onChange={(event) => onChange({ ...form, backupUrl: event.target.value })} placeholder="https://... (ถ้ามี)" />
           </EditField>
           <EditField label="หมายเหตุ">
-            <textarea className="input" rows={3} value={form.note} onChange={(event) => onChange({ ...form, note: event.target.value })} />
+            <textarea aria-label="หมายเหตุ" className="input min-h-[144px] resize-y" rows={6} value={form.note} onChange={(event) => onChange({ ...form, note: event.target.value })} />
           </EditField>
           <EditField label="สถานะการเฝ้าดู">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
