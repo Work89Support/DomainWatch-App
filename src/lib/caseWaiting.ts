@@ -1,10 +1,12 @@
-export type WaitingDetails = { reason: string; until: string; since: string; owner: string; impact: string };
+export type WaitingDetails = { reason: string; until: string; since: string; owner: string; impact: string; kind?: "forwarded"; recipient?: string };
 export const WAIT_IMPACTS = ["ลูกค้ายังใช้ลิงก์สำรองได้", "ลูกค้ายังใช้งานไม่ได้", "กำลังตรวจสอบผลกระทบ"];
 export function parseWaiting(value: unknown): WaitingDetails | null {
   if (!value || typeof value !== "object") return null;
   const v = value as Record<string, unknown>;
   if (!["reason", "until", "since", "owner", "impact"].every(k => typeof v[k] === "string")) return null;
-  if (!Number.isFinite(Date.parse(v.until as string)) || !Number.isFinite(Date.parse(v.since as string))) return null;
+  if (v.kind === "forwarded" && (typeof v.recipient !== "string" || !v.recipient.trim())) return null;
+  if (!(v.kind === "forwarded" && v.until === "") && !Number.isFinite(Date.parse(v.until as string))) return null;
+  if (!Number.isFinite(Date.parse(v.since as string))) return null;
   return v as WaitingDetails;
 }
 export function activeWaiting(c: { status: string; waitingDetails?: unknown; adminUpdatedAt?: string | Date | null; itResolvedAt?: string | Date | null }): WaitingDetails | null {
@@ -21,4 +23,11 @@ export function waitingInput(body: Record<string, unknown>, now = new Date()) {
   if (!Number.isFinite(until.getTime()) || until <= now) throw new Error("กรุณาระบุเวลาติดตามครั้งถัดไปในอนาคต");
   if (typeof body.impact !== "string" || !WAIT_IMPACTS.includes(body.impact)) throw new Error("กรุณาระบุผลกระทบต่อลูกค้า");
   return { reason, until: until.toISOString(), impact: body.impact };
+}
+export function forwardingInput(body: Record<string, unknown>) {
+  const recipient = typeof body.recipient === "string" ? body.recipient.trim() : "";
+  const reason = typeof body.note === "string" ? body.note.trim() : "";
+  if (!recipient || recipient.length > 200) throw new Error("กรุณาระบุทีม/ผู้รับที่ส่งต่อ ไม่เกิน 200 ตัวอักษร");
+  if (!reason || reason.length > 2000) throw new Error("กรุณาระบุงานที่ส่งต่อ ไม่เกิน 2,000 ตัวอักษร");
+  return { kind: "forwarded" as const, recipient, reason, until: "", impact: "แอดมินติดตามเอง" };
 }

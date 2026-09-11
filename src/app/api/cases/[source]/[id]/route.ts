@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { canActAsAdmin, canActAsIt, canViewIncidents, canAccessCompany } from "@/lib/permissions";
 import { caseActivity, isCaseClosed } from "@/lib/caseActivity";
 import { Prisma } from "@prisma/client";
-import { activeWaiting, waitingInput, WaitingDetails } from "@/lib/caseWaiting";
+import { activeWaiting, waitingInput, forwardingInput, WaitingDetails } from "@/lib/caseWaiting";
 
 export async function POST(req: NextRequest, { params }: { params: { source: string; id: string } }) {
   const me = await getCurrentUser();
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: { source: str
   const body = await req.json().catch(() => ({}));
   const note = typeof body.note === "string" ? body.note.trim() : "";
   if (note.length > 2000) return NextResponse.json({ error: "หมายเหตุต้องไม่เกิน 2,000 ตัวอักษร" }, { status: 400 });
-  if (body.action === "WAIT" || body.action === "RESUME") {
+  if (body.action === "WAIT" || body.action === "RESUME" || body.action === "FORWARD") {
     const it = source === "SYSTEM" && me.role === "IT";
     if (source === "MOBILE" && !canActAsAdmin(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
     const ownerId = it && "itUserId" in incident ? incident.itUserId : incident.adminUserId;
@@ -31,7 +31,8 @@ export async function POST(req: NextRequest, { params }: { params: { source: str
     const now = new Date();
     let waiting: WaitingDetails | undefined;
     try {
-      if (body.action === "WAIT") waiting = { ...waitingInput(body, now), since: activeWaiting(incident)?.since || now.toISOString(), owner: me.name };
+      if (body.action === "FORWARD") waiting = { ...forwardingInput(body), since: now.toISOString(), owner: me.name };
+      else if (body.action === "WAIT") waiting = { ...waitingInput(body, now), since: activeWaiting(incident)?.since || now.toISOString(), owner: me.name };
       else if (!activeWaiting(incident)) return NextResponse.json({ error: "เคสไม่ได้อยู่ระหว่างรอแก้ไข" }, { status: 409 });
     } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : "ข้อมูลไม่ถูกต้อง" }, { status: 400 }); }
     try {
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: { source: str
         const args = { where: { id: incident.id, updatedAt: incident.updatedAt, status: incident.status }, data: { waitingDetails: waiting || Prisma.DbNull } };
         const result = source === "SYSTEM" ? await tx.incident.updateMany(args) : await tx.networkIncident.updateMany(args);
         if (!result.count) throw new Error("CHANGED");
-        await tx.caseActivity.create({ data: { source, caseId: incident.id, companyId: incident.link.companyId, companyName: incident.link.company.name, linkName: incident.link.name, url: incident.link.url, action: body.action, actorId: me.id, actorName: me.name, note: waiting ? `รับเคสแล้ว — รอแก้ไข: ${waiting.reason} · ${waiting.impact}` : "กลับมาดำเนินการแก้ไขต่อ", details: { before: incident.waitingDetails, after: waiting || null, kpiPaused: false }, createdAt: now } });
+        await tx.caseActivity.create({ data: { source, caseId: incident.id, companyId: incident.link.companyId, companyName: incident.link.company.name, linkName: incident.link.name, url: incident.link.url, action: body.action, actorId: me.id, actorName: me.name, note: waiting?.kind === "forwarded" ? `ส่งต่อแล้ว — รอติดตาม · ส่งให้: ${waiting.recipient} · งาน: ${waiting.reason}` : waiting ? `รับเคสแล้ว — รอแก้ไข: ${waiting.reason} · ${waiting.impact}` : "กลับมาดำเนินการแก้ไขต่อ", details: { before: incident.waitingDetails, after: waiting || null, kpiPaused: false }, createdAt: now } });
       });
     } catch (e) {
       if (e instanceof Error && e.message === "CHANGED") return NextResponse.json({ error: "เคสเปลี่ยนแปลงแล้ว กรุณารีเฟรชก่อนบันทึก" }, { status: 409 });

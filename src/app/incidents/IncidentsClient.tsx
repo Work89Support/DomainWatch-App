@@ -253,7 +253,7 @@ export default function IncidentsClient({
               ))}
             </div>
             <div className="flex flex-wrap gap-1 bg-slate-100 rounded-lg p-1">
-              {(["open", "unclaimed", "working", "waiting", "verification", "all"] as const).map((f) => (
+              {(["open", "unclaimed", "working", "waiting", "forwarded", "verification", "all"] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
@@ -545,7 +545,7 @@ function MobileIncidentStatusBadge({ incident }: { incident: MobileIncident }) {
 
 function WorkflowStageBadge({ incident }: { incident: CaseStageInput }) {
   const stage = caseStage(incident);
-  const colors = { unclaimed: "bg-red-50 text-red-600", working: "bg-blue-50 text-blue-700", waiting: "bg-amber-50 text-amber-800", verification: "bg-indigo-50 text-indigo-700", closed: "bg-emerald-50 text-emerald-700", paused: "bg-slate-100 text-slate-600" };
+  const colors = { unclaimed: "bg-red-50 text-red-600", working: "bg-blue-50 text-blue-700", waiting: "bg-amber-50 text-amber-800", forwarded: "bg-cyan-50 text-cyan-800", verification: "bg-indigo-50 text-indigo-700", closed: "bg-emerald-50 text-emerald-700", paused: "bg-slate-100 text-slate-600" };
   return <span className={`badge shrink-0 ${colors[stage]}`}>{CASE_STAGE_LABELS[stage]}</span>;
 }
 
