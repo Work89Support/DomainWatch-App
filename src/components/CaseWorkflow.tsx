@@ -3,12 +3,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { fmtDateTime } from "@/lib/format";
 import { activeWaiting, WAIT_IMPACTS } from "@/lib/caseWaiting";
+import { caseStage, CASE_STAGE_LABELS, CaseStage } from "@/lib/caseStage";
 
 type Event = { id: string; createdAt: string; actorName: string; action: string; note: string; url: string; details: unknown };
-export default function CaseWorkflow({ id, source, status, detectedAt, ackAt, owner, resolvedAt, adminUpdatedAt, canAct, waitingDetails, itResolvedAt }: {
+export default function CaseWorkflow({ id, source, status, detectedAt, ackAt, owner, resolvedAt, adminUpdatedAt, canAct, waitingDetails, itResolvedAt, stage }: {
   id: string; source: "SYSTEM" | "MOBILE"; status: string; detectedAt: string; ackAt?: string | null;
   owner?: string | null; resolvedAt: string | null; adminUpdatedAt?: string | null; canAct: boolean;
   waitingDetails?: unknown; itResolvedAt?: string | null;
+  stage?: CaseStage;
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
@@ -44,7 +46,7 @@ export default function CaseWorkflow({ id, source, status, detectedAt, ackAt, ow
     finally { setBusy(false); }
   }
   return <div className="mt-3 rounded-xl border border-slate-200 p-3 text-xs">
-    <div className="font-semibold text-slate-700">{closed ? status === "PAUSED" ? "พักการเฝ้าดู · เก็บประวัติ" : "ปิดเคสแล้ว" : waiting ? "รับเคสแล้ว — รอแก้ไข" : status === "ADMIN_UPDATED" ? "ปรับแก้แล้ว · รอตรวจยืนยัน" : ackAt ? "รับเรื่องแล้ว · กำลังดำเนินการ" : "รอรับเรื่อง"}</div>
+    <div className="font-semibold text-slate-700">{CASE_STAGE_LABELS[stage || caseStage({ status, waitingDetails, adminUpdatedAt, itResolvedAt, adminAckAt: ackAt })]}</div>
     {waiting && <div className="my-2 rounded-lg bg-amber-50 p-3 text-amber-900"><p className="whitespace-pre-wrap break-words">เหตุผล: {waiting.reason}</p><p>ผู้บันทึกรอ: {waiting.owner} · เริ่มรอ: {fmtDateTime(waiting.since)}</p><p>ติดตามครั้งถัดไป: {fmtDateTime(waiting.until)} {Date.parse(waiting.until) < Date.now() ? "⚠ เลยเวลาติดตามแล้ว" : ""}</p><p>{waiting.impact} · ยังนับเวลา KPI ตามปกติ</p></div>}
     <div className="mt-1 text-slate-500">ผู้รับผิดชอบ: {owner || "ยังไม่ระบุ"} · รับเรื่อง: {ackAt ? fmtDateTime(ackAt) : "ยังไม่มีเวลารับเรื่อง"}</div>
     <div className="mt-1 text-slate-500">ตรวจพบ: {fmtDateTime(detectedAt)} · ปิดเคส: {resolvedAt ? fmtDateTime(resolvedAt) : "ยังไม่ปิด"}</div>

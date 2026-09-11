@@ -4,11 +4,11 @@ import BulkLinkButton from "@/components/BulkLinkButton";
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PageHeader, IncidentStatusBadge } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
 import { fmtDateTime, fmtMinutes } from "@/lib/format";
 import CompanyFilter from "@/components/CompanyFilter";
 import CaseWorkflow from "@/components/CaseWorkflow";
-import { activeWaiting } from "@/lib/caseWaiting";
+import { caseStage, CASE_STAGE_LABELS, matchesCaseFilter, CaseFilter, CaseStageInput } from "@/lib/caseStage";
 import { mobileIncidentStatusText, mobileSourceLabel } from "@/lib/statusPresentation";
 
 type Incident = {
@@ -142,7 +142,7 @@ export default function IncidentsClient({
   const router = useRouter();
   // ลิงก์จาก Telegram อาจชี้มายังเคสที่บอทปิดอัตโนมัติแล้ว
   // เปิดประวัติทั้งหมดทันทีเพื่อไม่ให้เคสดังกล่าวดูเหมือนหายไปจากระบบ
-  const [filter, setFilter] = useState<"open" | "all" | "waiting">(initialIncidentId ? "all" : "open");
+  const [filter, setFilter] = useState<CaseFilter>(initialIncidentId ? "all" : "open");
   const [source, setSource] = useState<"ALL" | "SYSTEM" | "MOBILE">("ALL");
   const [selected, setSelected] = useState<Incident | null>(
     initial.find((incident) => incident.id === initialIncidentId) || null
@@ -156,18 +156,15 @@ export default function IncidentsClient({
 
   const systemOpen = counts.systemOpen;
   const mobileOpen = counts.mobileOpen;
-  const mobileWaitingAction = mobileInitial.filter((incident) => incident.status === "OPEN" && !activeWaiting(incident)).length;
-  const mobileWaitingVerification = mobileInitial.filter((incident) => incident.status === "ADMIN_UPDATED").length;
+  const mobileWaitingAction = mobileInitial.filter((incident) => caseStage(incident) === "unclaimed").length;
+  const mobileWaitingVerification = mobileInitial.filter((incident) => caseStage(incident) === "verification").length;
   const openCount = source === "SYSTEM" ? systemOpen : source === "MOBILE" ? mobileOpen : systemOpen + mobileOpen;
   const totalCount = source === "SYSTEM" ? counts.systemTotal : source === "MOBILE" ? counts.mobileTotal : counts.systemTotal + counts.mobileTotal;
 
-  const waitingCount = (source !== "MOBILE" ? initial.filter(i => activeWaiting(i)).length : 0) + (source !== "SYSTEM" ? mobileInitial.filter(i => activeWaiting(i)).length : 0);
-  const list = filter === "waiting" ? initial.filter(i => activeWaiting(i)) : filter === "open"
-    ? initial.filter((incident) => isOpenIncidentStatus(incident.status))
-    : initial;
-  const mobileList = filter === "waiting" ? mobileInitial.filter(i => activeWaiting(i)) : filter === "open"
-    ? mobileInitial.filter((incident) => isOpenIncidentStatus(incident.status))
-    : mobileInitial;
+  const scopedCases = [...(source !== "MOBILE" ? initial : []), ...(source !== "SYSTEM" ? mobileInitial : [])];
+  const stageCount = (stage: CaseFilter) => scopedCases.filter(i => matchesCaseFilter(i, stage)).length;
+  const list = initial.filter(i => matchesCaseFilter(i, filter));
+  const mobileList = mobileInitial.filter(i => matchesCaseFilter(i, filter));
   const showSystem = source !== "MOBILE";
   const showMobile = source !== "SYSTEM";
 
@@ -255,16 +252,14 @@ export default function IncidentsClient({
                 >{label}</button>
               ))}
             </div>
-            <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
-              {(["open", "waiting", "all"] as const).map((f) => (
+            <div className="flex flex-wrap gap-1 bg-slate-100 rounded-lg p-1">
+              {(["open", "unclaimed", "working", "waiting", "verification", "all"] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
                   className={`px-3 py-1.5 text-sm rounded-md ${filter === f ? "bg-white shadow text-brand-700 font-medium" : "text-slate-500"}`}
                 >
-                  {f === "waiting" ? `รับแล้ว — รอแก้ไข (${waitingCount})` : f === "open"
-                    ? `เปิดค้าง (${openCount})`
-                    : `ประวัติทั้งหมด (${totalCount})`}
+                  {f === "open" ? `เปิดค้าง (${openCount})` : f === "all" ? `ประวัติทั้งหมด (${totalCount})` : `${CASE_STAGE_LABELS[f]} (${stageCount(f)})`}
                 </button>
               ))}
             </div>
@@ -278,7 +273,7 @@ export default function IncidentsClient({
         <div className="mb-6">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <h2 className="font-semibold text-slate-800">📱 ปัญหาที่ตรวจจากซิมมือถือ</h2>
-            {mobileWaitingAction > 0 && <span className="badge bg-red-50 text-red-600">รอจัดการ {mobileWaitingAction}</span>}
+            {mobileWaitingAction > 0 && <span className="badge bg-red-50 text-red-600">ยังไม่รับเคส {mobileWaitingAction}</span>}
             {mobileWaitingVerification > 0 && <span className="badge bg-amber-50 text-amber-700">รอตรวจยืนยัน {mobileWaitingVerification}</span>}
             {filter === "all" && <span className="badge bg-slate-100 text-slate-500">ทั้งหมด {mobileList.length}</span>}
           </div>
@@ -337,7 +332,7 @@ export default function IncidentsClient({
       {showSystem && <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {list.length === 0 && (!showMobile || mobileList.length === 0) && (
           <div className="card p-10 text-center text-slate-400 lg:col-span-2">
-            <div>ไม่มีเหตุการณ์เปิดค้าง</div>
+            <div>ไม่มีเหตุการณ์ตามสถานะที่เลือก</div>
             {filter === "open" && totalCount > 0 && (
               <button className="btn-ghost text-xs mt-3" onClick={() => setFilter("all")}>
                 ดูประวัติที่ปิดแล้ว {totalCount} เคส
@@ -369,11 +364,11 @@ export default function IncidentsClient({
                   {i.resolvedAt ? ` · กลับมา ${fmtDateTime(i.resolvedAt)}` : ""}
                 </div>
               </div>
-              {activeWaiting(i) ? <span className="badge bg-amber-50 text-amber-800">รับเคสแล้ว — รอแก้ไข</span> : <IncidentStatusBadge status={i.status} />}
+              <WorkflowStageBadge incident={i} />
             </div>
 
             {/* Timeline KPI */}
-            <CaseWorkflow waitingDetails={i.waitingDetails} itResolvedAt={i.itResolvedAt} adminUpdatedAt={i.adminUpdatedAt} id={i.id} source="SYSTEM" status={i.status} detectedAt={i.detectedAt} ackAt={canIt && !canAdmin ? i.itAckAt : i.adminAckAt} owner={canIt && !canAdmin ? i.itAckUserName : i.adminAckUserName || (i.adminAckAt ? i.adminUser?.name : null)} resolvedAt={i.resolvedAt} canAct={canAdmin || canIt} />
+            <CaseWorkflow stage={caseStage(i)} waitingDetails={i.waitingDetails} itResolvedAt={i.itResolvedAt} adminUpdatedAt={i.adminUpdatedAt} id={i.id} source="SYSTEM" status={i.status} detectedAt={i.detectedAt} ackAt={canIt && !canAdmin ? i.itAckAt : i.adminAckAt} owner={canIt && !canAdmin ? i.itAckUserName : i.adminAckUserName || (i.adminAckAt ? i.adminUser?.name : null)} resolvedAt={i.resolvedAt} canAct={canAdmin || canIt} />
             {showKpi && <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
               <KpiPill label="แอดมินอัพเดต" value={fmtMinutes(i.adminResponseMin)} done={!!i.adminUpdatedAt} />
               <KpiPill label="ไอทีชี้แจง/สำรอง" value={fmtMinutes(i.itResponseMin)} done={!!i.itResolvedAt} />
@@ -541,20 +536,17 @@ function mobileIncidentCardTone(status: string) {
 }
 
 function MobileIncidentStatusBadge({ incident }: { incident: MobileIncident }) {
-  if (activeWaiting(incident)) return <span className="badge shrink-0 bg-amber-50 text-amber-800">รับเคสแล้ว — รอแก้ไข</span>;
   const status = incident.status;
   if (status === "CLOSED" && incident.redirectType === "BACKUP_USED" && incident.finalUrl) {
     return <span className="badge shrink-0 bg-emerald-50 text-emerald-700">{mobileIncidentStatusText(incident)}</span>;
   }
-  const map: Record<string, { text: string; cls: string }> = {
-    OPEN: { text: "เปิด (รอจัดการ)", cls: "bg-red-50 text-red-600" },
-    ADMIN_UPDATED: { text: "ปรับแก้แล้ว · รอตรวจยืนยัน", cls: "bg-amber-100 text-amber-800" },
-    IT_RESOLVED: { text: "กำลังตรวจยืนยัน", cls: "bg-brand-50 text-brand-700" },
-    PAUSED: { text: "พักการเฝ้าดู", cls: "bg-slate-200 text-slate-700" },
-    CLOSED: { text: "จัดการเรียบร้อย", cls: "bg-emerald-50 text-emerald-700" },
-  };
-  const value = map[status] || map.OPEN;
-  return <span className={`badge shrink-0 ${value.cls}`}>{value.text}</span>;
+  return <WorkflowStageBadge incident={incident} />;
+}
+
+function WorkflowStageBadge({ incident }: { incident: CaseStageInput }) {
+  const stage = caseStage(incident);
+  const colors = { unclaimed: "bg-red-50 text-red-600", working: "bg-blue-50 text-blue-700", waiting: "bg-amber-50 text-amber-800", verification: "bg-indigo-50 text-indigo-700", closed: "bg-emerald-50 text-emerald-700", paused: "bg-slate-100 text-slate-600" };
+  return <span className={`badge shrink-0 ${colors[stage]}`}>{CASE_STAGE_LABELS[stage]}</span>;
 }
 
 function EditField({ label, children }: { label: string; children: React.ReactNode }) {
@@ -675,7 +667,7 @@ function IncidentPanel({
               {incident.link.url} <span className="text-brand-400">↗</span>
             </a>
           </div>
-          {activeWaiting(incident) ? <span className="badge bg-amber-50 text-amber-800">รับเคสแล้ว — รอแก้ไข</span> : <IncidentStatusBadge status={incident.status} />}
+          <WorkflowStageBadge incident={incident} />
         </div>
 
         {/* Timeline */}
