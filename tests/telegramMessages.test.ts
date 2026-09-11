@@ -4,6 +4,28 @@ import { downAlertMessage, mobileAgentReportLines, networkDownMessage, networkRe
 
 const incidentId = "cmtest00000000abcdefgh";
 
+test("network alerts never include the IP exit location", () => {
+  const common = {
+    incidentId, carrier: "AIS", agentName: "Test phone", company: "Example",
+    room: "Room A", name: "Login", url: "https://example.com",
+    appBaseUrl: "https://watch.example.com", egressLocation: "Pattaya, 20, TH",
+  };
+  for (const routeMode of ["CELLULAR", "VPN_DEFAULT"]) {
+    const messages = [
+      networkDownMessage({ ...common, routeMode, detectedAt: new Date("2026-09-11T00:00:00Z") }),
+      networkRecoveredMessage({ ...common, routeMode, downMinutes: 10 }),
+      networkRecoveredMessage({ ...common, routeMode, downMinutes: 10, slow: true }),
+      networkRecoveredMessage({ ...common, routeMode, downMinutes: 10, usedBackup: true }),
+    ];
+    for (const message of messages) {
+      assert.doesNotMatch(message.text, /📍|IP ทางออกโดยประมาณ|Pattaya|20, TH/);
+      assert.match(message.text, /AIS — ประเทศไทย/);
+      assert.match(message.text, /Room A/);
+      assert.ok(message.text.includes(`เส้นทางตรวจ: ${routeMode === "VPN_DEFAULT" ? "VPN" : "ซิมโดยตรง"}`));
+    }
+  }
+});
+
 test("mobile closure separates admin repair time from confirmation wait", () => {
   const message = networkRecoveredMessage({
     incidentId, carrier: "AIS", agentName: "Test", company: "Example", name: "Login",
