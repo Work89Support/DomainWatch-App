@@ -1,5 +1,6 @@
 "use client";
 import ProblemExplanation from "@/components/ProblemExplanation";
+import BulkLinkButton from "@/components/BulkLinkButton";
 
 import { useState, useMemo, useEffect, Fragment } from "react";
 import { useRouter } from "next/navigation";
@@ -298,6 +299,7 @@ export default function LinksClient({
       </td>
       <td className="py-3 px-4 text-right whitespace-nowrap">
         {capabilities.edit && <button className="text-brand-600 hover:underline text-xs mr-3" onClick={() => openEdit(l)}>แก้ไข</button>}
+        {capabilities.edit && <BulkLinkButton linkId={l.id} companyName={companies.find(c => c.id === l.companyId)?.name || ""} />}
         {!capabilities.edit && capabilities.editBackup && <button className="text-brand-600 hover:underline text-xs mr-3" onClick={() => editBackup(l)}>ลิงก์สำรอง</button>}
         {capabilities.delete && <button className="text-red-500 hover:underline text-xs" onClick={() => remove(l.id, l.name)}>ลบ</button>}
       </td>

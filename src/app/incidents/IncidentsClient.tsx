@@ -1,5 +1,6 @@
 "use client";
 import ProblemExplanation from "@/components/ProblemExplanation";
+import BulkLinkButton from "@/components/BulkLinkButton";
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -311,6 +312,7 @@ export default function IncidentsClient({
                 <div className="mt-4 flex flex-wrap gap-2">
                   <div className="w-full"><CaseWorkflow id={incident.id} source="MOBILE" status={incident.status} detectedAt={incident.detectedAt} ackAt={incident.adminAckAt} owner={incident.adminAckUserName || (incident.adminAckAt ? incident.adminUser?.name : null)} resolvedAt={incident.resolvedAt} adminUpdatedAt={incident.adminUpdatedAt} canAct={canAdmin} /></div>
                   {canAdmin && <button className="btn-primary text-xs py-1.5" onClick={() => beginMobileEdit(incident)}>✏️ แก้ลิงก์ตรงนี้</button>}
+                  {canAdmin && <BulkLinkButton linkId={incident.link.id} companyName={incident.link.company.name} />}
                   {canAdmin && incident.status === "OPEN" && (
                     <button
                       className="btn-ghost text-xs py-1.5"
@@ -381,6 +383,7 @@ export default function IncidentsClient({
             )}
 
             <div className="flex flex-wrap gap-2 mt-4">
+              {canAdmin && <BulkLinkButton linkId={i.link.id} companyName={i.link.company.name} />}
               <button className="btn-ghost text-xs py-1.5" onClick={() => setSelected(i)}>
                 {canAdmin || canIt ? "จัดการเคส →" : "ดูรายละเอียด →"}
               </button>
