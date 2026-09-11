@@ -8,9 +8,11 @@ import { PageHeader, IncidentStatusBadge } from "@/components/ui";
 import { fmtDateTime, fmtMinutes } from "@/lib/format";
 import CompanyFilter from "@/components/CompanyFilter";
 import CaseWorkflow from "@/components/CaseWorkflow";
+import { activeWaiting } from "@/lib/caseWaiting";
 import { mobileIncidentStatusText, mobileSourceLabel } from "@/lib/statusPresentation";
 
 type Incident = {
+  waitingDetails?: unknown;
   adminAckUserName?: string | null;
   itAckUserName?: string | null;
   adminUser?: { name: string } | null;
@@ -46,6 +48,7 @@ type Incident = {
 type Company = { id: string; name: string; lineGroups: Array<{ id: string; name: string }> };
 
 type MobileIncident = {
+  waitingDetails?: unknown;
   adminUpdatedAt: string | null;
   adminAckUserName?: string | null;
   adminAckAt?: string | null;
@@ -139,7 +142,7 @@ export default function IncidentsClient({
   const router = useRouter();
   // ลิงก์จาก Telegram อาจชี้มายังเคสที่บอทปิดอัตโนมัติแล้ว
   // เปิดประวัติทั้งหมดทันทีเพื่อไม่ให้เคสดังกล่าวดูเหมือนหายไปจากระบบ
-  const [filter, setFilter] = useState<"open" | "all">(initialIncidentId ? "all" : "open");
+  const [filter, setFilter] = useState<"open" | "all" | "waiting">(initialIncidentId ? "all" : "open");
   const [source, setSource] = useState<"ALL" | "SYSTEM" | "MOBILE">("ALL");
   const [selected, setSelected] = useState<Incident | null>(
     initial.find((incident) => incident.id === initialIncidentId) || null
@@ -153,15 +156,16 @@ export default function IncidentsClient({
 
   const systemOpen = counts.systemOpen;
   const mobileOpen = counts.mobileOpen;
-  const mobileWaitingAction = mobileInitial.filter((incident) => incident.status === "OPEN").length;
+  const mobileWaitingAction = mobileInitial.filter((incident) => incident.status === "OPEN" && !activeWaiting(incident)).length;
   const mobileWaitingVerification = mobileInitial.filter((incident) => incident.status === "ADMIN_UPDATED").length;
   const openCount = source === "SYSTEM" ? systemOpen : source === "MOBILE" ? mobileOpen : systemOpen + mobileOpen;
   const totalCount = source === "SYSTEM" ? counts.systemTotal : source === "MOBILE" ? counts.mobileTotal : counts.systemTotal + counts.mobileTotal;
 
-  const list = filter === "open"
+  const waitingCount = (source !== "MOBILE" ? initial.filter(i => activeWaiting(i)).length : 0) + (source !== "SYSTEM" ? mobileInitial.filter(i => activeWaiting(i)).length : 0);
+  const list = filter === "waiting" ? initial.filter(i => activeWaiting(i)) : filter === "open"
     ? initial.filter((incident) => isOpenIncidentStatus(incident.status))
     : initial;
-  const mobileList = filter === "open"
+  const mobileList = filter === "waiting" ? mobileInitial.filter(i => activeWaiting(i)) : filter === "open"
     ? mobileInitial.filter((incident) => isOpenIncidentStatus(incident.status))
     : mobileInitial;
   const showSystem = source !== "MOBILE";
@@ -252,13 +256,13 @@ export default function IncidentsClient({
               ))}
             </div>
             <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
-              {(["open", "all"] as const).map((f) => (
+              {(["open", "waiting", "all"] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
                   className={`px-3 py-1.5 text-sm rounded-md ${filter === f ? "bg-white shadow text-brand-700 font-medium" : "text-slate-500"}`}
                 >
-                  {f === "open"
+                  {f === "waiting" ? `รับแล้ว — รอแก้ไข (${waitingCount})` : f === "open"
                     ? `เปิดค้าง (${openCount})`
                     : `ประวัติทั้งหมด (${totalCount})`}
                 </button>
@@ -310,7 +314,7 @@ export default function IncidentsClient({
                   <MobileIncidentStatusBadge incident={incident} />
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <div className="w-full"><CaseWorkflow id={incident.id} source="MOBILE" status={incident.status} detectedAt={incident.detectedAt} ackAt={incident.adminAckAt} owner={incident.adminAckUserName || (incident.adminAckAt ? incident.adminUser?.name : null)} resolvedAt={incident.resolvedAt} adminUpdatedAt={incident.adminUpdatedAt} canAct={canAdmin} /></div>
+                  <div className="w-full"><CaseWorkflow waitingDetails={incident.waitingDetails} id={incident.id} source="MOBILE" status={incident.status} detectedAt={incident.detectedAt} ackAt={incident.adminAckAt} owner={incident.adminAckUserName || (incident.adminAckAt ? incident.adminUser?.name : null)} resolvedAt={incident.resolvedAt} adminUpdatedAt={incident.adminUpdatedAt} canAct={canAdmin} /></div>
                   {canAdmin && <button className="btn-primary text-xs py-1.5" onClick={() => beginMobileEdit(incident)}>✏️ แก้ลิงก์ตรงนี้</button>}
                   {canAdmin && <BulkLinkButton linkId={incident.link.id} companyName={incident.link.company.name} />}
                   {canAdmin && incident.status === "OPEN" && (
@@ -365,11 +369,11 @@ export default function IncidentsClient({
                   {i.resolvedAt ? ` · กลับมา ${fmtDateTime(i.resolvedAt)}` : ""}
                 </div>
               </div>
-              <IncidentStatusBadge status={i.status} />
+              {activeWaiting(i) ? <span className="badge bg-amber-50 text-amber-800">รับเคสแล้ว — รอแก้ไข</span> : <IncidentStatusBadge status={i.status} />}
             </div>
 
             {/* Timeline KPI */}
-            <CaseWorkflow id={i.id} source="SYSTEM" status={i.status} detectedAt={i.detectedAt} ackAt={canIt && !canAdmin ? i.itAckAt : i.adminAckAt} owner={canIt && !canAdmin ? i.itAckUserName : i.adminAckUserName || (i.adminAckAt ? i.adminUser?.name : null)} resolvedAt={i.resolvedAt} canAct={canAdmin || canIt} />
+            <CaseWorkflow waitingDetails={i.waitingDetails} itResolvedAt={i.itResolvedAt} adminUpdatedAt={i.adminUpdatedAt} id={i.id} source="SYSTEM" status={i.status} detectedAt={i.detectedAt} ackAt={canIt && !canAdmin ? i.itAckAt : i.adminAckAt} owner={canIt && !canAdmin ? i.itAckUserName : i.adminAckUserName || (i.adminAckAt ? i.adminUser?.name : null)} resolvedAt={i.resolvedAt} canAct={canAdmin || canIt} />
             {showKpi && <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
               <KpiPill label="แอดมินอัพเดต" value={fmtMinutes(i.adminResponseMin)} done={!!i.adminUpdatedAt} />
               <KpiPill label="ไอทีชี้แจง/สำรอง" value={fmtMinutes(i.itResponseMin)} done={!!i.itResolvedAt} />
@@ -537,6 +541,7 @@ function mobileIncidentCardTone(status: string) {
 }
 
 function MobileIncidentStatusBadge({ incident }: { incident: MobileIncident }) {
+  if (activeWaiting(incident)) return <span className="badge shrink-0 bg-amber-50 text-amber-800">รับเคสแล้ว — รอแก้ไข</span>;
   const status = incident.status;
   if (status === "CLOSED" && incident.redirectType === "BACKUP_USED" && incident.finalUrl) {
     return <span className="badge shrink-0 bg-emerald-50 text-emerald-700">{mobileIncidentStatusText(incident)}</span>;
@@ -670,7 +675,7 @@ function IncidentPanel({
               {incident.link.url} <span className="text-brand-400">↗</span>
             </a>
           </div>
-          <IncidentStatusBadge status={incident.status} />
+          {activeWaiting(incident) ? <span className="badge bg-amber-50 text-amber-800">รับเคสแล้ว — รอแก้ไข</span> : <IncidentStatusBadge status={incident.status} />}
         </div>
 
         {/* Timeline */}
