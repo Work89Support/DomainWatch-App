@@ -26,9 +26,9 @@ export default function KpiTrend({
         <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: "#94a3b8" }} unit="น." />
         <Tooltip contentStyle={{ borderRadius: 12, fontSize: 13 }} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Bar yAxisId="left" dataKey="incidents" name="จำนวนเหตุการณ์" fill="#93c5fd" radius={[6, 6, 0, 0]} />
-        <Line yAxisId="right" type="monotone" dataKey="adminAvg" name="KPI แอดมิน (นาที)" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} connectNulls />
-        <Line yAxisId="right" type="monotone" dataKey="itAvg" name="KPI ไอที (นาที)" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+        <Bar isAnimationActive={false} yAxisId="left" dataKey="incidents" name="จำนวนเหตุการณ์" fill="#93c5fd" radius={[6, 6, 0, 0]} />
+        <Line isAnimationActive={false} yAxisId="right" type="monotone" dataKey="adminAvg" name="KPI แอดมิน (นาที)" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+        <Line isAnimationActive={false} yAxisId="right" type="monotone" dataKey="itAvg" name="KPI ไอที (นาที)" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} connectNulls />
       </ComposedChart>
     </ResponsiveContainer>
   );

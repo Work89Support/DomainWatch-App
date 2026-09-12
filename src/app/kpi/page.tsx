@@ -7,6 +7,7 @@ import { canViewKpi, ROLE_LABELS, type AppRole } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import KpiExportActions from "@/components/KpiExportActions";
+import ReportExport from "@/components/ReportExport";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +82,9 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
         </div>
       </form>
 
+      <ReportExport key={fileLabel + source + (searchParams.userId || "")} title="KPI รายคน"
+        context={`${selectedUser?.name || "ทุกคน"} · ${searchParams.from || "เริ่มต้น"} ถึง ${searchParams.to || "ปัจจุบัน"} (เวลาไทย) · ${source === "SYSTEM" ? "ระบบกลาง" : source === "MOBILE" ? "เครือข่ายซิม" : "ทุกแหล่งงาน"} · ข้อมูล ณ ${fmtDateTime(new Date().toISOString())}`}
+        summary={`พบ ${d.totals.incidents} เคส ปิดแล้ว ${d.totals.resolved} เคส พักการเฝ้าดู ${d.lifecycle.paused} เคส\nKPI แอดมินเฉลี่ย ${fmtMinutes(d.totals.avgAdmin)} · ไอทีเฉลี่ย ${fmtMinutes(d.totals.avgIt)}\nมีเวลารับเรื่อง ${d.lifecycle.received} เคส ไม่มีเวลารับเรื่อง ${d.lifecycle.missingAck} เคส\nยึดช่วงวันตรวจพบ เวลาปิดรวมการรอเครื่องตรวจยืนยัน ไม่ใช่เวลาทำงานของพนักงานทั้งหมด`}>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="เหตุการณ์ทั้งหมด" value={d.totals.incidents} tone="brand" />
         <StatCard label="ปิดเคสแล้ว" value={d.totals.resolved} tone="green" />
@@ -154,6 +158,7 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
         )}
       </div>
 
+      </ReportExport>
       {/* ประวัติรายเคส (log) */}
       <div className="card p-5">
         <h2 className="text-lg font-semibold text-slate-800 mb-1">ประวัติรายเคส</h2>

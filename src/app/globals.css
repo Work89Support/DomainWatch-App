@@ -6,6 +6,12 @@
   --brand: #2563eb;
 }
 
+/* Fixed report layout is independent of the device viewport. */
+.report-capture .lg\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.report-capture .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.report-capture .lg\:col-span-2 { grid-column: span 2 / span 2; }
+.report-capture .overflow-x-auto { overflow: visible; }
+
 html,
 body {
   padding: 0;

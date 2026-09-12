@@ -27,6 +27,7 @@ export default function DashboardCharts({
   slow,
   down,
   unknown,
+  showOverview = true,
 }: {
   incidentsPerDay: { date: string; count: number }[];
   categoryBreakdown: { category: string; up: number; slow: number; down: number; total: number }[];
@@ -34,6 +35,7 @@ export default function DashboardCharts({
   slow: number;
   down: number;
   unknown: number;
+  showOverview?: boolean;
 }) {
   const pieData = [
     { name: "ใช้งานได้", value: up, color: GREEN },
@@ -45,9 +47,10 @@ export default function DashboardCharts({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {/* เหตุการณ์ต่อวัน */}
+      {showOverview && <>
       <div className="card p-5 lg:col-span-2">
         <h2 className="text-lg font-semibold text-slate-800 mb-4">
-          เหตุการณ์ระบบกลาง + เครือข่ายซิม (14 วันล่าสุด)
+          เหตุการณ์ระบบกลาง + เครือข่ายซิม (ช่วงเวลาที่เลือก)
         </h2>
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={incidentsPerDay}>
@@ -58,20 +61,21 @@ export default function DashboardCharts({
               contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 13 }}
               labelStyle={{ color: "#334155" }}
             />
-            <Bar dataKey="count" name="เหตุการณ์" fill={BRAND} radius={[6, 6, 0, 0]} />
+            <Bar isAnimationActive={false} dataKey="count" name="เหตุการณ์" fill={BRAND} radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
       {/* สัดส่วนสถานะ */}
       <div className="card p-5">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4">สัดส่วนสถานะลิงก์</h2>
+        <h2 className="text-lg font-semibold text-slate-800 mb-4">สัดส่วนสถานะลิงก์ ณ เวลาสร้างรายงาน</h2>
         {pieData.length === 0 ? (
           <p className="text-sm text-slate-400 text-center py-16">ยังไม่มีข้อมูล</p>
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>
               <Pie
+                isAnimationActive={false}
                 data={pieData}
                 dataKey="value"
                 nameKey="name"
@@ -93,6 +97,7 @@ export default function DashboardCharts({
       </div>
 
       {/* แยกตามหมวด */}
+      </>}
       {categoryBreakdown.length > 0 && (
         <div className="card p-5 lg:col-span-3">
           <h2 className="text-lg font-semibold text-slate-800 mb-4">สถานะแยกตามหมวด</h2>

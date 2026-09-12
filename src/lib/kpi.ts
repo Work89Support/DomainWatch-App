@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { verifiedAdminMinutes } from "@/lib/verifiedAdminTiming";
 import type { Prisma } from "@prisma/client";
+import { bangkokDay, reportPeriod } from "@/lib/reportPeriod";
+import { caseStage, type CaseStage } from "@/lib/caseStage";
 
 export type DashboardData = {
+  stages: Record<CaseStage, number>;
   totalLinks: number;
   activeLinks: number;
   upCount: number;
@@ -53,8 +56,8 @@ export type DashboardData = {
 };
 
 // companyId = undefined => รวมทุกบริษัท
-export async function getDashboardData(companyId?: string, allowedCompanyIds?: string[]): Promise<DashboardData> {
-  const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+export async function getDashboardData(companyId?: string, allowedCompanyIds?: string[], period = reportPeriod()): Promise<DashboardData> {
+  const detectedAt = { gte: period.start, lte: period.end };
   const companyScope = companyId ? { equals: companyId } : allowedCompanyIds ? { in: allowedCompanyIds } : undefined;
   const linkWhere: Prisma.LinkWhereInput = companyScope ? { companyId: companyScope } : {};
   const incWhere: Prisma.IncidentWhereInput = companyScope ? { link: { companyId: companyScope } } : {};
@@ -67,9 +70,9 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
         where: allowedCompanyIds ? { id: { in: allowedCompanyIds } } : {},
         orderBy: { createdAt: "asc" },
       }),
-      prisma.incident.count({ where: { ...incWhere, detectedAt: { gte: since30 } } }),
+      prisma.incident.count({ where: { ...incWhere, detectedAt } }),
       prisma.incident.findMany({
-        where: { ...incWhere, detectedAt: { gte: since30 } },
+        where: { ...incWhere, detectedAt, status: { not: "PAUSED" } },
         select: { adminResponseMin: true, itResponseMin: true },
       }),
       prisma.incident.findMany({
@@ -79,7 +82,7 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
         include: { link: { include: { company: true } } },
       }),
       prisma.networkIncident.findMany({
-        where: { ...networkIncWhere, detectedAt: { gte: since30 } },
+        where: { ...networkIncWhere, detectedAt },
         select: {
           adminResponseMin: true,
           adminUserId: true,
@@ -105,6 +108,12 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
       }),
     ]);
   const hasSoleAdmin = adminUsers.length === 1;
+  const periodCases = await Promise.all([
+    prisma.incident.findMany({ where: { ...incWhere, detectedAt }, select: { status: true, waitingDetails: true, adminUpdatedAt: true, itResolvedAt: true, adminAckAt: true, itAckAt: true } }),
+    prisma.networkIncident.findMany({ where: { ...networkIncWhere, detectedAt }, select: { status: true, waitingDetails: true, adminUpdatedAt: true, adminAckAt: true } }),
+  ]);
+  const stages: Record<CaseStage, number> = { unclaimed: 0, working: 0, waiting: 0, forwarded: 0, verification: 0, closed: 0, paused: 0 };
+  for (const item of periodCases.flat()) stages[caseStage(item)]++;
   const networkAdminMinutes = network30d.flatMap((incident) => {
     const minutes = verifiedAdminMinutes(incident);
     return incident.adminUserId && minutes !== null ? [minutes] : [];
@@ -209,35 +218,34 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
     })
     .filter((c) => (companyId ? c.companyId === companyId : true));
 
-  // incident ต่อวัน 14 วันล่าสุด
-  const since14 = new Date(Date.now() - 13 * 24 * 60 * 60 * 1000);
+  // Daily buckets use Bangkok dates, matching the selected inclusive dates.
   const incs14 = await prisma.incident.findMany({
-    where: { ...incWhere, detectedAt: { gte: since14 } },
+    where: { ...incWhere, detectedAt },
     select: { detectedAt: true },
   });
   const networkIncs14 = await prisma.networkIncident.findMany({
-    where: { ...networkIncWhere, detectedAt: { gte: since14 } },
+    where: { ...networkIncWhere, detectedAt },
     select: { detectedAt: true },
   });
   const dayMap = new Map<string, number>();
-  for (let i = 0; i < 14; i++) {
-    const d = new Date(since14.getTime() + i * 24 * 60 * 60 * 1000);
-    dayMap.set(d.toISOString().slice(0, 10), 0);
+  for (let time = period.start.getTime(); time <= period.end.getTime(); time += 86400000) {
+    dayMap.set(bangkokDay(new Date(time)), 0);
   }
   for (const inc of incs14) {
-    const key = inc.detectedAt.toISOString().slice(0, 10);
+    const key = bangkokDay(inc.detectedAt);
     if (dayMap.has(key)) dayMap.set(key, (dayMap.get(key) || 0) + 1);
   }
   for (const inc of networkIncs14) {
-    const key = inc.detectedAt.toISOString().slice(0, 10);
+    const key = bangkokDay(inc.detectedAt);
     if (dayMap.has(key)) dayMap.set(key, (dayMap.get(key) || 0) + 1);
   }
   const incidentsPerDay = Array.from(dayMap.entries()).map(([date, count]) => ({
-    date: date.slice(5),
+    date,
     count,
   }));
 
   return {
+    stages,
     totalLinks: links.length,
     activeLinks,
     upCount,

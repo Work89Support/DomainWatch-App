@@ -11,21 +11,27 @@ import AdminQueueCard from "@/components/AdminQueueCard";
 import Link from "next/link";
 import { canActAsAdmin, canEditBackup, canRunCheck, canViewKpi } from "@/lib/permissions";
 import { redirect } from "next/navigation";
+import ReportExport from "@/components/ReportExport";
+import { reportPeriod } from "@/lib/reportPeriod";
+import { CASE_STAGE_LABELS, type CaseStage } from "@/lib/caseStage";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: { company?: string };
+  searchParams: { company?: string; from?: string; to?: string };
 }) {
   const me = await requireUser();
   if (me.role === "SITE_STAFF") redirect("/agents");
   const requestedCompany = searchParams.company || undefined;
   const companyId = requestedCompany;
   const allowedCompanyIds = undefined;
+  let period;
+  try { period = reportPeriod(searchParams.from, searchParams.to); }
+  catch (error) { return <div className="p-8"><p role="alert">{error instanceof Error ? error.message : "วันที่ไม่ถูกต้อง"}</p><Link href="/">กลับไปเลือกช่วงเวลา</Link></div>; }
   const [d, companies, companyTelegramRoutes] = await Promise.all([
-    getDashboardData(companyId, allowedCompanyIds),
+    getDashboardData(companyId, allowedCompanyIds, period),
     prisma.company.findMany({
       where: allowedCompanyIds ? { id: { in: allowedCompanyIds } } : {},
       orderBy: { createdAt: "asc" }, select: { id: true, name: true },
@@ -106,22 +112,33 @@ export default async function DashboardPage({
         )}
       </div>
 
-      {/* KPI ย่อ */}
+      {canViewKpi(me.role) && <form method="get" className="card p-4 mb-4 flex flex-wrap items-end gap-3">
+        {companyId && <input type="hidden" name="company" value={companyId} />}
+        <label>ตั้งแต่วันที่<input className="input" type="date" name="from" required defaultValue={period.from} /></label>
+        <label>ถึงวันที่<input className="input" type="date" name="to" required defaultValue={period.to} /></label>
+        <button className="btn-primary" type="submit">แสดงรายงาน</button>
+        <span className="text-xs text-slate-500">เวลาไทย · ไม่เกิน 366 วัน · ยึดวันตรวจพบ</span>
+      </form>}
+      {canViewKpi(me.role) ? <ReportExport key={`${companyId}-${period.from}-${period.to}`} title="รายงานภาพรวม"
+        context={`${companies.find(c => c.id === companyId)?.name || "ทุกบริษัท"} · ${period.from} ถึง ${period.to} (เวลาไทย) · ข้อมูล ณ ${fmtDateTime(new Date().toISOString())}`}
+        summary={`ช่วงที่เลือกพบ ${d.incidents30d} เคส ปิดแล้ว ${d.stages.closed} เคส\n${Object.entries(d.stages).filter(([stage]) => stage !== "closed").map(([stage, count]) => `${CASE_STAGE_LABELS[stage as CaseStage]} ${count}`).join(" · ")}\nKPI แอดมินเฉลี่ย ${fmtMinutes(d.avgAdminMin)} · ไอทีเฉลี่ย ${fmtMinutes(d.avgItMin)}\nสถานะเคสเป็นสถานะล่าสุดของเคสที่ตรวจพบในช่วงที่เลือก ส่วนสถานะลิงก์และยอดเปิดค้างทั้งหมดเป็นข้อมูลปัจจุบัน ไม่ใช่สถานะย้อนหลัง`}>
       {canViewKpi(me.role) && <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="เหตุการณ์เปิดค้าง" value={d.openIncidents} hint="รวมระบบกลางและเครือข่ายซิม" tone={d.openIncidents > 0 ? "amber" : "green"} />
-        <StatCard label="เหตุการณ์ 30 วัน" value={d.incidents30d} tone="brand" />
+        <StatCard label="เหตุการณ์เปิดค้างทั้งหมด ณ ปัจจุบัน" value={d.openIncidents} hint="รวมทุกวันตรวจพบ ระบบกลางและเครือข่ายซิม" tone={d.openIncidents > 0 ? "amber" : "green"} />
+        <StatCard label="เหตุการณ์ในช่วงที่เลือก" value={d.incidents30d} tone="brand" />
         <StatCard label="KPI แอดมิน (เฉลี่ย)" value={fmtMinutes(d.avgAdminMin)} tone="brand" />
         <StatCard label="KPI ไอที (เฉลี่ย)" value={fmtMinutes(d.avgItMin)} tone="brand" />
       </div>}
 
       <DashboardCharts
         incidentsPerDay={d.incidentsPerDay}
-        categoryBreakdown={d.categoryBreakdown}
+        categoryBreakdown={[]}
         up={d.upCount}
         slow={d.slowCount}
         down={d.downCount}
         unknown={d.unknownCount}
       />
+      </ReportExport> : <DashboardCharts incidentsPerDay={d.incidentsPerDay} categoryBreakdown={d.categoryBreakdown} up={d.upCount} slow={d.slowCount} down={d.downCount} unknown={d.unknownCount} />}
+      {canViewKpi(me.role) && <DashboardCharts showOverview={false} incidentsPerDay={[]} categoryBreakdown={d.categoryBreakdown} up={d.upCount} slow={d.slowCount} down={d.downCount} unknown={d.unknownCount} />}
 
       {!companyId && d.companyBreakdown.length > 0 && (
         <div className="card p-5 mt-6">
