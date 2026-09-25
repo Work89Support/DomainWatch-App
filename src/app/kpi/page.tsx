@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import KpiExportActions from "@/components/KpiExportActions";
 import ReportExport from "@/components/ReportExport";
+import { fmtAckDuration } from "@/lib/ackRange";
 
 export const dynamic = "force-dynamic";
 
@@ -92,7 +93,12 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <StatCard label="เคสที่กดรับ" value={d.lifecycle.received} hint="มีบันทึกเวลารับเคสแอดมิน" tone="brand" />
           <StatCard label="เวลารับเคสเฉลี่ย" value={fmtMinutes(d.lifecycle.avgAck)} hint={`เกิดเคส → กดรับ · คำนวณจาก ${d.lifecycle.received} เคส`} tone="brand" />
+          {([['เร็วที่สุด', d.ackExtremes.fastest], ['ช้าที่สุด', d.ackExtremes.slowest]] as const).map(([label, item]) => <div key={label}>
+            <StatCard label={`รับเคส${label}`} value={fmtAckDuration(item?.milliseconds)} hint={item ? `ผู้รับ: ${item.name} · ${item.source === 'MOBILE' ? 'เครือข่ายซิม' : 'ระบบกลาง'}` : 'ไม่มีเวลารับเคสที่ใช้คำนวณในช่วงนี้'} tone={label === 'เร็วที่สุด' ? 'green' : 'amber'} />
+            {item && <p className="mt-2 text-sm"><Link href={`/incidents?incident=${encodeURIComponent(item.id)}`} className="text-brand-600 underline">เปิดเคส #{item.id.slice(-8).toUpperCase()} →</Link>{item.ties > 1 && <span className="text-slate-500"> · เวลาเท่ากัน {item.ties} เคส (แสดงตัวอย่าง 1 เคส)</span>}</p>}
+          </div>)}
         </div>
+        <p className="text-xs text-slate-500 mt-3">เร็วสุด–ช้าสุดวัดจากเวลาเกิดเคสถึงกดรับ ใช้ตัวกรองเดียวกับค่าเฉลี่ย ไม่ใช่เวลาที่ใช้แก้ไขงาน</p>
       </div>
       <div className="card p-5 mb-6">
         <h2 className="font-semibold mb-3">2. การแก้ไขงาน — แก้เสร็จเร็วแค่ไหน</h2>

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { claimedWork } from "@/lib/claimedWork";
 import { visibleInStaffKpi } from "@/lib/kpiVisibility";
+import { ackRange, type AckExtreme } from "@/lib/ackRange";
 import { elapsedMinutes } from "@/lib/caseActivity";
 import { offlineSpans, waitingOverlapMs, type OfflineSpan } from "@/lib/offlineKpi";
 
@@ -49,6 +50,7 @@ export type UserKpiData = {
   siteStaff: { id: string; name: string; devices: { id: string; name: string }[] }[];
   offline: (OfflineSpan & { waitingMinutes: number })[];
   presenceSince: Date | null;
+  ackExtremes: { fastest: AckExtreme | null; slowest: AckExtreme | null };
   lifecycle: { received: number; missingAck: number; repairedWithoutAck: number; avgAck: number | null; avgResolution: number | null; paused: number };
   users: UserStat[];
   userOptions: { id: string; name: string; role: string }[];
@@ -253,6 +255,10 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
   const allIt = scopedIncidents.filter(i => i.status !== "PAUSED").map((i) => i.itResponseMin).filter((v): v is number => v !== null);
 
   return {
+    ackExtremes: ackRange([
+      ...scopedIncidents.map(i => ({ ...i, source: "SYSTEM", name: i.adminUser?.name || i.adminAckUserName || "ไม่พบหลักฐานชื่อผู้รับ" })),
+      ...scopedNetworkIncidents.map(i => ({ ...i, source: "MOBILE", name: i.adminUser?.name || i.adminAckUserName || "ไม่พบหลักฐานชื่อผู้รับ" })),
+    ]),
     offline,
     presenceSince: presence[0]?.createdAt ?? null,
     siteStaff: users.filter(u => u.role === "SITE_STAFF" && (!filters.userId || u.id === filters.userId)).map(u => ({ id: u.id, name: u.name, devices: u.siteDevices })),
