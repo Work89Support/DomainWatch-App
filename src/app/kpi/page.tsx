@@ -35,6 +35,8 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
     status: row.status,
     admin: row.adminName || "",
     adminMinutes: row.adminMin,
+    adminBasis: row.adminBasis,
+    itBasis: row.itBasis,
     it: row.itName || "",
     itMinutes: row.itMin,
   }));
@@ -43,7 +45,7 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
       <PageHeader
         title="KPI รายคน"
-        subtitle="ผลงานผู้กดรับเคส · รับเรื่อง → แก้ไขเสร็จ · ไม่รวมเวลารอเครื่องตรวจยืนยัน"
+        subtitle="แยก KPI รับเคสและแก้ไขงาน · ไม่รับเคสนับจากตรวจพบ · ไม่รวมเวลารอเครื่องยืนยัน"
         action={<KpiExportActions rows={exportRows} fileLabel={fileLabel} />}
       />
 
@@ -84,23 +86,24 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
 
       <ReportExport key={fileLabel + source + (searchParams.userId || "")} title="KPI รายคน"
         context={`${selectedUser?.name || "ทุกคน"} · ${searchParams.from || "เริ่มต้น"} ถึง ${searchParams.to || "ปัจจุบัน"} (เวลาไทย) · ${source === "SYSTEM" ? "ระบบกลาง" : source === "MOBILE" ? "เครือข่ายซิม" : "ทุกแหล่งงาน"} · ข้อมูล ณ ${fmtDateTime(new Date().toISOString())}`}
-        summary={`พบ ${d.totals.incidents} เคส ปิดแล้ว ${d.totals.resolved} เคส พักการเฝ้าดู ${d.lifecycle.paused} เคส\nKPI แอดมินเฉลี่ย ${fmtMinutes(d.totals.avgAdmin)} · ไอทีเฉลี่ย ${fmtMinutes(d.totals.avgIt)}\nมีเวลารับเรื่อง ${d.lifecycle.received} เคส ไม่มีเวลารับเรื่อง ${d.lifecycle.missingAck} เคส\nยึดช่วงวันตรวจพบ เวลาปิดรวมการรอเครื่องตรวจยืนยัน ไม่ใช่เวลาทำงานของพนักงานทั้งหมด`}>
+        summary={`พบ ${d.totals.incidents} เคส ปิดแล้ว ${d.totals.resolved} เคส พักการเฝ้าดู ${d.lifecycle.paused} เคส\nKPI แอดมินเฉลี่ย ${fmtMinutes(d.totals.avgAdmin)} · ไอทีเฉลี่ย ${fmtMinutes(d.totals.avgIt)}\nรับเคส ${d.lifecycle.received} เคส · แก้ไขโดยไม่รับเคส ${d.lifecycle.repairedWithoutAck} เคส · ไม่มีบันทึกรับหรือผลงานที่ยืนยัน ${d.lifecycle.missingAck} เคส\nรับเคส: รับถึงแก้เสร็จ · ไม่รับเคส: ตรวจพบถึงแก้เสร็จ · ไม่รวมรอรีเช็ค`}>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="เหตุการณ์ทั้งหมด" value={d.totals.incidents} tone="brand" />
         <StatCard label="ปิดเคสแล้ว" value={d.totals.resolved} tone="green" />
-        <StatCard label="KPI แอดมินเฉลี่ย" value={fmtMinutes(d.totals.avgAdmin)} hint="รับเรื่อง → แก้ไขเสร็จ (ไม่รวมรีเช็ค)" tone="brand" />
-        <StatCard label="KPI ไอทีเฉลี่ย" value={fmtMinutes(d.totals.avgIt)} hint="รับเรื่อง → ชี้แจง/สำรองเสร็จ" tone="amber" />
+        <StatCard label="KPI แอดมินเฉลี่ย" value={fmtMinutes(d.totals.avgAdmin)} hint="รับ → แก้เสร็จ; ไม่รับเริ่มที่ตรวจพบ (ไม่รวมรีเช็ค)" tone="brand" />
+        <StatCard label="KPI ไอทีเฉลี่ย" value={fmtMinutes(d.totals.avgIt)} hint="รับ → งานเสร็จ; ไม่รับเริ่มที่ตรวจพบ" tone="amber" />
       </div>
 
       {/* กราฟแนวโน้ม */}
       <div className="card p-5 mb-6">
         <h2 className="font-semibold mb-3">การรับเรื่องและปิดเคสตามช่วงเวลาที่เลือก</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="มีเวลารับเรื่องแอดมิน" value={d.lifecycle.received} tone="brand" />
+          <StatCard label="กดรับเคสแอดมิน" value={d.lifecycle.received} tone="brand" />
           <StatCard label="ตรวจพบ → รับเรื่องเฉลี่ย" value={fmtMinutes(d.lifecycle.avgAck)} tone="brand" />
           <StatCard label="ตรวจพบ → ปิดเคสเฉลี่ย" value={fmtMinutes(d.lifecycle.avgResolution)} tone="green" />
-          <StatCard label="ไม่มีเวลารับเรื่อง" value={d.lifecycle.missingAck} tone="amber" />
+          <StatCard label="แก้ไขโดยไม่รับเคส (ยืนยันแล้ว)" value={d.lifecycle.repairedWithoutAck} tone="amber" />
         </div>
+        <p className="text-sm text-slate-500 mt-2">อีก {d.lifecycle.missingAck} เคสไม่มีบันทึกรับหรือผลงานแก้ไขที่ยืนยัน อาจเป็นเคสรอดำเนินการ ระบบปิดเอง หรือหลักฐานเก่าไม่ครบ — ไม่นับเป็นผลงานพนักงาน</p>
         <p className="mt-3 text-xs text-slate-500">ช่วงเวลายึดวันตรวจพบ · พักการเฝ้าดู {d.lifecycle.paused} เคส ไม่รวมเวลาแก้สำเร็จ · เวลาปิดรวมการปิดอัตโนมัติและเวลารอเครื่องตรวจยืนยัน ไม่ใช่เวลาทำงานของพนักงานทั้งหมด · เคสเก่าที่ไม่ทราบผู้ทำรายการไม่ถูกเดาชื่อผู้รับผิดชอบ</p>
         <Link href="/case-history" className="mt-3 inline-block text-brand-600">ตรวจหลักฐานการดำเนินการย้อนหลัง →</Link>
       </div>
@@ -112,7 +115,7 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
       {/* สรุปรายคน (leaderboard) */}
       <div className="card p-5 mb-6">
         <h2 className="text-lg font-semibold text-slate-800 mb-4">สรุปรายคน (ผลงาน)</h2>
-        <p className="text-sm text-slate-500 mb-4">นับให้ผู้กดรับเคสที่มีหลักฐานเท่านั้น ไม่ใช่ผู้แก้ข้อมูลล่าสุด · ปิดอัตโนมัติโดยไม่มีการแก้ไขไม่นับ · เคสซิมต้องตรวจยืนยันสำเร็จ แต่หยุดจับเวลาที่แก้เสร็จ · ข้อมูลเก่าที่ไม่มีหลักฐานรับเคสไม่นำมาคิด KPI</p>
+        <p className="text-sm text-slate-500 mb-4">มีผู้รับ: นับรับถึงแก้เสร็จให้ผู้รับเคส · ไม่มีผู้รับ: นับตรวจพบถึงแก้เสร็จให้ผู้แก้ที่มีหลักฐาน · งานแอดมินต้องตรวจยืนยันสำเร็จ ไม่รวมเวลารอรีเช็ค · ปิดเองโดยไม่มีการแก้ไขหรือหลักฐานไม่ครบไม่นับ</p>
         {d.users.length === 0 ? (
           <p className="text-sm text-slate-400 py-6 text-center">ยังไม่มีผู้ใช้</p>
         ) : (
@@ -124,6 +127,8 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
                   <th className="py-2 pr-4 font-medium">ชื่อ</th>
                   <th className="py-2 pr-4 font-medium">บทบาท</th>
                   <th className="py-2 pr-4 font-medium">เคสที่จัดการ</th>
+                  <th className="py-2 pr-4 font-medium">รับเคส / เวลาเฉลี่ย</th>
+                  <th className="py-2 pr-4 font-medium">แก้โดยไม่รับเคส</th>
                   <th className="py-2 pr-4 font-medium">งานแอดมิน (เฉลี่ย)</th>
                   <th className="py-2 pr-4 font-medium">งานไอที (เฉลี่ย)</th>
                 </tr>
@@ -145,6 +150,10 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
                         {u.legacyNetworkCount > 0 ? ` (ย้อนหลัง ${u.legacyNetworkCount})` : ""}
                       </div>
                     </td>
+                    <td className="py-2.5 pr-4 text-slate-600">
+                      {u.receivedCount} งาน · {fmtMinutes(u.receivedAvgMin)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-slate-600">{u.repairedWithoutAck} งาน</td>
                     <td className="py-2.5 pr-4 text-slate-600">
                       {u.adminCount > 0 ? `${u.adminCount} เคส · ${fmtMinutes(u.adminAvgMin)}` : "-"}
                     </td>
@@ -188,8 +197,8 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
                 <tr className="text-left text-slate-400 border-b border-slate-100">
                   <th className="py-2 pr-4 font-medium">ลิงก์ / แบรนด์</th>
                   <th className="py-2 pr-4 font-medium">ตรวจพบ</th>
-                  <th className="py-2 pr-4 font-medium">แอดมินผู้รับเคส (รับ → แก้เสร็จ)</th>
-                  <th className="py-2 pr-4 font-medium">ไอทีผู้รับเคส (รับ → แก้เสร็จ)</th>
+                  <th className="py-2 pr-4 font-medium">แอดมินผู้รับหรือผู้แก้ / ฐานเวลา</th>
+                  <th className="py-2 pr-4 font-medium">ไอทีผู้รับหรือผู้แก้ / ฐานเวลา</th>
                   <th className="py-2 pr-4 font-medium">สถานะ</th>
                 </tr>
               </thead>
@@ -204,10 +213,10 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
                     </td>
                     <td className="py-2.5 pr-4 text-slate-500">{fmtDateTime(r.detectedAt)}</td>
                     <td className="py-2.5 pr-4 text-slate-600">
-                      {r.adminName ? <>{r.adminName} <span className="text-slate-400">· {fmtMinutes(r.adminMin)}</span></> : <span className="text-slate-300">-</span>}
+                      {r.adminName ? <>{r.adminName} <span className="text-slate-400">· {fmtMinutes(r.adminMin)}</span><div className="text-xs text-slate-500">{r.adminBasis}</div></> : <span className="text-slate-300">-</span>}
                     </td>
                     <td className="py-2.5 pr-4 text-slate-600">
-                      {r.itName ? <>{r.itName} <span className="text-slate-400">· {fmtMinutes(r.itMin)}</span></> : <span className="text-slate-300">-</span>}
+                      {r.itName ? <>{r.itName} <span className="text-slate-400">· {fmtMinutes(r.itMin)}</span><div className="text-xs text-slate-500">{r.itBasis}</div></> : <span className="text-slate-300">-</span>}
                     </td>
                     <td className="py-2.5 pr-4"><IncidentStatusBadge status={r.status} /></td>
                   </tr>

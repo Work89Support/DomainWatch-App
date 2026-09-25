@@ -10,6 +10,8 @@ type ExportRow = {
   status: string;
   admin: string;
   adminMinutes: number | null;
+  adminBasis: string;
+  itBasis: string;
   it: string;
   itMinutes: number | null;
 };
@@ -21,10 +23,10 @@ function csvCell(value: string | number | null) {
 
 export default function KpiExportActions({ rows, fileLabel }: { rows: ExportRow[]; fileLabel: string }) {
   function downloadCsv() {
-    const headers = ["รหัสเคส", "แหล่งงาน", "เครื่องตรวจ", "ลิงก์", "บริษัท", "ตรวจพบ", "สถานะ", "แอดมินผู้รับเคส", "นาทีรับถึงแก้เสร็จ (ไม่รวมรีเช็ค)", "ไอทีผู้รับเคส", "นาทีรับถึงงานไอทีเสร็จ"];
+    const headers = ["รหัสเคส", "แหล่งงาน", "เครื่องตรวจ", "ลิงก์", "บริษัท", "ตรวจพบ", "สถานะ", "แอดมินผู้รับหรือผู้แก้", "นาทีรับถึงแก้เสร็จ หรือพบถึงแก้เสร็จหากไม่รับ (ไม่รวมรีเช็ค)", "ไอทีผู้รับหรือผู้แก้", "นาทีรับถึงงานเสร็จ หรือพบถึงงานเสร็จหากไม่รับ"];
     const lines = [
-      headers.map(csvCell).join(","),
-      ...rows.map((row) => [row.id, row.source, row.agent, row.link, row.company, row.detectedAt, row.status, row.admin, row.adminMinutes, row.it, row.itMinutes].map(csvCell).join(",")),
+      [...headers, "ฐานเวลาแอดมิน", "ฐานเวลาไอที"].map(csvCell).join(","),
+      ...rows.map((row) => [row.id, row.source, row.agent, row.link, row.company, row.detectedAt, row.status, row.admin, row.adminMinutes, row.it, row.itMinutes, row.adminBasis, row.itBasis].map(csvCell).join(",")),
     ];
     const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);

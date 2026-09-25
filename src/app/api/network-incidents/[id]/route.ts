@@ -42,7 +42,7 @@ export async function PATCH(
         adminResponseMin: minutesBetween(incident.detectedAt, markedAt),
         adminUserId: me.id,
       },
-    }), caseActivity("MOBILE", incident.id, incident.link, "mark_updated", "ปรับแก้แล้ว รอผลยืนยันจากเครื่องซิม", me)]);
+    }), caseActivity("MOBILE", incident.id, incident.link, "mark_updated", "ปรับแก้แล้ว รอผลยืนยันจากเครื่องซิม", me, { editedAt: markedAt.toISOString() })]);
     return NextResponse.json({ ok: true, incidentStatus: updated.status });
   }
   if (body.action !== "admin_update") {
@@ -104,7 +104,7 @@ export async function PATCH(
         adminUserId: me.id,
       },
     }), caseActivity("MOBILE", item.id, incident.link, nextIncidentStatus === "PAUSED" ? "PAUSED" : "admin_update", nextIncidentStatus === "PAUSED" ? "พักการเฝ้าดู เก็บประวัติ ไม่ใช่การแก้สำเร็จ" : "แก้ไขข้อมูล รอยืนยันจากซิม", me,
-      { before: { url: oldUrl, backupUrl: incident.link.backupUrl }, after: JSON.parse(JSON.stringify(linkData)) })]
+      { editedAt: checkedAt.toISOString(), before: { url: oldUrl, backupUrl: incident.link.backupUrl }, after: JSON.parse(JSON.stringify(linkData)) })]
   );
   if (result) {
     Object.assign(linkData, {

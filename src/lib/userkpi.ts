@@ -15,6 +15,9 @@ export type UserStat = {
   itCount: number;
   itAvgMin: number | null;
   totalHandled: number;
+  receivedCount: number;
+  receivedAvgMin: number | null;
+  repairedWithoutAck: number;
 };
 
 export type IncidentLogRow = {
@@ -26,6 +29,8 @@ export type IncidentLogRow = {
   resolvedAt: string | null;
   adminName: string | null;
   adminMin: number | null;
+  adminBasis: string;
+  itBasis: string;
   itName: string | null;
   itMin: number | null;
   source: "SYSTEM" | "MOBILE";
@@ -43,7 +48,7 @@ export type UserKpiData = {
   siteStaff: { id: string; name: string; devices: { id: string; name: string }[] }[];
   offline: (OfflineSpan & { waitingMinutes: number })[];
   presenceSince: Date | null;
-  lifecycle: { received: number; missingAck: number; avgAck: number | null; avgResolution: number | null; paused: number };
+  lifecycle: { received: number; missingAck: number; repairedWithoutAck: number; avgAck: number | null; avgResolution: number | null; paused: number };
   users: UserStat[];
   userOptions: { id: string; name: string; role: string }[];
   log: IncidentLogRow[];
@@ -80,8 +85,8 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
       orderBy: { detectedAt: "desc" },
       include: { link: { include: { company: true } }, agent: true, adminUser: true },
     }),
-    prisma.caseActivity.findMany({ where: { action: "ACK", actorId: { not: null } },
-      select: { source: true, caseId: true, action: true, actorId: true, actorName: true, createdAt: true, note: true } }),
+    prisma.caseActivity.findMany({ where: { actorId: { not: null } },
+      select: { source: true, caseId: true, action: true, actorId: true, actorName: true, createdAt: true, note: true, details: true } }),
     prisma.agentPresence.findMany({ orderBy: [{ createdAt: "asc" }, { id: "asc" }] }),
   ]);
   const claimMap = new Map<string, typeof claims>();
@@ -91,13 +96,13 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
   }
   const allIncidents = rawIncidents.map(i => {
     const evidence = claimMap.get(`SYSTEM:${i.id}`) || [];
-    const admin = claimedWork(i.status, i.adminAckAt, i.adminUpdatedAt, evidence.filter(e => e.note === "แอดมินรับเรื่อง"));
-    const it = claimedWork(i.status, i.itAckAt, i.itResolvedAt, evidence.filter(e => e.note === "ไอทีรับเรื่อง"));
+    const admin = claimedWork(i.status, i.adminAckAt, i.adminUpdatedAt, evidence.filter(e => e.action !== "ACK" || e.note === "แอดมินรับเรื่อง"), i.resolvedAt, i.detectedAt);
+    const it = claimedWork(i.status, i.itAckAt, i.itResolvedAt, evidence.filter(e => e.action !== "ACK" || e.note === "ไอทีรับเรื่อง"), undefined, i.detectedAt, true);
     return { ...i, adminUserId: admin.userId, adminUser: admin.name ? { name: admin.name } : null, adminResponseMin: admin.minutes,
       itUserId: it.userId, itUser: it.name ? { name: it.name } : null, itResponseMin: it.minutes };
   });
   const allNetworkIncidents = rawNetworkIncidents.map(i => {
-    const admin = claimedWork(i.status, i.adminAckAt, i.adminUpdatedAt, claimMap.get(`MOBILE:${i.id}`) || [], i.resolvedAt);
+    const admin = claimedWork(i.status, i.adminAckAt, i.adminUpdatedAt, claimMap.get(`MOBILE:${i.id}`) || [], i.resolvedAt, i.detectedAt);
     return { ...i, adminUserId: admin.userId, adminUser: admin.name ? { name: admin.name } : null, adminResponseMin: admin.minutes };
   });
   const from = filters.from ? new Date(`${filters.from}T00:00:00+07:00`) : null;
@@ -154,6 +159,12 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
       itCount: asIt.length,
       itAvgMin: avg(asIt.map((i) => i.itResponseMin as number)),
       totalHandled: new Set([...asAdmin.map(i => `SYSTEM:${i.id}`), ...asIt.map(i => `SYSTEM:${i.id}`), ...asNetworkAdmin.map(i => `MOBILE:${i.id}`)]).size,
+      receivedCount: [...scopedIncidents, ...scopedNetworkIncidents].filter(i => i.adminUserId === u.id && i.adminAckAt).length + scopedIncidents.filter(i => i.itUserId === u.id && i.itAckAt).length,
+      receivedAvgMin: avg([
+        ...[...scopedIncidents, ...scopedNetworkIncidents].filter(i => i.adminUserId === u.id).map(i => elapsedMinutes(i.detectedAt, i.adminAckAt)),
+        ...scopedIncidents.filter(i => i.itUserId === u.id).map(i => elapsedMinutes(i.detectedAt, i.itAckAt)),
+      ].filter((n): n is number => n !== null)),
+      repairedWithoutAck: asAdmin.filter(i => !i.adminAckAt).length + asNetworkAdmin.filter(i => !i.adminAckAt).length + asIt.filter(i => !i.itAckAt).length,
     };
   })
     .sort((a, b) => b.totalHandled - a.totalHandled);
@@ -169,6 +180,8 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
       resolvedAt: i.resolvedAt ? i.resolvedAt.toISOString() : null,
       adminName: i.adminUser?.name ?? null,
       adminMin: i.adminResponseMin,
+      adminBasis: i.adminAckAt ? "รับเคส → แก้เสร็จ" : "ไม่รับเคส: ตรวจพบ → แก้เสร็จ",
+      itBasis: i.itAckAt ? "รับเคส → งานเสร็จ" : "ไม่รับเคส: ตรวจพบ → งานเสร็จ",
       itName: i.itUser?.name ?? null,
       itMin: i.itResponseMin,
       source: "SYSTEM" as const,
@@ -183,6 +196,8 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
       resolvedAt: i.resolvedAt ? i.resolvedAt.toISOString() : null,
       adminName: i.adminUser?.name ?? null,
       adminMin: i.adminResponseMin,
+      adminBasis: i.adminAckAt ? "รับเคส → แก้เสร็จ" : "ไม่รับเคส: ตรวจพบ → แก้เสร็จ",
+      itBasis: "—",
       itName: null,
       itMin: null,
       source: "MOBILE" as const,
@@ -245,7 +260,8 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
       const active = cases.filter(i => i.status !== "PAUSED");
       const ack = active.map(i => elapsedMinutes(i.detectedAt, i.adminAckAt)).filter((n): n is number => n !== null);
       const resolved = active.filter(i => i.status === "CLOSED").map(i => elapsedMinutes(i.detectedAt, i.resolvedAt)).filter((n): n is number => n !== null);
-      return { received: ack.length, missingAck: active.length - ack.length, avgAck: avg(ack), avgResolution: avg(resolved), paused: cases.length - active.length };
+      const repairedWithoutAck = active.filter(i => !i.adminAckAt && i.adminResponseMin !== null && i.adminUserId).length;
+      return { received: ack.length, missingAck: active.length - ack.length - repairedWithoutAck, repairedWithoutAck, avgAck: avg(ack), avgResolution: avg(resolved), paused: cases.length - active.length };
     })(),
     users: users_,
     userOptions: users.map((u) => ({ id: u.id, name: u.name, role: u.role })),

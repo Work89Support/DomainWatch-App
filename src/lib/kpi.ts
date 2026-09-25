@@ -73,7 +73,7 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
       prisma.incident.count({ where: { ...incWhere, detectedAt } }),
       prisma.incident.findMany({
         where: { ...incWhere, detectedAt, status: { not: "PAUSED" } },
-        select: { id: true, status: true, adminAckAt: true, adminUpdatedAt: true, itAckAt: true, itResolvedAt: true },
+        select: { id: true, status: true, detectedAt: true, resolvedAt: true, adminAckAt: true, adminUpdatedAt: true, itAckAt: true, itResolvedAt: true },
       }),
       prisma.incident.findMany({
         where: incWhere,
@@ -116,12 +116,12 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
   ]);
   const stages: Record<CaseStage, number> = { unclaimed: 0, working: 0, waiting: 0, forwarded: 0, verification: 0, closed: 0, paused: 0 };
   for (const item of periodCases.flat()) stages[caseStage(item)]++;
-  const claims = await prisma.caseActivity.findMany({ where: { action: "ACK", actorId: { not: null }, OR: [
+  const claims = await prisma.caseActivity.findMany({ where: { actorId: { not: null }, OR: [
     { source: "SYSTEM", caseId: { in: closedWithKpi.map(i => i.id) } },
     { source: "MOBILE", caseId: { in: network30d.map(i => i.id) } },
-  ] }, select: { source: true, caseId: true, action: true, actorId: true, actorName: true, createdAt: true, note: true } });
-  const evidence = (source: string, id: string, it = false) => claims.filter(c => c.source === source && c.caseId === id && c.note === (it ? "ไอทีรับเรื่อง" : "แอดมินรับเรื่อง"));
-  const networkAdminMinutes = network30d.map(i => claimedWork(i.status, i.adminAckAt, i.adminUpdatedAt, evidence("MOBILE", i.id), i.resolvedAt).minutes)
+  ] }, select: { source: true, caseId: true, action: true, actorId: true, actorName: true, createdAt: true, note: true, details: true } });
+  const evidence = (source: string, id: string, it = false) => claims.filter(c => c.source === source && c.caseId === id && (c.action !== "ACK" || c.note === (it ? "ไอทีรับเรื่อง" : "แอดมินรับเรื่อง")));
+  const networkAdminMinutes = network30d.map(i => claimedWork(i.status, i.adminAckAt, i.adminUpdatedAt, evidence("MOBILE", i.id), i.resolvedAt, i.detectedAt).minutes)
     .filter((v): v is number => v !== null);
   const incidents30d = centralIncidents30d + network30d.length;
 
@@ -165,11 +165,11 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
   const activeLinks = activeArr.length;
 
   const adminVals = closedWithKpi
-    .map(i => claimedWork(i.status, i.adminAckAt, i.adminUpdatedAt, evidence("SYSTEM", i.id)).minutes)
+    .map(i => claimedWork(i.status, i.adminAckAt, i.adminUpdatedAt, evidence("SYSTEM", i.id), i.resolvedAt, i.detectedAt).minutes)
     .filter((v): v is number => v !== null);
   adminVals.push(...networkAdminMinutes);
   const itVals = closedWithKpi
-    .map(i => claimedWork(i.status, i.itAckAt, i.itResolvedAt, evidence("SYSTEM", i.id, true)).minutes)
+    .map(i => claimedWork(i.status, i.itAckAt, i.itResolvedAt, evidence("SYSTEM", i.id, true), undefined, i.detectedAt, true).minutes)
     .filter((v): v is number => v !== null);
   const avg = (arr: number[]) =>
     arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;

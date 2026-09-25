@@ -26,3 +26,22 @@ test("rejects completion before claim and ambiguous evidence", () => {
 test("IT and central work stop timing at completion", () => {
   assert.equal(claimedWork("IT_RESOLVED", ack, done, evidence).minutes, 10);
 });
+const detected = new Date("2026-09-25T00:00:00Z");
+const repair = { action: "admin_update", actorId: "fixer", actorName: "Fixer", createdAt: verified, details: { editedAt: done.toISOString() } };
+test("no ACK credits evidenced fixer from detection to completion, not verification", () => {
+  assert.deepEqual(claimedWork("CLOSED", null, done, [repair], verified, detected), { userId: "fixer", name: "Fixer", minutes: 70 });
+});
+test("claimant stays responsible when another user submits repair", () => {
+  assert.equal(claimedWork("CLOSED", ack, done, [...evidence, repair], verified, detected).userId, "employee");
+});
+test("no ACK requires exact repair evidence and successful verification", () => {
+  assert.equal(claimedWork("CLOSED", null, done, [], verified, detected).minutes,null);
+  assert.equal(claimedWork("ADMIN_UPDATED", null, done, [repair], null, detected).minutes,null);
+  assert.equal(claimedWork("CLOSED", null, done, [{...repair, action:"NOTE"}], verified, detected).minutes,null);
+  assert.equal(claimedWork("CLOSED", null, done, [{...repair, details:{editedAt:ack.toISOString()}}], verified, detected).minutes,null);
+  assert.equal(claimedWork("CLOSED", null, done, [repair,{...repair,actorId:"other"}], verified, detected).minutes,null);
+});
+test("IT completion without ACK uses detection and accepts only IT action", () => {
+  assert.equal(claimedWork("IT_RESOLVED", null, done, [{...repair,action:"it_resolve"}], undefined, detected,true).minutes,70);
+  assert.equal(claimedWork("IT_RESOLVED", null, done, [repair], undefined, detected,true).minutes,null);
+});
