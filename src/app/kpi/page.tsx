@@ -161,8 +161,8 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
 
       {d.siteStaff.length > 0 && <div className="card p-5 mb-6">
         <h2 className="text-lg font-semibold mb-3">พนักงานหน้าไซต์ — การดูแลเครื่องตรวจซิม</h2>
-        <p className="text-sm text-slate-600">{d.siteStaff.map(u => u.name).join(" · ")}</p>
-        <p className="text-sm text-amber-700 mt-2">ยังคำนวณ KPI หน้าไซต์ไม่ได้: ต้องผูกผู้ดูแลกับเครื่องตรวจและบันทึกช่วงออฟไลน์/หยุดตรวจ พร้อมเคสที่รอยืนยันในช่วงนั้นก่อน ข้อมูลออนไลน์ล่าสุดไม่เพียงพอสำหรับสรุปว่าใครทำให้ปิดเคสช้า จึงไม่แสดงเป็น 0 ผลงานและไม่โอนเคสจากแอดมินมาให้พนักงานหน้าไซต์</p>
+        {d.siteStaff.map(u => <p key={u.id} className="text-sm text-slate-600 mt-2"><strong>{u.name}</strong>: {u.devices.map(a => a.name).join(" · ") || "ยังไม่ผูกเครื่อง"}</p>)}
+        <p className="text-sm text-amber-700 mt-2">การมอบหมายเครื่องด้านบนเป็นข้อมูลปัจจุบัน ไม่ใช่ย้อนหลังตามช่วงวันที่ · ยังไม่คำนวณ KPI ออฟไลน์: ต้องมีประวัติช่วงหยุดตรวจและเคสที่รอยืนยันในช่วงนั้นก่อน ไม่ถือว่าเวลารอทั้งหมดเป็นความล่าช้าของพนักงานหน้าไซต์</p>
       </div>}
       </ReportExport>
       {/* ประวัติรายเคส (log) */}

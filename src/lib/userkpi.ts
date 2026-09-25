@@ -39,7 +39,7 @@ export type TrendPoint = {
 };
 
 export type UserKpiData = {
-  siteStaff: { id: string; name: string }[];
+  siteStaff: { id: string; name: string; devices: { id: string; name: string }[] }[];
   lifecycle: { received: number; missingAck: number; avgAck: number | null; avgResolution: number | null; paused: number };
   users: UserStat[];
   userOptions: { id: string; name: string; role: string }[];
@@ -68,7 +68,7 @@ function startOfWeek(d: Date): Date {
 
 export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiData> {
   const [users, rawIncidents, rawNetworkIncidents, claims] = await Promise.all([
-    prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
+    prisma.user.findMany({ orderBy: { createdAt: "asc" }, include: { siteDevices: { select: { id: true, name: true } } } }),
     prisma.incident.findMany({
       orderBy: { detectedAt: "desc" },
       include: { link: { include: { company: true } }, adminUser: true, itUser: true },
@@ -230,7 +230,7 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
   const allIt = scopedIncidents.filter(i => i.status !== "PAUSED").map((i) => i.itResponseMin).filter((v): v is number => v !== null);
 
   return {
-    siteStaff: users.filter(u => u.role === "SITE_STAFF" && (!filters.userId || u.id === filters.userId)).map(u => ({ id: u.id, name: u.name })),
+    siteStaff: users.filter(u => u.role === "SITE_STAFF" && (!filters.userId || u.id === filters.userId)).map(u => ({ id: u.id, name: u.name, devices: u.siteDevices })),
     lifecycle: (() => {
       const cases = [...scopedIncidents, ...scopedNetworkIncidents];
       const active = cases.filter(i => i.status !== "PAUSED");

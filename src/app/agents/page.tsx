@@ -10,11 +10,13 @@ export const dynamic = "force-dynamic";
 export default async function AgentsPage() {
   const user = await requireUser();
   if (!canViewMobileAgents(user.role)) redirect("/");
-  const [agents, links] = await Promise.all([
+  const [agents, links, staff] = await Promise.all([
     prisma.mobileAgent.findMany({
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
+        siteOwnerId: true,
+        siteOwner: { select: { name: true } },
         name: true,
         carrier: true,
         isActive: true,
@@ -64,6 +66,7 @@ export default async function AgentsPage() {
         lineGroup: { select: { name: true } },
       },
     }),
+    prisma.user.findMany({ where: { role: "SITE_STAFF", isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
   const safeAgents = agents.map(({ tokenHash, ...agent }) => ({
     ...agent,
@@ -92,5 +95,6 @@ export default async function AgentsPage() {
     initial={JSON.parse(JSON.stringify(safeAgents))}
     linkContexts={linkContexts}
     canManage={canManageMobileAgents(user.role)}
+    staff={staff}
   />;
 }

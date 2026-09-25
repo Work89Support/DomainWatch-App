@@ -1,5 +1,6 @@
 "use client";
 import ProblemExplanation from "@/components/ProblemExplanation";
+import AgentOwner from "@/components/AgentOwner";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -20,6 +21,7 @@ type NetworkIncident = {
   link: { id: string; name: string; url: string; backupUrl: string | null; company: { name: string }; lineGroup: { name: string } | null };
 };
 type Agent = {
+  siteOwnerId: string | null; siteOwner: { name: string } | null;
   id: string; name: string; carrier: string; isActive: boolean; deviceLabel: string | null;
   hasEnrollment: boolean;
   emergencyLockedAt: string | null;
@@ -71,8 +73,10 @@ export default function AgentsClient({
   initial,
   canManage,
   linkContexts,
+  staff,
 }: {
   initial: Agent[];
+  staff: { id: string; name: string }[];
   canManage: boolean;
   linkContexts: Record<string, LinkContext[]>;
 }) {
@@ -335,6 +339,7 @@ export default function AgentsClient({
                       </div>
                     )}
                     <p className="text-xs text-slate-400 mt-1">{selected.deviceLabel || "ยังไม่มีข้อมูลรุ่นเครื่อง"} · แอป {selected.appVersion || "-"}</p>
+                    <AgentOwner key={`${selected.id}:${selected.siteOwnerId}`} agentId={selected.id} ownerId={selected.siteOwnerId} ownerName={selected.siteOwner?.name || null} staff={staff} canManage={canManage} />
                     <p className="text-xs text-slate-400 mt-1">จุดตรวจ: {mobileSourceLabel(selected.reportedCarrier, selected.carrier)} · {selected.routeMode === "VPN_DEFAULT" ? "VPN" : "ซิมโดยตรง"} · {selected.networkType || "รอข้อมูล"}</p>
                     <p className="text-xs text-emerald-700 mt-1">🔒 ไม่ขอสิทธิ์ GPS · ไม่บันทึก IP · แสดงเฉพาะตำแหน่งโดยประมาณของ IP ทางออก</p>
                     {selected.isActive && !selected.hasEnrollment && (

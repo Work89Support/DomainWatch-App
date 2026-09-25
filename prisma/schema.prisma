@@ -92,6 +92,9 @@ model Link {
 /// โทรศัพท์ตรวจเครือข่ายมือถือ — token เก็บเฉพาะ hash และผูกได้ทีละเครื่อง
 model MobileAgent {
   id              String    @id @default(cuid())
+  siteOwnerId     String?
+  siteOwner       User?     @relation("SiteDevices", fields: [siteOwnerId], references: [id], onDelete: SetNull)
+  siteAssignedAt  DateTime?
   name            String
   carrier         String    @default("TRUE")
   isActive        Boolean   @default(true)
@@ -332,7 +335,24 @@ model User {
   itIncidents           Incident[]           @relation("ITIncidents")
   adminNetworkIncidents NetworkIncident[]    @relation("AdminNetworkIncidents")
   companyAssignments    UserCompany[]
+  siteDevices           MobileAgent[] @relation("SiteDevices")
   passwordResetTokens   PasswordResetToken[]
+}
+
+/// Ownership snapshots are retained even if a device or user is deleted.
+model AgentAssignment {
+  id            String   @id @default(cuid())
+  agentId       String
+  agentName     String
+  previousOwnerId String?
+  ownerId       String?
+  ownerName     String?
+  assignedById  String
+  assignedByName String
+  createdAt     DateTime @default(now())
+
+  @@index([agentId, createdAt])
+  @@index([ownerId, createdAt])
 }
 
 model PasswordResetToken {
