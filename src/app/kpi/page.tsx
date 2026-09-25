@@ -161,8 +161,18 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
 
       {d.siteStaff.length > 0 && <div className="card p-5 mb-6">
         <h2 className="text-lg font-semibold mb-3">พนักงานหน้าไซต์ — การดูแลเครื่องตรวจซิม</h2>
-        {d.siteStaff.map(u => <p key={u.id} className="text-sm text-slate-600 mt-2"><strong>{u.name}</strong>: {u.devices.map(a => a.name).join(" · ") || "ยังไม่ผูกเครื่อง"}</p>)}
-        <p className="text-sm text-amber-700 mt-2">การมอบหมายเครื่องด้านบนเป็นข้อมูลปัจจุบัน ไม่ใช่ย้อนหลังตามช่วงวันที่ · ยังไม่คำนวณ KPI ออฟไลน์: ต้องมีประวัติช่วงหยุดตรวจและเคสที่รอยืนยันในช่วงนั้นก่อน ไม่ถือว่าเวลารอทั้งหมดเป็นความล่าช้าของพนักงานหน้าไซต์</p>
+        {d.siteStaff.map(u => {
+          const spans = d.offline.filter(s => s.ownerId === u.id);
+          const minutes = spans.reduce((n,s) => n+(s.end.getTime()-s.start.getTime())/60_000,0);
+          const waiting = spans.reduce((n,s) => n+s.waitingMinutes,0);
+          return <p key={u.id} className="text-sm text-slate-600 mt-2"><strong>{u.name}</strong>: {u.devices.map(a => a.name).join(" · ") || "ยังไม่ผูกเครื่อง"}<br />ขาดการติดต่อรวม {minutes.toFixed(1)} นาที-เครื่อง · ทับช่วงรอรีเช็ค {waiting.toFixed(1)} นาที-เครื่อง</p>;
+        })}
+        <p className="text-sm text-amber-700 mt-2">KPI ขาดการติดต่อ: เริ่มหลังไม่ติดต่อเกิน 12 นาที จนติดต่อกลับหรือปิดใช้งาน · แยกผู้ดูแลตามประวัติ ณ เวลานั้น ไม่รวมในเวลาแก้เคสแอดมิน ไม่ใช่ข้อสรุปว่าเกิดจากพนักงาน</p>
+        <p className="text-sm text-slate-500 mt-2">เริ่มมีหลักฐาน {d.presenceSince ? fmtDateTime(d.presenceSince.toISOString()) : "รอเครื่องติดต่อครั้งแรก"} · ไม่คำนวณย้อนหลังจากข้อมูลที่ไม่มี · เวลารอรีเช็คแสดงเฉพาะช่วงที่ทับกับออฟไลน์และมีการบันทึกแก้ไขแล้ว ไม่นับเวลาซ้ำเมื่อหลายเคสรอพร้อมกัน</p>
+        <div className="overflow-x-auto mt-4"><table className="w-full text-sm"><thead><tr><th>ผู้ดูแล / เครื่อง</th><th>เริ่มขาดการติดต่อ</th><th>สิ้นสุด / สถานะ</th><th>ออฟไลน์ (นาที)</th><th>ทับช่วงรอรีเช็ค (นาที)</th></tr></thead><tbody>
+          {d.offline.map((s,i) => <tr key={`${s.agentId}:${i}`} className="border-t"><td className="p-2">{d.userOptions.find(u => u.id === s.ownerId)?.name || "ไม่มีผู้ดูแลที่ระบุ"}<br />{s.agentName}</td><td>{fmtDateTime(s.start.toISOString())}</td><td>{s.ongoing ? "ยังขาดการติดต่อ ณ เวลาเปิดรายงาน" : fmtDateTime(s.end.toISOString())}</td><td>{((s.end.getTime()-s.start.getTime())/60_000).toFixed(1)}</td><td>{s.waitingMinutes.toFixed(1)}</td></tr>)}
+          {!d.offline.length && <tr><td colSpan={5} className="p-3 text-slate-500">ไม่พบช่วงออฟไลน์จากหลักฐานในช่วงที่เลือก (ไม่ใช่การยืนยันว่าไม่เคยออฟไลน์)</td></tr>}
+        </tbody></table></div>
       </div>}
       </ReportExport>
       {/* ประวัติรายเคส (log) */}

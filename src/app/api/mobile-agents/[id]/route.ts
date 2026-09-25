@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageMobileAgents } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { recordPresence } from "@/lib/agentPresence";
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -49,6 +50,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         ...(body.isActive === true ? { emergencyLockedAt: null } : {}),
       },
     });
+    if (typeof body.isActive === "boolean") await recordPresence(tx, params.id, "STOP");
     if (body.isActive === false) await tx.mobileEnrollment.updateMany({
       where: { agentId: params.id, usedAt: null }, data: { usedAt: new Date() },
     });
@@ -61,6 +63,10 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!canManageMobileAgents(user.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  await prisma.mobileAgent.delete({ where: { id: params.id } });
+  await prisma.$transaction(async tx => {
+    await tx.mobileAgent.update({ where: { id: params.id }, data: { isActive: false } });
+    await recordPresence(tx, params.id, "STOP");
+    await tx.mobileAgent.delete({ where: { id: params.id } });
+  });
   return NextResponse.json({ ok: true });
 }

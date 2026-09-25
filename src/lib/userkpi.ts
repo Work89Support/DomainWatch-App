@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { claimedWork } from "@/lib/claimedWork";
 import { elapsedMinutes } from "@/lib/caseActivity";
+import { offlineSpans, waitingOverlapMs, type OfflineSpan } from "@/lib/offlineKpi";
 
 export type UserStat = {
   userId: string;
@@ -40,6 +41,8 @@ export type TrendPoint = {
 
 export type UserKpiData = {
   siteStaff: { id: string; name: string; devices: { id: string; name: string }[] }[];
+  offline: (OfflineSpan & { waitingMinutes: number })[];
+  presenceSince: Date | null;
   lifecycle: { received: number; missingAck: number; avgAck: number | null; avgResolution: number | null; paused: number };
   users: UserStat[];
   userOptions: { id: string; name: string; role: string }[];
@@ -67,7 +70,7 @@ function startOfWeek(d: Date): Date {
 }
 
 export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiData> {
-  const [users, rawIncidents, rawNetworkIncidents, claims] = await Promise.all([
+  const [users, rawIncidents, rawNetworkIncidents, claims, presence] = await Promise.all([
     prisma.user.findMany({ orderBy: { createdAt: "asc" }, include: { siteDevices: { select: { id: true, name: true } } } }),
     prisma.incident.findMany({
       orderBy: { detectedAt: "desc" },
@@ -79,6 +82,7 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
     }),
     prisma.caseActivity.findMany({ where: { action: "ACK", actorId: { not: null } },
       select: { source: true, caseId: true, action: true, actorId: true, actorName: true, createdAt: true, note: true } }),
+    prisma.agentPresence.findMany({ orderBy: [{ createdAt: "asc" }, { id: "asc" }] }),
   ]);
   const claimMap = new Map<string, typeof claims>();
   for (const claim of claims) {
@@ -99,6 +103,9 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
   const from = filters.from ? new Date(`${filters.from}T00:00:00+07:00`) : null;
   const to = filters.to ? new Date(`${filters.to}T23:59:59.999+07:00`) : null;
   const inPeriod = (date: Date) => (!from || date >= from) && (!to || date <= to);
+  const offline = (filters.source === "SYSTEM" ? [] : offlineSpans(presence, new Date(), from, to))
+    .filter(s => !filters.userId || s.ownerId === filters.userId)
+    .map(s => ({ ...s, waitingMinutes: waitingOverlapMs(s, rawNetworkIncidents.filter(i => i.agentId === s.agentId && i.status !== "PAUSED")) / 60_000 }));
   const incidents = filters.source === "MOBILE"
     ? []
     : allIncidents.filter((i) => inPeriod(i.detectedAt));
@@ -230,6 +237,8 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
   const allIt = scopedIncidents.filter(i => i.status !== "PAUSED").map((i) => i.itResponseMin).filter((v): v is number => v !== null);
 
   return {
+    offline,
+    presenceSince: presence[0]?.createdAt ?? null,
     siteStaff: users.filter(u => u.role === "SITE_STAFF" && (!filters.userId || u.id === filters.userId)).map(u => ({ id: u.id, name: u.name, devices: u.siteDevices })),
     lifecycle: (() => {
       const cases = [...scopedIncidents, ...scopedNetworkIncidents];

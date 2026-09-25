@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { recordPresence } from "@/lib/agentPresence";
 import { bearerToken, hashSecret } from "@/lib/mobileAgent";
 
 // The bearer identifies exactly one enrollment; never accepts a user/agent ID.
@@ -16,6 +17,7 @@ export async function POST(req: NextRequest) {
       data: { isActive: false, tokenHash: null, emergencyLockedAt: now },
     });
     if (changed.count !== 1) return false;
+    await recordPresence(tx, agent.id, "STOP");
     await tx.mobileEnrollment.updateMany({
       where: { agentId: agent.id, usedAt: null }, data: { usedAt: now },
     });

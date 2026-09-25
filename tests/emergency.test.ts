@@ -14,8 +14,10 @@ for (const scenario of ["valid", "unknown", "rotated"] as const) {
   test(`emergency ${scenario}: only the bearer enrollment can be revoked`, async (t) => {
     const changes: unknown[] = [];
     const enrollments: unknown[] = [];
+    const presence: { data: { kind: string; agentId: string } }[] = [];
     const tx = {
       mobileAgent: {
+        findUniqueOrThrow: async () => ({ id: "this-device", name: "Phone", siteOwnerId: "staff" }),
         findUnique: async (args: unknown) => {
           assert.deepEqual(args, { where: { tokenHash: hashSecret("device-secret") } });
           return scenario === "unknown" ? null : { id: "this-device" };
@@ -23,6 +25,7 @@ for (const scenario of ["valid", "unknown", "rotated"] as const) {
         updateMany: async (args: unknown) => { changes.push(args); return { count: scenario === "rotated" ? 0 : 1 }; },
       },
       mobileEnrollment: { updateMany: async (args: unknown) => { enrollments.push(args); return { count: 2 }; } },
+      agentPresence: { create: async (args: { data: { kind: string; agentId: string } }) => { presence.push(args); } },
       // No user, link, case or other-device mutation is available to this transaction.
     };
     t.mock.method(prisma, "$transaction", async (callback: (client: typeof tx) => unknown) => callback(tx));
@@ -32,6 +35,8 @@ for (const scenario of ["valid", "unknown", "rotated"] as const) {
     }));
     assert.equal(response.status, scenario === "valid" ? 200 : 401);
     assert.equal(enrollments.length, scenario === "valid" ? 1 : 0);
+    assert.equal(presence.length, scenario === "valid" ? 1 : 0);
+    if (presence.length) assert.deepEqual([presence[0].data.agentId, presence[0].data.kind], ["this-device", "STOP"]);
     if (scenario !== "unknown") {
       const change = changes[0] as { where: unknown; data: Record<string, unknown> };
       assert.deepEqual(change.where, { id: "this-device", tokenHash: hashSecret("device-secret") });

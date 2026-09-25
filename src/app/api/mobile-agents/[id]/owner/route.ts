@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageMobileAgents } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { recordPresence } from "@/lib/agentPresence";
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const actor = await getCurrentUser();
@@ -23,6 +24,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       const now = new Date();
       const changed = await tx.mobileAgent.updateMany({ where: { id: agent.id, siteOwnerId: body.expectedOwnerId }, data: { siteOwnerId: body.ownerId, siteAssignedAt: now } });
       if (changed.count !== 1) throw new Error("STALE");
+      await recordPresence(tx, agent.id, "OWNER");
       await tx.agentAssignment.create({ data: { agentId: agent.id, agentName: agent.name, previousOwnerId: agent.siteOwnerId,
         ownerId: owner?.id, ownerName: owner?.name, assignedById: actor.id, assignedByName: actor.name, createdAt: now } });
       return { owner, assignedAt: now };

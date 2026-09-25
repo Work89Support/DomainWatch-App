@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { LinkStatus } from "@prisma/client";
 import { authenticateMobileAgent, storeMobileResults } from "@/lib/mobileAgent";
 import { prisma } from "@/lib/prisma";
+import { recordPresence } from "@/lib/agentPresence";
 import { getRequestGeo, hasRequestGeo } from "@/lib/requestGeo";
 
 const VALID_STATUS = new Set<LinkStatus>(["UP", "SLOW", "DOWN"]);
@@ -42,8 +43,9 @@ export async function POST(req: NextRequest) {
       checkedAt,
     }];
   });
-  await prisma.mobileAgent.update({
-    where: { id: agent.id },
+  const active = await prisma.$transaction(async tx => {
+  const changed = await tx.mobileAgent.updateMany({
+    where: { id: agent.id, isActive: true, tokenHash: agent.tokenHash },
     data: {
       lastSeenAt: new Date(),
       deviceLabel: typeof body.deviceLabel === "string" ? body.deviceLabel.slice(0, 160) : agent.deviceLabel,
@@ -59,6 +61,10 @@ export async function POST(req: NextRequest) {
       } : {}),
     },
   });
+  if (changed.count) await recordPresence(tx, agent.id, "HEARTBEAT");
+  return changed.count === 1;
+  });
+  if (!active) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const summary = await storeMobileResults(agent.id, results);
   return NextResponse.json({ ok: true, ...summary, receivedAt: new Date().toISOString() });
 }

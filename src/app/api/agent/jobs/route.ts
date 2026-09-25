@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateMobileAgent, mobileUrlHash, normalizeUrl } from "@/lib/mobileAgent";
 import { prisma } from "@/lib/prisma";
+import { recordPresence } from "@/lib/agentPresence";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +16,12 @@ export async function GET(req: NextRequest) {
   const unique = Array.from(new Set(links.flatMap((item) => [item.url, item.backupUrl])
     .filter((url): url is string => Boolean(url?.trim()))
     .map((url) => normalizeUrl(url))));
-  await prisma.mobileAgent.update({
-    where: { id: agent.id },
-    data: { lastSeenAt: new Date() },
+  const active = await prisma.$transaction(async tx => {
+    const changed = await tx.mobileAgent.updateMany({ where: { id: agent.id, isActive: true, tokenHash: agent.tokenHash }, data: { lastSeenAt: new Date() } });
+    if (changed.count) await recordPresence(tx, agent.id, "HEARTBEAT");
+    return changed.count === 1;
   });
+  if (!active) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   return NextResponse.json({
     agent: { id: agent.id, name: agent.name, carrier: agent.carrier },
     routeMode: agent.routeMode,

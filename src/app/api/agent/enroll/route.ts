@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { recordPresence } from "@/lib/agentPresence";
 import { hashSecret, randomSecret } from "@/lib/mobileAgent";
 
 export async function POST(req: NextRequest) {
@@ -34,6 +35,8 @@ export async function POST(req: NextRequest) {
         },
       });
       if (bound.count !== 1) throw new Error("agent_locked");
+      await recordPresence(tx, enrollment.agentId, "STOP");
+      await recordPresence(tx, enrollment.agentId, "HEARTBEAT");
       const claimed = await tx.mobileEnrollment.updateMany({
         where: { id: enrollment.id, usedAt: null, expiresAt: { gt: now } },
         data: { usedAt: now },

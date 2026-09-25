@@ -129,6 +129,16 @@ model MobileAgent {
 }
 
 /// QR ผูกเครื่องแบบใช้ครั้งเดียว มีอายุสั้น และไม่เก็บรหัสจริง
+model AgentPresence {
+  id String @id @default(cuid())
+  agentId String
+  agentName String
+  ownerId String?
+  kind String
+  createdAt DateTime @default(now())
+  @@index([agentId, createdAt])
+}
+
 model MobileEnrollment {
   id        String      @id @default(cuid())
   agentId   String
