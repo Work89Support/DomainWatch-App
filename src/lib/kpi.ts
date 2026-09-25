@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { verifiedAdminMinutes } from "@/lib/verifiedAdminTiming";
+import { claimedWork } from "@/lib/claimedWork";
 import type { Prisma } from "@prisma/client";
 import { bangkokDay, reportPeriod } from "@/lib/reportPeriod";
 import { caseStage, type CaseStage } from "@/lib/caseStage";
@@ -73,7 +73,7 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
       prisma.incident.count({ where: { ...incWhere, detectedAt } }),
       prisma.incident.findMany({
         where: { ...incWhere, detectedAt, status: { not: "PAUSED" } },
-        select: { adminResponseMin: true, itResponseMin: true },
+        select: { id: true, status: true, adminAckAt: true, adminUpdatedAt: true, itAckAt: true, itResolvedAt: true },
       }),
       prisma.incident.findMany({
         where: incWhere,
@@ -84,6 +84,8 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
       prisma.networkIncident.findMany({
         where: { ...networkIncWhere, detectedAt },
         select: {
+          id: true,
+          adminAckAt: true,
           adminResponseMin: true,
           adminUserId: true,
           adminUpdatedAt: true,
@@ -114,10 +116,13 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
   ]);
   const stages: Record<CaseStage, number> = { unclaimed: 0, working: 0, waiting: 0, forwarded: 0, verification: 0, closed: 0, paused: 0 };
   for (const item of periodCases.flat()) stages[caseStage(item)]++;
-  const networkAdminMinutes = network30d.flatMap((incident) => {
-    const minutes = verifiedAdminMinutes(incident);
-    return incident.adminUserId && minutes !== null ? [minutes] : [];
-  });
+  const claims = await prisma.caseActivity.findMany({ where: { action: "ACK", actorId: { not: null }, OR: [
+    { source: "SYSTEM", caseId: { in: closedWithKpi.map(i => i.id) } },
+    { source: "MOBILE", caseId: { in: network30d.map(i => i.id) } },
+  ] }, select: { source: true, caseId: true, action: true, actorId: true, actorName: true, createdAt: true, note: true } });
+  const evidence = (source: string, id: string, it = false) => claims.filter(c => c.source === source && c.caseId === id && c.note === (it ? "ไอทีรับเรื่อง" : "แอดมินรับเรื่อง"));
+  const networkAdminMinutes = network30d.map(i => claimedWork(i.status, i.adminAckAt, i.adminUpdatedAt, evidence("MOBILE", i.id), i.resolvedAt).minutes)
+    .filter((v): v is number => v !== null);
   const incidents30d = centralIncidents30d + network30d.length;
 
   // นับเฉพาะลิงก์ที่ "เฝ้าดูอยู่" (isActive) — ลิงก์ LINE ที่ตั้งไม่เฝ้าดูจะไม่ถูกนับสถานะ/สำรอง
@@ -160,11 +165,11 @@ export async function getDashboardData(companyId?: string, allowedCompanyIds?: s
   const activeLinks = activeArr.length;
 
   const adminVals = closedWithKpi
-    .map((i) => i.adminResponseMin)
+    .map(i => claimedWork(i.status, i.adminAckAt, i.adminUpdatedAt, evidence("SYSTEM", i.id)).minutes)
     .filter((v): v is number => v !== null);
   adminVals.push(...networkAdminMinutes);
   const itVals = closedWithKpi
-    .map((i) => i.itResponseMin)
+    .map(i => claimedWork(i.status, i.itAckAt, i.itResolvedAt, evidence("SYSTEM", i.id, true)).minutes)
     .filter((v): v is number => v !== null);
   const avg = (arr: number[]) =>
     arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;

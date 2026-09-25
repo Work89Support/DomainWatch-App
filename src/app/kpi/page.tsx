@@ -43,7 +43,7 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
       <PageHeader
         title="KPI รายคน"
-        subtitle="ตั้งแต่ระบบตรวจพบปัญหา → ใครเป็นคนแก้ → ใช้เวลาเท่าไหร่"
+        subtitle="ผลงานผู้กดรับเคส · รับเรื่อง → แก้ไขเสร็จ · ไม่รวมเวลารอเครื่องตรวจยืนยัน"
         action={<KpiExportActions rows={exportRows} fileLabel={fileLabel} />}
       />
 
@@ -88,8 +88,8 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="เหตุการณ์ทั้งหมด" value={d.totals.incidents} tone="brand" />
         <StatCard label="ปิดเคสแล้ว" value={d.totals.resolved} tone="green" />
-        <StatCard label="KPI แอดมินเฉลี่ย" value={fmtMinutes(d.totals.avgAdmin)} hint="ตรวจพบ → อัพเดตลิงก์" tone="brand" />
-        <StatCard label="KPI ไอทีเฉลี่ย" value={fmtMinutes(d.totals.avgIt)} hint="ตรวจพบ → ชี้แจง/สำรอง" tone="amber" />
+        <StatCard label="KPI แอดมินเฉลี่ย" value={fmtMinutes(d.totals.avgAdmin)} hint="รับเรื่อง → แก้ไขเสร็จ (ไม่รวมรีเช็ค)" tone="brand" />
+        <StatCard label="KPI ไอทีเฉลี่ย" value={fmtMinutes(d.totals.avgIt)} hint="รับเรื่อง → ชี้แจง/สำรองเสร็จ" tone="amber" />
       </div>
 
       {/* กราฟแนวโน้ม */}
@@ -112,6 +112,7 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
       {/* สรุปรายคน (leaderboard) */}
       <div className="card p-5 mb-6">
         <h2 className="text-lg font-semibold text-slate-800 mb-4">สรุปรายคน (ผลงาน)</h2>
+        <p className="text-sm text-slate-500 mb-4">นับให้ผู้กดรับเคสที่มีหลักฐานเท่านั้น ไม่ใช่ผู้แก้ข้อมูลล่าสุด · ปิดอัตโนมัติโดยไม่มีการแก้ไขไม่นับ · เคสซิมต้องตรวจยืนยันสำเร็จ แต่หยุดจับเวลาที่แก้เสร็จ · ข้อมูลเก่าที่ไม่มีหลักฐานรับเคสไม่นำมาคิด KPI</p>
         {d.users.length === 0 ? (
           <p className="text-sm text-slate-400 py-6 text-center">ยังไม่มีผู้ใช้</p>
         ) : (
@@ -158,6 +159,11 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
         )}
       </div>
 
+      {d.siteStaff.length > 0 && <div className="card p-5 mb-6">
+        <h2 className="text-lg font-semibold mb-3">พนักงานหน้าไซต์ — การดูแลเครื่องตรวจซิม</h2>
+        <p className="text-sm text-slate-600">{d.siteStaff.map(u => u.name).join(" · ")}</p>
+        <p className="text-sm text-amber-700 mt-2">ยังคำนวณ KPI หน้าไซต์ไม่ได้: ต้องผูกผู้ดูแลกับเครื่องตรวจและบันทึกช่วงออฟไลน์/หยุดตรวจ พร้อมเคสที่รอยืนยันในช่วงนั้นก่อน ข้อมูลออนไลน์ล่าสุดไม่เพียงพอสำหรับสรุปว่าใครทำให้ปิดเคสช้า จึงไม่แสดงเป็น 0 ผลงานและไม่โอนเคสจากแอดมินมาให้พนักงานหน้าไซต์</p>
+      </div>}
       </ReportExport>
       {/* ประวัติรายเคส (log) */}
       <div className="card p-5">
@@ -172,8 +178,8 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
                 <tr className="text-left text-slate-400 border-b border-slate-100">
                   <th className="py-2 pr-4 font-medium">ลิงก์ / แบรนด์</th>
                   <th className="py-2 pr-4 font-medium">ตรวจพบ</th>
-                  <th className="py-2 pr-4 font-medium">แอดมินที่แก้ (เวลา)</th>
-                  <th className="py-2 pr-4 font-medium">ไอทีที่แก้ (เวลา)</th>
+                  <th className="py-2 pr-4 font-medium">แอดมินผู้รับเคส (รับ → แก้เสร็จ)</th>
+                  <th className="py-2 pr-4 font-medium">ไอทีผู้รับเคส (รับ → แก้เสร็จ)</th>
                   <th className="py-2 pr-4 font-medium">สถานะ</th>
                 </tr>
               </thead>

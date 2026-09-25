@@ -21,7 +21,7 @@ function csvCell(value: string | number | null) {
 
 export default function KpiExportActions({ rows, fileLabel }: { rows: ExportRow[]; fileLabel: string }) {
   function downloadCsv() {
-    const headers = ["รหัสเคส", "แหล่งงาน", "เครื่องตรวจ", "ลิงก์", "บริษัท", "ตรวจพบ", "สถานะ", "แอดมิน", "นาทีแอดมิน", "ไอที", "นาทีไอที"];
+    const headers = ["รหัสเคส", "แหล่งงาน", "เครื่องตรวจ", "ลิงก์", "บริษัท", "ตรวจพบ", "สถานะ", "แอดมินผู้รับเคส", "นาทีรับถึงแก้เสร็จ (ไม่รวมรีเช็ค)", "ไอทีผู้รับเคส", "นาทีรับถึงงานไอทีเสร็จ"];
     const lines = [
       headers.map(csvCell).join(","),
       ...rows.map((row) => [row.id, row.source, row.agent, row.link, row.company, row.detectedAt, row.status, row.admin, row.adminMinutes, row.it, row.itMinutes].map(csvCell).join(",")),

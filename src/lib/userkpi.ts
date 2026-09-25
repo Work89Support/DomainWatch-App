@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { verifiedAdminMinutes } from "@/lib/verifiedAdminTiming";
+import { claimedWork } from "@/lib/claimedWork";
 import { elapsedMinutes } from "@/lib/caseActivity";
 
 export type UserStat = {
@@ -39,6 +39,7 @@ export type TrendPoint = {
 };
 
 export type UserKpiData = {
+  siteStaff: { id: string; name: string }[];
   lifecycle: { received: number; missingAck: number; avgAck: number | null; avgResolution: number | null; paused: number };
   users: UserStat[];
   userOptions: { id: string; name: string; role: string }[];
@@ -66,7 +67,7 @@ function startOfWeek(d: Date): Date {
 }
 
 export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiData> {
-  const [users, allIncidents, allNetworkIncidents] = await Promise.all([
+  const [users, rawIncidents, rawNetworkIncidents, claims] = await Promise.all([
     prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.incident.findMany({
       orderBy: { detectedAt: "desc" },
@@ -76,7 +77,25 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
       orderBy: { detectedAt: "desc" },
       include: { link: { include: { company: true } }, agent: true, adminUser: true },
     }),
+    prisma.caseActivity.findMany({ where: { action: "ACK", actorId: { not: null } },
+      select: { source: true, caseId: true, action: true, actorId: true, actorName: true, createdAt: true, note: true } }),
   ]);
+  const claimMap = new Map<string, typeof claims>();
+  for (const claim of claims) {
+    const key = `${claim.source}:${claim.caseId}`;
+    claimMap.set(key, [...(claimMap.get(key) || []), claim]);
+  }
+  const allIncidents = rawIncidents.map(i => {
+    const evidence = claimMap.get(`SYSTEM:${i.id}`) || [];
+    const admin = claimedWork(i.status, i.adminAckAt, i.adminUpdatedAt, evidence.filter(e => e.note === "แอดมินรับเรื่อง"));
+    const it = claimedWork(i.status, i.itAckAt, i.itResolvedAt, evidence.filter(e => e.note === "ไอทีรับเรื่อง"));
+    return { ...i, adminUserId: admin.userId, adminUser: admin.name ? { name: admin.name } : null, adminResponseMin: admin.minutes,
+      itUserId: it.userId, itUser: it.name ? { name: it.name } : null, itResponseMin: it.minutes };
+  });
+  const allNetworkIncidents = rawNetworkIncidents.map(i => {
+    const admin = claimedWork(i.status, i.adminAckAt, i.adminUpdatedAt, claimMap.get(`MOBILE:${i.id}`) || [], i.resolvedAt);
+    return { ...i, adminUserId: admin.userId, adminUser: admin.name ? { name: admin.name } : null, adminResponseMin: admin.minutes };
+  });
   const from = filters.from ? new Date(`${filters.from}T00:00:00+07:00`) : null;
   const to = filters.to ? new Date(`${filters.to}T23:59:59.999+07:00`) : null;
   const inPeriod = (date: Date) => (!from || date >= from) && (!to || date <= to);
@@ -92,7 +111,7 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
   const networkOwnerId = (i: (typeof networkIncidents)[number]) =>
     i.adminUserId;
   const networkResponseMinutes = (i: (typeof networkIncidents)[number]) =>
-    verifiedAdminMinutes(i);
+    i.adminResponseMin;
   const scopedIncidents = filters.userId
     ? incidents.filter((i) => i.adminUserId === filters.userId || i.itUserId === filters.userId)
     : incidents;
@@ -101,7 +120,7 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
     : networkIncidents;
 
   // ---- สรุปรายคน ----
-  const users_ = users.filter((u) => !filters.userId || u.id === filters.userId).map((u) => {
+  const users_ = users.filter((u) => u.role !== "SITE_STAFF" && (!filters.userId || u.id === filters.userId)).map((u) => {
     const asAdmin = scopedIncidents.filter(
       (i) => i.adminUserId === u.id && i.adminResponseMin !== null && i.status !== "PAUSED"
     );
@@ -211,6 +230,7 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
   const allIt = scopedIncidents.filter(i => i.status !== "PAUSED").map((i) => i.itResponseMin).filter((v): v is number => v !== null);
 
   return {
+    siteStaff: users.filter(u => u.role === "SITE_STAFF" && (!filters.userId || u.id === filters.userId)).map(u => ({ id: u.id, name: u.name })),
     lifecycle: (() => {
       const cases = [...scopedIncidents, ...scopedNetworkIncidents];
       const active = cases.filter(i => i.status !== "PAUSED");
