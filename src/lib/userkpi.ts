@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { claimedWork } from "@/lib/claimedWork";
+import { visibleInStaffKpi } from "@/lib/kpiVisibility";
 import { elapsedMinutes } from "@/lib/caseActivity";
 import { offlineSpans, waitingOverlapMs, type OfflineSpan } from "@/lib/offlineKpi";
 
@@ -54,7 +55,7 @@ export type UserKpiData = {
   log: IncidentLogRow[];
   exportLog: IncidentLogRow[];
   trend: TrendPoint[];
-  totals: { incidents: number; resolved: number; avgAdmin: number | null; avgIt: number | null };
+  totals: { incidents: number; resolved: number; adminCount: number; itCount: number; avgAdmin: number | null; avgIt: number | null };
 };
 
 export type UserKpiFilters = {
@@ -113,10 +114,10 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
     .map(s => ({ ...s, waitingMinutes: waitingOverlapMs(s, rawNetworkIncidents.filter(i => i.agentId === s.agentId && i.status !== "PAUSED")) / 60_000 }));
   const incidents = filters.source === "MOBILE"
     ? []
-    : allIncidents.filter((i) => inPeriod(i.detectedAt));
+    : allIncidents.filter((i) => inPeriod(i.detectedAt) && visibleInStaffKpi(i));
   const networkIncidents = filters.source === "SYSTEM"
     ? []
-    : allNetworkIncidents.filter((i) => inPeriod(i.detectedAt));
+    : allNetworkIncidents.filter((i) => inPeriod(i.detectedAt) && visibleInStaffKpi(i));
 
   // Only recorded user attribution counts toward individual performance.
   const isLegacyHandledNetworkIncident = (_i: (typeof networkIncidents)[number]) => false;
@@ -269,6 +270,8 @@ export async function getUserKpi(filters: UserKpiFilters = {}): Promise<UserKpiD
     exportLog,
     trend,
     totals: {
+      adminCount: allAdmin.length,
+      itCount: allIt.length,
       incidents: scopedIncidents.length + scopedNetworkIncidents.length,
       resolved:
         scopedIncidents.filter((i) => i.status === "CLOSED").length +

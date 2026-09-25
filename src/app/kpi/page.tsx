@@ -86,29 +86,28 @@ export default async function KpiPage({ searchParams }: { searchParams: { userId
 
       <ReportExport key={fileLabel + source + (searchParams.userId || "")} title="KPI รายคน"
         context={`${selectedUser?.name || "ทุกคน"} · ${searchParams.from || "เริ่มต้น"} ถึง ${searchParams.to || "ปัจจุบัน"} (เวลาไทย) · ${source === "SYSTEM" ? "ระบบกลาง" : source === "MOBILE" ? "เครือข่ายซิม" : "ทุกแหล่งงาน"} · ข้อมูล ณ ${fmtDateTime(new Date().toISOString())}`}
-        summary={`พบ ${d.totals.incidents} เคส ปิดแล้ว ${d.totals.resolved} เคส พักการเฝ้าดู ${d.lifecycle.paused} เคส\nKPI แอดมินเฉลี่ย ${fmtMinutes(d.totals.avgAdmin)} · ไอทีเฉลี่ย ${fmtMinutes(d.totals.avgIt)}\nรับเคส ${d.lifecycle.received} เคส · แก้ไขโดยไม่รับเคส ${d.lifecycle.repairedWithoutAck} เคส · ไม่มีบันทึกรับหรือผลงานที่ยืนยัน ${d.lifecycle.missingAck} เคส\nรับเคส: รับถึงแก้เสร็จ · ไม่รับเคส: ตรวจพบถึงแก้เสร็จ · ไม่รวมรอรีเช็ค`}>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="เหตุการณ์ทั้งหมด" value={d.totals.incidents} tone="brand" />
-        <StatCard label="ปิดเคสแล้ว" value={d.totals.resolved} tone="green" />
-        <StatCard label="KPI แอดมินเฉลี่ย" value={fmtMinutes(d.totals.avgAdmin)} hint="รับ → แก้เสร็จ; ไม่รับเริ่มที่ตรวจพบ (ไม่รวมรีเช็ค)" tone="brand" />
-        <StatCard label="KPI ไอทีเฉลี่ย" value={fmtMinutes(d.totals.avgIt)} hint="รับ → งานเสร็จ; ไม่รับเริ่มที่ตรวจพบ" tone="amber" />
-      </div>
-
-      {/* กราฟแนวโน้ม */}
+        summary={`การรับเคสแอดมิน: ${d.lifecycle.received} เคส · เวลารับเฉลี่ย ${fmtMinutes(d.lifecycle.avgAck)}\nการแก้ไขแอดมิน: ยืนยันแล้ว ${d.totals.adminCount} งาน · เวลาแก้เฉลี่ย ${fmtMinutes(d.totals.avgAdmin)}\nในงานแก้ไข มี ${d.lifecycle.repairedWithoutAck} งานที่แก้โดยไม่กดรับเคส\nงานไอที: ${d.totals.itCount} งาน · เฉลี่ย ${fmtMinutes(d.totals.avgIt)}\nรับเคส: รับถึงแก้เสร็จ · ไม่รับเคส: ตรวจพบถึงแก้เสร็จ · ไม่รวมรอรีเช็ค`}>
       <div className="card p-5 mb-6">
-        <h2 className="font-semibold mb-3">การรับเรื่องและปิดเคสตามช่วงเวลาที่เลือก</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="กดรับเคสแอดมิน" value={d.lifecycle.received} tone="brand" />
-          <StatCard label="ตรวจพบ → รับเรื่องเฉลี่ย" value={fmtMinutes(d.lifecycle.avgAck)} tone="brand" />
-          <StatCard label="ตรวจพบ → ปิดเคสเฉลี่ย" value={fmtMinutes(d.lifecycle.avgResolution)} tone="green" />
-          <StatCard label="แก้ไขโดยไม่รับเคส (ยืนยันแล้ว)" value={d.lifecycle.repairedWithoutAck} tone="amber" />
+        <h2 className="font-semibold mb-3">1. การรับเคส — รับงานเร็วแค่ไหน</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <StatCard label="เคสที่กดรับ" value={d.lifecycle.received} hint="มีบันทึกเวลารับเคสแอดมิน" tone="brand" />
+          <StatCard label="เวลารับเคสเฉลี่ย" value={fmtMinutes(d.lifecycle.avgAck)} hint={`เกิดเคส → กดรับ · คำนวณจาก ${d.lifecycle.received} เคส`} tone="brand" />
         </div>
-        <p className="text-sm text-slate-500 mt-2">อีก {d.lifecycle.missingAck} เคสไม่มีบันทึกรับหรือผลงานแก้ไขที่ยืนยัน อาจเป็นเคสรอดำเนินการ ระบบปิดเอง หรือหลักฐานเก่าไม่ครบ — ไม่นับเป็นผลงานพนักงาน</p>
-        <p className="mt-3 text-xs text-slate-500">ช่วงเวลายึดวันตรวจพบ · พักการเฝ้าดู {d.lifecycle.paused} เคส ไม่รวมเวลาแก้สำเร็จ · เวลาปิดรวมการปิดอัตโนมัติและเวลารอเครื่องตรวจยืนยัน ไม่ใช่เวลาทำงานของพนักงานทั้งหมด · เคสเก่าที่ไม่ทราบผู้ทำรายการไม่ถูกเดาชื่อผู้รับผิดชอบ</p>
-        <Link href="/case-history" className="mt-3 inline-block text-brand-600">ตรวจหลักฐานการดำเนินการย้อนหลัง →</Link>
       </div>
       <div className="card p-5 mb-6">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4">แนวโน้ม 8 สัปดาห์</h2>
+        <h2 className="font-semibold mb-3">2. การแก้ไขงาน — แก้เสร็จเร็วแค่ไหน</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <StatCard label="งานแอดมินที่แก้เสร็จ" value={d.totals.adminCount} hint="เฉพาะงานมีหลักฐานและตรวจยืนยันแล้ว" tone="green" />
+          <StatCard label="เวลาแก้ไขเฉลี่ย" value={fmtMinutes(d.totals.avgAdmin)} hint={`คำนวณจาก ${d.totals.adminCount} งาน · ไม่รวมรอรีเช็ค`} tone="green" />
+          <StatCard label="แก้โดยไม่กดรับเคส" value={d.lifecycle.repairedWithoutAck} hint="เป็นส่วนหนึ่งของงานแก้เสร็จ ไม่ใช่งานเพิ่ม" tone="amber" />
+        </div>
+        <p className="mt-3 text-sm text-slate-600">กดรับเคส: รับ → แก้เสร็จ · ไม่กดรับเคส: เกิดเคส → แก้เสร็จ</p>
+        {d.totals.itCount > 0 && <p className="mt-3 text-sm text-slate-600">งานไอทีเสร็จ {d.totals.itCount} งาน · เวลาเฉลี่ย {fmtMinutes(d.totals.avgIt)} จาก {d.totals.itCount} งาน</p>}
+        <p className="mt-3 text-xs text-slate-500">จำนวนรับเคสกับจำนวนแก้เสร็จเป็นคนละกลุ่ม ไม่ต้องเท่ากัน · เลือกช่วงตามวันเกิดเคส · แสดงเฉพาะเคสที่มีบันทึกรับหรือผลงานยืนยัน ประวัติทั้งหมดเก็บไว้ที่หน้าเหตุการณ์</p>
+        <Link href="/case-history" className="mt-3 inline-block text-brand-600">ดูหลักฐานย้อนหลัง →</Link>
+      </div>
+      <div className="card p-5 mb-6">
+        <h2 className="text-lg font-semibold text-slate-800 mb-4">แนวโน้มเคสที่มีบันทึกพนักงาน — 8 สัปดาห์</h2>
         <KpiTrend data={d.trend} />
       </div>
 
