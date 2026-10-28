@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 // POST /api/linegroups/[id]/import-richmenu — ดึงลิงก์จาก Rich Menu ของ OA มาสร้างเป็นลิงก์ในห้องนี้
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const me = await getCurrentUser();
@@ -20,7 +20,9 @@ export async function POST(
     include: { links: true },
   });
   if (!g) return NextResponse.json({ error: "ไม่พบห้อง" }, { status: 404 });
-  const token = (g.channelAccessToken || "").trim();
+  const dryRun = req.nextUrl.searchParams.get("dryRun") === "1";
+  const body = await req.json().catch(() => ({}));
+  const token = String(dryRun ? body.channelAccessToken || g.channelAccessToken || "" : g.channelAccessToken || "").trim();
   if (!token)
     return NextResponse.json({ error: "ยังไม่ได้ใส่ Channel Access Token" }, { status: 400 });
 
@@ -35,11 +37,24 @@ export async function POST(
     );
   }
 
-  if (links.length === 0)
-    return NextResponse.json({ ok: true, added: 0, skipped: 0, note: "ไม่พบลิงก์ใน Rich Menu" });
-
   // สร้างเฉพาะลิงก์ที่ยังไม่มี (เทียบด้วย URL ในห้องนี้)
   const existing = new Set(g.links.map((l) => l.url.trim()));
+  const preview = links.map((l) => ({ ...l, exists: existing.has(l.url.trim()) }));
+  if (dryRun) {
+    const skipped = preview.filter((l) => l.exists).length;
+    return NextResponse.json({
+      ok: true,
+      dryRun: true,
+      links: preview,
+      total: preview.length,
+      added: preview.length - skipped,
+      skipped,
+      note: preview.length ? null : "ไม่พบลิงก์ใน Rich Menu ที่ Messaging API มองเห็น",
+    });
+  }
+
+  if (links.length === 0)
+    return NextResponse.json({ ok: true, added: 0, skipped: 0, note: "ไม่พบลิงก์ใน Rich Menu" });
   let added = 0;
   let skipped = 0;
   for (const l of links) {

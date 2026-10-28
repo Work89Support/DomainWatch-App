@@ -42,6 +42,10 @@ model LineGroup {
   expectedOaName     String? // ชื่อ OA ที่คาดหวัง (ไว้เทียบว่าถูกเปลี่ยนไหม)
   oaStatus           String    @default("UNKNOWN") // OK | MISMATCH | NO_PICTURE | TOKEN_INVALID | ERROR | UNKNOWN
   oaDisplayName      String? // ชื่อจริงที่อ่านได้จาก LINE
+  oaUserId           String? // userId ของบอท ใช้เป็นตัวตนคงที่ของ OA
+  oaBasicId          String? // Basic ID ที่ LINE API ส่งกลับ
+  oaPremiumId        String? // null = ไม่มี Premium ID หรือยังตรวจไม่สำเร็จ (ดู oaStatus/oaLastCheckedAt ประกอบ)
+  oaChatMode         String? // chat | bot
   oaHasPicture       Boolean?
   oaLastCheckedAt    DateTime?
   oaError            String?
@@ -51,6 +55,7 @@ model LineGroup {
   links Link[]
 
   @@index([companyId])
+  @@index([oaUserId])
 }
 
 /// Master data ของลิงก์/หน้าเว็บที่ต้องเฝ้าดู

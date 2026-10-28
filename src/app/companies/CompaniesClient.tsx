@@ -25,6 +25,10 @@ type LineGroup = {
   hasToken: boolean;
   oaStatus: string;
   oaDisplayName: string | null;
+  oaUserId: string | null;
+  oaBasicId: string | null;
+  oaPremiumId: string | null;
+  oaChatMode: string | null;
   oaHasPicture: boolean | null;
   oaLastCheckedAt: string | null;
   oaError: string | null;
@@ -41,6 +45,21 @@ type Company = {
 };
 
 type ModalData = { link: LinkLite; companyId: string; company: string; room: string };
+type OaPreview = {
+  status: string;
+  displayName: string | null;
+  userId: string | null;
+  basicId: string | null;
+  premiumId: string | null;
+  chatMode: string | null;
+  hasPicture: boolean | null;
+  error: string | null;
+};
+type RichMenuPreview = {
+  label: string;
+  url: string;
+  exists: boolean;
+};
 
 function statusMeta(status: string) {
   if (status === "UP") return { dot: "bg-emerald-500", text: "ใช้งานได้", cls: "text-emerald-600", pill: "bg-emerald-50 text-emerald-700" };
@@ -434,7 +453,11 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
   const [expectedName, setExpectedName] = useState(group.expectedOaName || "");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [savedToken, setSavedToken] = useState(group.hasToken);
+  const [preview, setPreview] = useState<OaPreview | null>(null);
+  const [menuPreview, setMenuPreview] = useState<RichMenuPreview[] | null>(null);
   const oa = oaMeta(group.oaStatus);
+  const canTest = savedToken || !!token.trim();
 
   async function save() {
     setBusy(true); setMsg(null);
@@ -445,7 +468,26 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
       body: JSON.stringify(body),
     });
     setBusy(false);
-    if (res.ok) onSaved(); else setMsg("บันทึกไม่สำเร็จ");
+    if (res.ok) {
+      if (token.trim()) setSavedToken(true);
+      setMsg("บันทึกการตั้งค่าแล้ว");
+      onSaved();
+    } else setMsg("บันทึกไม่สำเร็จ");
+  }
+
+  async function testWithoutSaving() {
+    setBusy(true); setMsg(null); setPreview(null);
+    const res = await fetch(`/api/linegroups/${group.id}/check-oa?dryRun=1`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelAccessToken: token.trim() || undefined, expectedOaName: expectedName }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (res.ok) {
+      setPreview(data.result);
+      setMsg("ทดลองตรวจแล้ว — ยังไม่ได้บันทึก Token หรือผลตรวจ");
+    } else setMsg(data.error || "ทดลองตรวจไม่สำเร็จ");
   }
 
   async function checkNow() {
@@ -453,11 +495,27 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
     const res = await fetch(`/api/linegroups/${group.id}/check-oa`, { method: "POST" });
     const data = await res.json().catch(() => ({}));
     setBusy(false);
-    if (res.ok) { setMsg(`ผลตรวจ: ${oaMeta(data.result?.status).text}${data.result?.displayName ? ` (${data.result.displayName})` : ""}`); onSaved(); }
+    if (res.ok) { setPreview(data.result); setMsg(`บันทึกผลตรวจแล้ว: ${oaMeta(data.result?.status).text}${data.result?.displayName ? ` (${data.result.displayName})` : ""}`); onSaved(); }
     else setMsg(data.error || "ตรวจไม่สำเร็จ");
   }
 
+  async function previewMenu() {
+    setBusy(true); setMsg(null); setMenuPreview(null);
+    const res = await fetch(`/api/linegroups/${group.id}/import-richmenu?dryRun=1`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelAccessToken: token.trim() || undefined }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (res.ok) {
+      setMenuPreview(data.links || []);
+      setMsg(data.note || `ตัวอย่าง Rich Menu: จะเพิ่ม ${data.added} · มีอยู่แล้ว ${data.skipped}`);
+    } else setMsg(data.error || "ดูตัวอย่างไม่สำเร็จ");
+  }
+
   async function importMenu() {
+    if (!confirm("ยืนยันนำลิงก์ใหม่จาก Rich Menu เข้า Master ของห้องนี้?")) return;
     setBusy(true); setMsg(null);
     const res = await fetch(`/api/linegroups/${group.id}/import-richmenu`, { method: "POST" });
     const data = await res.json().catch(() => ({}));
@@ -473,6 +531,12 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
         <div className="mb-3 text-sm">
           <span className={`badge text-[11px] ${oa.cls}`}>{oa.text}</span>
           {group.oaDisplayName && <span className="text-slate-500 ml-2">ชื่อจริง: {group.oaDisplayName}</span>}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500 mt-2">
+            <div>Basic ID: <b className="text-slate-700">{group.oaBasicId || "ยังไม่มีผล"}</b></div>
+            <div>Premium ID: <b className="text-slate-700">{group.oaUserId ? group.oaPremiumId || "ไม่มี Premium ID" : "ยังไม่มีผล"}</b></div>
+            <div>Bot userId: <b className="text-slate-700 break-all">{group.oaUserId || "ยังไม่มีผล"}</b></div>
+            <div>โหมดแชต: <b className="text-slate-700">{group.oaChatMode || "ยังไม่มีผล"}</b></div>
+          </div>
           {group.oaError && <div className="text-xs text-red-500 mt-1">{group.oaError}</div>}
         </div>
       )}
@@ -481,12 +545,50 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
       <label className="label">ชื่อ OA ที่คาดหวัง (ไว้เทียบว่าถูกเปลี่ยนไหม)</label>
       <input className="input mb-1" value={expectedName} onChange={(e) => setExpectedName(e.target.value)} placeholder="เช่น AD3 free" />
       {msg && <div className="text-xs text-slate-600 bg-slate-50 rounded-lg p-2 mt-2">{msg}</div>}
+      {preview && (
+        <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-xs">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className={`badge text-[11px] ${oaMeta(preview.status).cls}`}>{oaMeta(preview.status).text}</span>
+            <b className="text-slate-800">{preview.displayName || "อ่านชื่อไม่ได้"}</b>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-600">
+            <div>Basic ID: <b className="text-slate-800">{preview.basicId || "ไม่พบ"}</b></div>
+            <div>Premium ID: <b className="text-slate-800">{preview.premiumId || "ไม่มี Premium ID"}</b></div>
+            <div>รูปโปรไฟล์: <b className="text-slate-800">{preview.hasPicture === null ? "ตรวจไม่ได้" : preview.hasPicture ? "มี" : "ไม่มี"}</b></div>
+            <div>โหมดแชต: <b className="text-slate-800">{preview.chatMode || "ไม่พบ"}</b></div>
+            <div className="sm:col-span-2 break-all">Bot userId: <b className="text-slate-800">{preview.userId || "ไม่พบ"}</b></div>
+          </div>
+          {preview.error && <div className="text-red-600 mt-2">{preview.error}</div>}
+        </div>
+      )}
+      {menuPreview && (
+        <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+          <div className="font-semibold text-sm mb-2">ตัวอย่างลิงก์จาก Rich Menu</div>
+          {menuPreview.length === 0 ? (
+            <div className="text-xs text-slate-500">ไม่พบลิงก์ที่ Messaging API มองเห็น</div>
+          ) : (
+            <div className="space-y-2 max-h-56 overflow-auto">
+              {menuPreview.map((l, i) => (
+                <div key={`${l.url}-${i}`} className="text-xs border-b border-slate-100 pb-2 last:border-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`badge text-[10px] ${l.exists ? "bg-slate-100 text-slate-600" : "bg-emerald-50 text-emerald-700"}`}>{l.exists ? "มีแล้ว" : "จะเพิ่ม"}</span>
+                    <b>{l.label}</b>
+                  </div>
+                  <div className="text-slate-500 break-all mt-1">{l.url}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap gap-2 mt-4">
-        <button className="btn-primary text-sm disabled:opacity-60" disabled={busy} onClick={save}>{busy ? "..." : "บันทึก"}</button>
-        <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy || !group.hasToken} onClick={checkNow} title={group.hasToken ? "" : "ใส่ token ก่อน"}>ตรวจ OA ตอนนี้</button>
-        <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy || !group.hasToken} onClick={importMenu} title={group.hasToken ? "" : "ใส่ token ก่อน"}>ดึงลิงก์จาก Rich Menu</button>
+        <button className="btn-primary text-sm disabled:opacity-60" disabled={busy || !canTest} onClick={testWithoutSaving}>{busy ? "..." : "ทดลองตรวจ — ไม่บันทึก"}</button>
+        <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy} onClick={save}>บันทึกการตั้งค่า</button>
+        <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy || !savedToken} onClick={checkNow} title={savedToken ? "" : "บันทึก token ก่อน"}>ตรวจและบันทึกผล</button>
+        <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy || !canTest} onClick={previewMenu}>ดูตัวอย่าง Rich Menu</button>
+        <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy || !savedToken || !menuPreview} onClick={importMenu} title={!savedToken ? "บันทึก token ก่อน" : !menuPreview ? "ดูตัวอย่างก่อนนำเข้า" : ""}>นำลิงก์เข้า Master</button>
       </div>
-      <div className="text-[11px] text-slate-400 mt-3">บันทึก token ก่อน แล้วค่อยกด &quot;ตรวจ&quot; / &quot;ดึงลิงก์&quot;</div>
+      <div className="text-[11px] text-slate-400 mt-3">เริ่มจาก “ทดลองตรวจ — ไม่บันทึก” ได้ทันที ระบบจะไม่เก็บ Token หรือผลตรวจจนกว่าจะกดบันทึก</div>
     </ModalShell>
   );
 }

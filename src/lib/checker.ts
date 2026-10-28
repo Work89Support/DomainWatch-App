@@ -491,11 +491,20 @@ export async function runOaChecks(routes?: Map<string, TgRoute>): Promise<void> 
     if (!token) return;
     const prevStatus = g.oaStatus;
     const res = await checkOa(token, g.expectedOaName);
+    const hasIdentity = res.status !== "TOKEN_INVALID" && res.status !== "ERROR";
     await prisma.lineGroup.update({
       where: { id: g.id },
       data: {
         oaStatus: res.status,
         oaDisplayName: res.displayName,
+        ...(hasIdentity
+          ? {
+              oaUserId: res.userId,
+              oaBasicId: res.basicId,
+              oaPremiumId: res.premiumId,
+              oaChatMode: res.chatMode,
+            }
+          : {}),
         oaHasPicture: res.hasPicture,
         oaError: res.error,
         oaLastCheckedAt: new Date(),

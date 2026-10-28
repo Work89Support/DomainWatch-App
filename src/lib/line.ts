@@ -19,7 +19,10 @@ async function lineGet(path: string, token: string): Promise<Response> {
 export type BotInfo = {
   displayName: string;
   userId: string;
+  basicId: string;
+  premiumId: string | null;
   pictureUrl: string | null;
+  chatMode: string | null;
 };
 
 // ข้อมูลบอท (ชื่อ/รูป) — ถ้า token ใช้ไม่ได้จะโยน error
@@ -34,12 +37,18 @@ export async function getBotInfo(token: string): Promise<BotInfo> {
   const j = (await res.json()) as {
     displayName?: string;
     userId?: string;
+    basicId?: string;
+    premiumId?: string;
     pictureUrl?: string;
+    chatMode?: string;
   };
   return {
     displayName: j.displayName || "",
     userId: j.userId || "",
+    basicId: j.basicId || "",
+    premiumId: j.premiumId || null,
     pictureUrl: j.pictureUrl || null,
+    chatMode: j.chatMode || null,
   };
 }
 
@@ -103,6 +112,10 @@ export async function getRichMenuLinks(token: string): Promise<RichMenuLink[]> {
 export type OaCheck = {
   status: "OK" | "MISMATCH" | "NO_PICTURE" | "TOKEN_INVALID" | "ERROR";
   displayName: string | null;
+  userId: string | null;
+  basicId: string | null;
+  premiumId: string | null;
+  chatMode: string | null;
   hasPicture: boolean | null;
   error: string | null;
 };
@@ -113,17 +126,17 @@ export async function checkOa(token: string, expectedName?: string | null): Prom
     const info = await getBotInfo(token);
     const hasPicture = !!info.pictureUrl;
     if (expectedName && expectedName.trim() && info.displayName.trim() !== expectedName.trim()) {
-      return { status: "MISMATCH", displayName: info.displayName, hasPicture, error: null };
+      return { status: "MISMATCH", displayName: info.displayName, userId: info.userId, basicId: info.basicId, premiumId: info.premiumId, chatMode: info.chatMode, hasPicture, error: null };
     }
     if (!hasPicture) {
-      return { status: "NO_PICTURE", displayName: info.displayName, hasPicture, error: null };
+      return { status: "NO_PICTURE", displayName: info.displayName, userId: info.userId, basicId: info.basicId, premiumId: info.premiumId, chatMode: info.chatMode, hasPicture, error: null };
     }
-    return { status: "OK", displayName: info.displayName, hasPicture, error: null };
+    return { status: "OK", displayName: info.displayName, userId: info.userId, basicId: info.basicId, premiumId: info.premiumId, chatMode: info.chatMode, hasPicture, error: null };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg === "TOKEN_INVALID") {
-      return { status: "TOKEN_INVALID", displayName: null, hasPicture: null, error: "token ใช้ไม่ได้ (OA อาจถูกปิด/แบน)" };
+      return { status: "TOKEN_INVALID", displayName: null, userId: null, basicId: null, premiumId: null, chatMode: null, hasPicture: null, error: "token ใช้ไม่ได้ — ยังสรุปไม่ได้ว่า OA ถูกระงับ" };
     }
-    return { status: "ERROR", displayName: null, hasPicture: null, error: msg };
+    return { status: "ERROR", displayName: null, userId: null, basicId: null, premiumId: null, chatMode: null, hasPicture: null, error: msg };
   }
 }
