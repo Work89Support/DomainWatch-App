@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageCompanies } from "@/lib/permissions";
-import { checkOa } from "@/lib/line";
+import { checkOa, enforceOaIdentityBaseline } from "@/lib/line";
 
 export const dynamic = "force-dynamic";
 
@@ -18,16 +18,25 @@ export async function POST(
   const g = await prisma.lineGroup.findUnique({ where: { id: params.id } });
   if (!g) return NextResponse.json({ error: "ไม่พบห้อง" }, { status: 404 });
   const dryRun = req.nextUrl.searchParams.get("dryRun") === "1";
+  const confirmIdentity = req.nextUrl.searchParams.get("confirmIdentity") === "1";
   const body = await req.json().catch(() => ({}));
   const token = String(dryRun ? body.channelAccessToken || g.channelAccessToken || "" : g.channelAccessToken || "").trim();
   if (!token)
     return NextResponse.json({ error: "ยังไม่ได้ใส่ Channel Access Token" }, { status: 400 });
 
   const expectedName = dryRun && "expectedOaName" in body ? String(body.expectedOaName || "").trim() : g.expectedOaName;
-  const res = await checkOa(token, expectedName);
+  const checked = await checkOa(token, expectedName);
+  const res = confirmIdentity ? checked : enforceOaIdentityBaseline(checked, g.oaUserId);
   if (dryRun) return NextResponse.json({ ok: true, dryRun: true, result: res });
 
-  const hasIdentity = res.status !== "TOKEN_INVALID" && res.status !== "ERROR";
+  if (confirmIdentity && (!checked.userId || checked.status === "TOKEN_INVALID" || checked.status === "ERROR")) {
+    return NextResponse.json(
+      { error: "ยังยืนยันตัวตนใหม่ไม่ได้ กรุณาตรวจ token ให้สำเร็จก่อน" },
+      { status: 400 }
+    );
+  }
+
+  const hasIdentity = !!checked.userId && res.status !== "IDENTITY_MISMATCH";
   const updated = await prisma.lineGroup.update({
     where: { id: g.id },
     data: {
@@ -35,10 +44,10 @@ export async function POST(
       oaDisplayName: res.displayName,
       ...(hasIdentity
         ? {
-            oaUserId: res.userId,
-            oaBasicId: res.basicId,
-            oaPremiumId: res.premiumId,
-            oaChatMode: res.chatMode,
+            oaUserId: checked.userId,
+            oaBasicId: checked.basicId,
+            oaPremiumId: checked.premiumId,
+            oaChatMode: checked.chatMode,
           }
         : {}),
       oaHasPicture: res.hasPicture,
@@ -46,5 +55,5 @@ export async function POST(
       oaLastCheckedAt: new Date(),
     },
   });
-  return NextResponse.json({ ok: true, result: res, group: updated });
+  return NextResponse.json({ ok: true, confirmedIdentity: confirmIdentity, result: res, group: updated });
 }

@@ -151,8 +151,16 @@ export function oaAlertMessage(opts: {
   const reasonMap: Record<string, string> = {
     MISMATCH: `ชื่อ OA ไม่ตรง (พบ "${opts.displayName || "-"}" คาดหวัง "${opts.expectedName || "-"}")`,
     NO_PICTURE: "รูปโปรไฟล์ OA หาย/ไม่มี",
-    TOKEN_INVALID: "token ใช้ไม่ได้ — OA อาจถูกปิด/แบน",
+    TOKEN_INVALID: "token ใช้ไม่ได้ — ยังสรุปไม่ได้ว่า OA ถูกระงับ กรุณาตรวจ token และสิทธิ์ใน LINE Developers",
+    IDENTITY_MISMATCH: "Bot userId ไม่ตรงกับข้อมูลอ้างอิง — token อาจเป็นของคนละ LINE OA",
     ERROR: "ตรวจ OA ไม่สำเร็จ",
+  };
+  const actionMap: Record<string, string> = {
+    MISMATCH: "ตรวจชื่อใน OA Manager หากเปลี่ยนโดยอนุมัติแล้วจึงแก้ชื่อที่คาดหวังใน DomainWatch",
+    NO_PICTURE: "ตรวจและตั้งรูปโปรไฟล์ใน LINE Official Account Manager",
+    TOKEN_INVALID: "ตรวจ Messaging API และออก Channel Access Token ใหม่ แล้วทดลองตรวจก่อนบันทึก",
+    IDENTITY_MISMATCH: "ห้ามยืนยันจนกว่าจะตรวจว่า token เป็นของ OA ที่ถูกต้อง หากตั้งใจเปลี่ยนจึงกดยืนยันตัวตนใหม่",
+    ERROR: "รอตรวจซ้ำและตรวจสถานะ LINE API/เครือข่ายก่อนสรุปสาเหตุ",
   };
   const text = [
     `🚨 <b>LINE OA ผิดปกติ</b>`,
@@ -160,6 +168,7 @@ export function oaAlertMessage(opts: {
     `💬 <b>${escapeHtml(opts.room)}</b>`,
     `🏢 บริษัท: ${escapeHtml(opts.company)}`,
     `⚠️ ปัญหา: ${escapeHtml(reasonMap[opts.status] || opts.status)}`,
+    `📌 ควรทำ: ${escapeHtml(actionMap[opts.status] || "เปิดระบบเพื่อตรวจรายละเอียด")}`,
   ].join("\n");
   return {
     text,

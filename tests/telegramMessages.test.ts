@@ -1,8 +1,31 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { downAlertMessage, mobileAgentReportLines, networkDownMessage, networkRecoveredMessage, recoveredMessage } from "../src/lib/telegram";
+import { downAlertMessage, mobileAgentReportLines, networkDownMessage, networkRecoveredMessage, oaAlertMessage, recoveredMessage } from "../src/lib/telegram";
 
 const incidentId = "cmtest00000000abcdefgh";
+
+test("OA token alert avoids claiming a ban and gives a safe next step", () => {
+  const message = oaAlertMessage({
+    room: "@example",
+    company: "Example Co",
+    status: "TOKEN_INVALID",
+    appBaseUrl: "https://watch.example.com",
+  });
+  assert.match(message.text, /ยังสรุปไม่ได้ว่า OA ถูกระงับ/);
+  assert.match(message.text, /LINE Developers/);
+  assert.doesNotMatch(message.text, /อาจถูกปิด\/แบน/);
+});
+
+test("OA identity mismatch alert tells staff not to overwrite the baseline", () => {
+  const message = oaAlertMessage({
+    room: "@example",
+    company: "Example Co",
+    status: "IDENTITY_MISMATCH",
+    appBaseUrl: "https://watch.example.com",
+  });
+  assert.match(message.text, /Bot userId ไม่ตรงกับข้อมูลอ้างอิง/);
+  assert.match(message.text, /ห้ามยืนยัน/);
+});
 
 test("network alerts never include the IP exit location", () => {
   const common = {

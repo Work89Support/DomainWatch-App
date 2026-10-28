@@ -110,7 +110,7 @@ export async function getRichMenuLinks(token: string): Promise<RichMenuLink[]> {
 }
 
 export type OaCheck = {
-  status: "OK" | "MISMATCH" | "NO_PICTURE" | "TOKEN_INVALID" | "ERROR";
+  status: "OK" | "MISMATCH" | "NO_PICTURE" | "TOKEN_INVALID" | "IDENTITY_MISMATCH" | "ERROR";
   displayName: string | null;
   userId: string | null;
   basicId: string | null;
@@ -119,6 +119,22 @@ export type OaCheck = {
   hasPicture: boolean | null;
   error: string | null;
 };
+
+// Bot userId เป็นตัวตนคงที่ของ LINE OA และปลอดภัยกว่าการเทียบชื่อที่เปลี่ยนได้
+// เมื่อมี baseline แล้ว ห้ามเขียนทับอัตโนมัติหาก token ชี้ไปคนละ OA
+export function enforceOaIdentityBaseline(
+  result: OaCheck,
+  baselineUserId?: string | null
+): OaCheck {
+  const baseline = (baselineUserId || "").trim();
+  const observed = (result.userId || "").trim();
+  if (!baseline || !observed || baseline === observed) return result;
+  return {
+    ...result,
+    status: "IDENTITY_MISMATCH",
+    error: "Bot userId ไม่ตรงกับข้อมูลอ้างอิง — token อาจเป็นของคนละ LINE OA ระบบยังไม่เขียนทับตัวตนเดิม",
+  };
+}
 
 // ตรวจ OA 1 ตัว: อ่าน bot info แล้วเทียบชื่อ/รูป
 export async function checkOa(token: string, expectedName?: string | null): Promise<OaCheck> {

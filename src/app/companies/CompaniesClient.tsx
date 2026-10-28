@@ -74,6 +74,7 @@ function oaMeta(status: string) {
     case "MISMATCH": return { text: "ชื่อ OA ไม่ตรง", cls: "bg-red-50 text-red-600" };
     case "NO_PICTURE": return { text: "รูปโปรไฟล์หาย", cls: "bg-amber-50 text-amber-700" };
     case "TOKEN_INVALID": return { text: "token ใช้ไม่ได้", cls: "bg-red-50 text-red-600" };
+    case "IDENTITY_MISMATCH": return { text: "ตัวตน OA เปลี่ยน", cls: "bg-red-50 text-red-700" };
     case "ERROR": return { text: "ตรวจ OA ไม่ได้", cls: "bg-amber-50 text-amber-700" };
     default: return { text: "ยังไม่ตรวจ OA", cls: "bg-slate-100 text-slate-500" };
   }
@@ -499,6 +500,18 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
     else setMsg(data.error || "ตรวจไม่สำเร็จ");
   }
 
+  async function confirmIdentity() {
+    if (!confirm("ยืนยันให้ Bot userId ที่ตรวจพบล่าสุดเป็นตัวตนอ้างอิงใหม่? ทำเฉพาะเมื่อเช็กแล้วว่า token เป็นของ OA ที่ถูกต้อง")) return;
+    setBusy(true); setMsg(null);
+    const res = await fetch(`/api/linegroups/${group.id}/check-oa?confirmIdentity=1`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (res.ok) {
+      setMsg("ยืนยันตัวตน OA ใหม่และบันทึกข้อมูลอ้างอิงแล้ว");
+      onSaved();
+    } else setMsg(data.error || "ยืนยันตัวตนใหม่ไม่สำเร็จ");
+  }
+
   async function previewMenu() {
     setBusy(true); setMsg(null); setMenuPreview(null);
     const res = await fetch(`/api/linegroups/${group.id}/import-richmenu?dryRun=1`, {
@@ -532,9 +545,9 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
           <span className={`badge text-[11px] ${oa.cls}`}>{oa.text}</span>
           {group.oaDisplayName && <span className="text-slate-500 ml-2">ชื่อจริง: {group.oaDisplayName}</span>}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500 mt-2">
-            <div>Basic ID: <b className="text-slate-700">{group.oaBasicId || "ยังไม่มีผล"}</b></div>
-            <div>Premium ID: <b className="text-slate-700">{group.oaUserId ? group.oaPremiumId || "ไม่มี Premium ID" : "ยังไม่มีผล"}</b></div>
-            <div>Bot userId: <b className="text-slate-700 break-all">{group.oaUserId || "ยังไม่มีผล"}</b></div>
+            <div>Basic ID อ้างอิง: <b className="text-slate-700">{group.oaBasicId || "ยังไม่มีผล"}</b></div>
+            <div>Premium ID อ้างอิง: <b className="text-slate-700">{group.oaUserId ? group.oaPremiumId || "ไม่มี Premium ID" : "ยังไม่มีผล"}</b></div>
+            <div>Bot userId อ้างอิง: <b className="text-slate-700 break-all">{group.oaUserId || "ยังไม่มีผล"}</b></div>
             <div>โหมดแชต: <b className="text-slate-700">{group.oaChatMode || "ยังไม่มีผล"}</b></div>
           </div>
           {group.oaError && <div className="text-xs text-red-500 mt-1">{group.oaError}</div>}
@@ -561,6 +574,11 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
           {preview.error && <div className="text-red-600 mt-2">{preview.error}</div>}
         </div>
       )}
+      {(group.oaStatus === "IDENTITY_MISMATCH" || preview?.status === "IDENTITY_MISMATCH") && (
+        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+          <b>หยุดตรวจสอบก่อนยืนยัน:</b> token ที่ตรวจพบชี้ไปยัง Bot userId คนละตัวกับข้อมูลอ้างอิง ระบบยังไม่เขียนทับตัวตนเดิม
+        </div>
+      )}
       {menuPreview && (
         <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
           <div className="font-semibold text-sm mb-2">ตัวอย่างลิงก์จาก Rich Menu</div>
@@ -585,6 +603,9 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
         <button className="btn-primary text-sm disabled:opacity-60" disabled={busy || !canTest} onClick={testWithoutSaving}>{busy ? "..." : "ทดลองตรวจ — ไม่บันทึก"}</button>
         <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy} onClick={save}>บันทึกการตั้งค่า</button>
         <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy || !savedToken} onClick={checkNow} title={savedToken ? "" : "บันทึก token ก่อน"}>ตรวจและบันทึกผล</button>
+        {(group.oaStatus === "IDENTITY_MISMATCH" || preview?.status === "IDENTITY_MISMATCH") && (
+          <button className="btn-ghost text-sm border-red-200 text-red-700 disabled:opacity-60" disabled={busy || !savedToken} onClick={confirmIdentity}>ยืนยันตัวตน OA ใหม่</button>
+        )}
         <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy || !canTest} onClick={previewMenu}>ดูตัวอย่าง Rich Menu</button>
         <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy || !savedToken || !menuPreview} onClick={importMenu} title={!savedToken ? "บันทึก token ก่อน" : !menuPreview ? "ดูตัวอย่างก่อนนำเข้า" : ""}>นำลิงก์เข้า Master</button>
       </div>

@@ -10,7 +10,7 @@ import {
   oaRecoveredMessage,
   type TgMessage,
 } from "@/lib/telegram";
-import { checkOa } from "@/lib/line";
+import { checkOa, enforceOaIdentityBaseline } from "@/lib/line";
 import { confirmCheckState } from "@/lib/checkState";
 import { Prisma, type LinkStatus } from "@prisma/client";
 
@@ -490,8 +490,9 @@ export async function runOaChecks(routes?: Map<string, TgRoute>): Promise<void> 
     const token = (g.channelAccessToken || "").trim();
     if (!token) return;
     const prevStatus = g.oaStatus;
-    const res = await checkOa(token, g.expectedOaName);
-    const hasIdentity = res.status !== "TOKEN_INVALID" && res.status !== "ERROR";
+    const checked = await checkOa(token, g.expectedOaName);
+    const res = enforceOaIdentityBaseline(checked, g.oaUserId);
+    const hasIdentity = !!checked.userId && res.status !== "IDENTITY_MISMATCH";
     await prisma.lineGroup.update({
       where: { id: g.id },
       data: {
@@ -499,10 +500,10 @@ export async function runOaChecks(routes?: Map<string, TgRoute>): Promise<void> 
         oaDisplayName: res.displayName,
         ...(hasIdentity
           ? {
-              oaUserId: res.userId,
-              oaBasicId: res.basicId,
-              oaPremiumId: res.premiumId,
-              oaChatMode: res.chatMode,
+            oaUserId: checked.userId,
+            oaBasicId: checked.basicId,
+            oaPremiumId: checked.premiumId,
+            oaChatMode: checked.chatMode,
             }
           : {}),
         oaHasPicture: res.hasPicture,

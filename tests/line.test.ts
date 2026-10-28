@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkOa, getBotInfo, getRichMenuLinks } from "../src/lib/line";
+import { checkOa, enforceOaIdentityBaseline, getBotInfo, getRichMenuLinks } from "../src/lib/line";
 
 const originalFetch = global.fetch;
 
@@ -60,6 +60,39 @@ test("invalid token is not reported as proof that the OA is banned", async () =>
   const result = await checkOa("invalid-token", "MR9 SUPPORT");
   assert.equal(result.status, "TOKEN_INVALID");
   assert.match(result.error || "", /ยังสรุปไม่ได้ว่า OA ถูกระงับ/);
+});
+
+test("identity baseline blocks a token that points to a different OA", () => {
+  const result = enforceOaIdentityBaseline(
+    {
+      status: "OK",
+      displayName: "OA ใหม่",
+      userId: "U-NEW",
+      basicId: "@new",
+      premiumId: null,
+      chatMode: "chat",
+      hasPicture: true,
+      error: null,
+    },
+    "U-ORIGINAL"
+  );
+  assert.equal(result.status, "IDENTITY_MISMATCH");
+  assert.match(result.error || "", /ไม่เขียนทับตัวตนเดิม/);
+});
+
+test("identity baseline accepts the same OA and initializes an empty baseline", () => {
+  const observed = {
+    status: "OK" as const,
+    displayName: "OA เดิม",
+    userId: "U-SAME",
+    basicId: "@same",
+    premiumId: null,
+    chatMode: "chat",
+    hasPicture: true,
+    error: null,
+  };
+  assert.equal(enforceOaIdentityBaseline(observed, "U-SAME").status, "OK");
+  assert.equal(enforceOaIdentityBaseline(observed, null).status, "OK");
 });
 
 test("getRichMenuLinks reads URI actions from the default API rich menu", async () => {
