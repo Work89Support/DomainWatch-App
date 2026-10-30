@@ -188,14 +188,15 @@ export function nextMobileState(previous: {
 
 export function isInconclusiveMobileTimeout(error?: string | null): boolean {
   if (!error) return false;
-  return /(sockettimeoutexception|read timed out|connect timed out|timeout|timed out)/i.test(error);
+  return /(sockettimeoutexception|read timed out|connect timed out|timeout|timed out|sslhandshakeexception|sslprotocolexception|sslpeerunverifiedexception|ssl.*handshake|tls.*handshake)/i.test(error);
 }
 
 export function normalizeMobileProbeStatus(
   status: LinkStatus,
   error?: string | null
 ): LinkStatus {
-  // Timeout จากซิมบอกได้เพียงว่าเว็บตอบช้า/ตรวจไม่จบ ไม่ได้ยืนยันว่าเว็บล่ม
+  // Timeout หรือ SSL/TLS handshake จากซิมบอกได้เพียงว่าการตรวจไม่จบ
+  // ไม่ได้ยืนยันว่าเว็บล่มหรือถูกปิด จึงเก็บเป็น SLOW และไม่เปิดเคส
   // ทำที่ server ด้วยเพื่อรองรับแอปรุ่นเก่าที่ยังส่ง DOWN มา
   return status === "DOWN" && isInconclusiveMobileTimeout(error) ? "SLOW" : status;
 }

@@ -56,8 +56,10 @@ test("mobile recovery requires two successful rounds and preserves slow recovery
   assert.equal(second.recovered, true);
 });
 
-test("mobile timeout is inconclusive/slow and must not open a false outage", () => {
+test("mobile timeout or transient SSL handshake is inconclusive/slow and must not open a false outage", () => {
   assert.equal(normalizeMobileProbeStatus("DOWN", "SocketTimeoutException: Read timed out"), "SLOW");
+  assert.equal(normalizeMobileProbeStatus("DOWN", "SSLHandshakeException: Connection closed by peer"), "SLOW");
+  assert.equal(normalizeMobileProbeStatus("DOWN", "SSLProtocolException: TLS handshake aborted"), "SLOW");
   assert.equal(normalizeMobileProbeStatus("DOWN", "ConnectException: Connection refused"), "DOWN");
   const first = nextMobileState(null, normalizeMobileProbeStatus("DOWN", "Read timed out"));
   assert.equal(first.status, "SLOW");
