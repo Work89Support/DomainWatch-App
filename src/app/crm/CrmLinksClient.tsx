@@ -9,6 +9,7 @@ type CrmLinkRow = {
   url: string;
   note: string | null;
   isActive: boolean;
+  notifyTelegram: boolean;
   lastStatus: string;
   lastCheckedAt: string | null;
   lastHttpCode: number | null;
@@ -16,7 +17,7 @@ type CrmLinkRow = {
   lastError: string | null;
 };
 
-const emptyForm = { id: "", name: "", url: "", note: "ลิงก์ส่ง SMS", isActive: true };
+const emptyForm = { id: "", name: "", url: "", note: "ลิงก์ส่ง SMS", isActive: true, notifyTelegram: true };
 
 function formatCheckedAt(value: string | null) {
   if (!value) return "ยังไม่ตรวจ";
@@ -31,10 +32,12 @@ export default function CrmLinksClient({
   initialLinks,
   canEdit,
   canCheck,
+  telegramMode,
 }: {
   initialLinks: CrmLinkRow[];
   canEdit: boolean;
   canCheck: boolean;
+  telegramMode: "crm" | "global" | "off";
 }) {
   const [links, setLinks] = useState(initialLinks);
   const [form, setForm] = useState(emptyForm);
@@ -62,10 +65,19 @@ export default function CrmLinksClient({
     const data = await response.json().catch(() => ({}));
     if (response.ok) {
       await reload();
-      setMessage(`ตรวจเสร็จแล้ว ${data.checked} ลิงก์ · ไม่สร้างเคสหรือส่ง Telegram`);
+      setMessage(`ตรวจเสร็จแล้ว ${data.checked} ลิงก์ · หากสถานะยืนยันเปลี่ยน ระบบจะแจ้ง Telegram อัตโนมัติ`);
     } else {
       setMessage(data.error || "ตรวจไม่สำเร็จ");
     }
+    setBusy(false);
+  }
+
+  async function testTelegram() {
+    setBusy(true);
+    setMessage(null);
+    const response = await fetch("/api/crm-links/test-telegram", { method: "POST" });
+    const data = await response.json().catch(() => ({}));
+    setMessage(response.ok ? `ส่งข้อความทดสอบ Telegram แล้ว ${data.sent} กลุ่ม` : (data.error || "ส่ง Telegram ไม่สำเร็จ"));
     setBusy(false);
   }
 
@@ -76,7 +88,7 @@ export default function CrmLinksClient({
   }
 
   function startEdit(link: CrmLinkRow) {
-    setForm({ id: link.id, name: link.name, url: link.url, note: link.note || "", isActive: link.isActive });
+    setForm({ id: link.id, name: link.name, url: link.url, note: link.note || "", isActive: link.isActive, notifyTelegram: link.notifyTelegram });
     setShowForm(true);
     setMessage(null);
   }
@@ -108,7 +120,7 @@ export default function CrmLinksClient({
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
       <PageHeader
         title="CRM / ลิงก์ส่ง SMS"
-        subtitle="ตรวจเฉพาะลิงก์สั้นของ CRM · แยกจาก Master Data, KPI, เคส และ Telegram"
+        subtitle="ตรวจลิงก์สั้นของ CRM แยกจาก Master Data, KPI และเคส · แจ้ง Telegram เมื่อสถานะยืนยันเปลี่ยน"
         action={
           <div className="flex flex-wrap gap-2">
             {canEdit && <button className="btn-ghost" onClick={startAdd}>+ เพิ่มลิงก์ CRM</button>}
@@ -116,6 +128,13 @@ export default function CrmLinksClient({
           </div>
         }
       />
+
+      <div className="card p-4 mb-6 flex flex-wrap items-center gap-3">
+        <div className="text-lg">📢</div>
+        <div className="flex-1"><div className="font-semibold text-slate-800">Telegram สำหรับ CRM</div><div className="text-xs text-slate-500">แจ้งเมื่อใช้ไม่ได้ครบ 2 รอบ และแจ้งกลับเมื่อใช้งานได้ครบ 2 รอบ</div></div>
+        <span className={`badge ${telegramMode === "off" ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>{telegramMode === "crm" ? "กลุ่ม CRM โดยเฉพาะ" : telegramMode === "global" ? "ใช้กลุ่มกลาง" : "ยังไม่ได้ตั้งค่า"}</span>
+        {canCheck && telegramMode !== "off" && <button className="btn-ghost text-xs" disabled={busy} onClick={testTelegram}>ส่งข้อความทดสอบ</button>}
+      </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <StatCard label="ลิงก์ CRM ทั้งหมด" value={totals.total} tone="slate" />
@@ -139,6 +158,7 @@ export default function CrmLinksClient({
             <label className="text-sm text-slate-600 md:col-span-2">หมายเหตุ<input className="input mt-1" value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} /></label>
           </div>
           <label className="mt-3 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={form.isActive} onChange={(event) => setForm({ ...form, isActive: event.target.checked })} /> เปิดตรวจอัตโนมัติ</label>
+          <label className="mt-3 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={form.notifyTelegram} onChange={(event) => setForm({ ...form, notifyTelegram: event.target.checked })} /> แจ้ง Telegram เมื่อสถานะเปลี่ยน</label>
           <div className="mt-4 flex gap-2"><button className="btn-primary" disabled={busy} onClick={save}>บันทึก</button><button className="btn-ghost" onClick={() => setShowForm(false)}>ยกเลิก</button></div>
         </div>
       )}

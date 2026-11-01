@@ -134,6 +134,72 @@ export async function sendTelegramTo(
   return { ok: sent > 0, sent };
 }
 
+// CRM ใช้กลุ่มเฉพาะได้ ถ้ายังไม่ตั้งจะส่งเข้ากลุ่มกลางของแอดมิน/ไอที
+export async function sendCrmTelegram(
+  msg: string | TgMessage
+): Promise<{ ok: boolean; sent: number; skipped?: string }> {
+  const chatId = (process.env.TELEGRAM_CRM_CHAT_ID || "").trim();
+  if (chatId) {
+    const token = (process.env.TELEGRAM_CRM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "").trim();
+    if (!token) return { ok: false, sent: 0, skipped: "no_token" };
+    return sendTelegramTo(token, chatId, msg);
+  }
+  return sendTelegram(msg, "all");
+}
+
+export function crmTelegramMode(): "crm" | "global" | "off" {
+  if (process.env.TELEGRAM_CRM_CHAT_ID && (process.env.TELEGRAM_CRM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN)) return "crm";
+  if (process.env.TELEGRAM_BOT_TOKEN && (process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_IT_CHAT_ID)) return "global";
+  return "off";
+}
+
+export function crmDownMessage(opts: {
+  name: string;
+  url: string;
+  httpCode?: number | null;
+  error?: string | null;
+  appBaseUrl: string;
+}): TgMessage {
+  const detail = opts.httpCode ? `HTTP ${opts.httpCode}` : (opts.error || "เชื่อมต่อไม่ได้");
+  return {
+    text: [
+      "🔴 <b>CRM / ลิงก์ส่ง SMS ใช้ไม่ได้</b>",
+      "━━━━━━━━━━━━━━━",
+      `📨 รายการ: <b>${escapeHtml(opts.name)}</b>`,
+      `🔗 ${escapeHtml(opts.url)}`,
+      `⚠️ ผลตรวจ: ${escapeHtml(detail)}`,
+      "🧪 ยืนยันผิดปกติต่อเนื่องครบ 2 รอบแล้ว",
+      "📌 ตรวจปลายทางหรือแก้ไขลิงก์ในหน้า CRM",
+    ].join("\n"),
+    buttons: [
+      [{ text: "📨 เปิดหน้า CRM", url: `${opts.appBaseUrl}/crm` }],
+      [{ text: "🔗 เปิดลิงก์", url: opts.url }],
+    ],
+  };
+}
+
+export function crmRecoveredMessage(opts: {
+  name: string;
+  url: string;
+  slow?: boolean;
+  responseMs?: number | null;
+  appBaseUrl: string;
+}): TgMessage {
+  const result = opts.slow ? "กลับมาเปิดได้แล้ว แต่ยังโหลดช้า" : "กลับมาใช้งานได้แล้ว";
+  const seconds = opts.responseMs == null ? null : `${(opts.responseMs / 1000).toFixed(1)} วินาที`;
+  return {
+    text: [
+      `✅ <b>CRM / ลิงก์ส่ง SMS ${result}</b>`,
+      "━━━━━━━━━━━━━━━",
+      `📨 รายการ: <b>${escapeHtml(opts.name)}</b>`,
+      `🔗 ${escapeHtml(opts.url)}`,
+      ...(seconds ? [`⏱️ เวลาโหลด: ${seconds}`] : []),
+      "🧪 ตรวจยืนยันการกลับมาใช้ได้ต่อเนื่องครบ 2 รอบแล้ว",
+    ].join("\n"),
+    buttons: [[{ text: "📨 เปิดหน้า CRM", url: `${opts.appBaseUrl}/crm` }]],
+  };
+}
+
 // ปุ่ม "เปิดในระบบ" ของเคส
 function incidentUrl(appBaseUrl: string, incidentId: string): string {
   return `${appBaseUrl}/incidents?incident=${encodeURIComponent(incidentId)}`;

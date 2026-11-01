@@ -1,8 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { downAlertMessage, mobileAgentReportLines, networkDownMessage, networkRecoveredMessage, oaAlertMessage, recoveredMessage } from "../src/lib/telegram";
+import { crmDownMessage, crmRecoveredMessage, downAlertMessage, mobileAgentReportLines, networkDownMessage, networkRecoveredMessage, oaAlertMessage, recoveredMessage } from "../src/lib/telegram";
 
 const incidentId = "cmtest00000000abcdefgh";
+
+test("CRM Telegram alerts are clearly separated and link back to the CRM page", () => {
+  const down = crmDownMessage({ name: "Ferrari8", url: "https://urlio.co/ferrari8", httpCode: 503, appBaseUrl: "https://watch.example.com" });
+  const up = crmRecoveredMessage({ name: "Ferrari8", url: "https://urlio.co/ferrari8", responseMs: 450, appBaseUrl: "https://watch.example.com" });
+  assert.match(down.text, /CRM \/ ลิงก์ส่ง SMS ใช้ไม่ได้/);
+  assert.match(down.text, /ยืนยันผิดปกติต่อเนื่องครบ 2 รอบ/);
+  assert.match(up.text, /กลับมาใช้งานได้แล้ว/);
+  assert.ok(down.buttons?.flat().some((button) => button.url === "https://watch.example.com/crm"));
+});
 
 test("OA token alert avoids claiming a ban and gives a safe next step", () => {
   const message = oaAlertMessage({

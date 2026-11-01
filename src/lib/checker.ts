@@ -8,6 +8,9 @@ import {
   recoveredMessage,
   oaAlertMessage,
   oaRecoveredMessage,
+  crmDownMessage,
+  crmRecoveredMessage,
+  sendCrmTelegram,
   type TgMessage,
 } from "@/lib/telegram";
 import { checkOa, enforceOaIdentityBaseline } from "@/lib/line";
@@ -250,16 +253,49 @@ export async function runCrmChecks(): Promise<number> {
   await forEachConcurrent(links, Math.min(WRITE_CONCURRENCY, 12), async (link) => {
     const result = results.get(urlKey(link.url));
     if (!result) return;
+    const probeStatus = classifyProbeStatus(result);
+    const state = confirmCheckState({
+      probeStatus,
+      currentStatus: link.lastStatus,
+      hasOpenIncident: link.lastStatus === "DOWN",
+      failureStreak: link.failureStreak,
+      recoveryStreak: link.recoveryStreak,
+      downConfirmations: DOWN_CONFIRMATIONS,
+      recoveryConfirmations: RECOVERY_CONFIRMATIONS,
+    });
+    const becameDown = link.lastStatus !== "DOWN" && state.status === "DOWN";
+    const recovered = link.lastStatus === "DOWN" && state.status !== "DOWN";
     await prisma.crmLink.update({
       where: { id: link.id },
       data: {
-        lastStatus: classifyProbeStatus(result),
+        lastStatus: state.status,
+        failureStreak: state.failureStreak,
+        recoveryStreak: state.recoveryStreak,
         lastCheckedAt: checkedAt,
         lastHttpCode: result.httpCode,
         lastResponseMs: result.responseMs,
         lastError: result.error,
       },
     });
+    if (link.notifyTelegram && becameDown) {
+      const sent = await sendCrmTelegram(crmDownMessage({
+        name: link.name,
+        url: link.url,
+        httpCode: result.httpCode,
+        error: result.error,
+        appBaseUrl: APP_BASE_URL,
+      }));
+      if (sent.ok) await prisma.crmLink.update({ where: { id: link.id }, data: { lastNotifiedAt: new Date() } });
+    } else if (link.notifyTelegram && recovered) {
+      const sent = await sendCrmTelegram(crmRecoveredMessage({
+        name: link.name,
+        url: link.url,
+        slow: state.status === "SLOW",
+        responseMs: result.responseMs,
+        appBaseUrl: APP_BASE_URL,
+      }));
+      if (sent.ok) await prisma.crmLink.update({ where: { id: link.id }, data: { lastNotifiedAt: new Date() } });
+    }
   });
   return links.length;
 }

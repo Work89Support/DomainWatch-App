@@ -94,18 +94,22 @@ model Link {
   @@index([category])
 }
 
-/// ลิงก์สั้นสำหรับ CRM / SMS — แยกจาก Master Data และไม่สร้าง Incident/KPI/Telegram
+/// ลิงก์สั้นสำหรับ CRM / SMS — แยกจาก Master Data และไม่สร้าง Incident/KPI
 model CrmLink {
   id             String     @id @default(cuid())
   name           String
   url            String     @unique
   note           String?
   isActive       Boolean    @default(true)
+  notifyTelegram Boolean    @default(true)
   lastStatus     LinkStatus @default(UNKNOWN)
+  failureStreak  Int        @default(0)
+  recoveryStreak Int        @default(0)
   lastCheckedAt  DateTime?
   lastHttpCode   Int?
   lastResponseMs Int?
   lastError      String?
+  lastNotifiedAt DateTime?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

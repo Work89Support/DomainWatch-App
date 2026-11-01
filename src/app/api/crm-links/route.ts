@@ -24,7 +24,13 @@ export async function POST(req: NextRequest) {
   if (!name || !url) return NextResponse.json({ error: "กรุณาระบุชื่อและ URL ที่ถูกต้อง" }, { status: 400 });
   try {
     const link = await prisma.crmLink.create({
-      data: { name, url, note: String(body.note || "").trim() || null, isActive: body.isActive !== false },
+      data: {
+        name,
+        url,
+        note: String(body.note || "").trim() || null,
+        isActive: body.isActive !== false,
+        notifyTelegram: body.notifyTelegram !== false,
+      },
     });
     return NextResponse.json(link, { status: 201 });
   } catch {
