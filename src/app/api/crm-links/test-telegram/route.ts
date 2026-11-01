@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { canRunCheck } from "@/lib/permissions";
-import { crmTelegramMode, sendCrmTelegram } from "@/lib/telegram";
+import { getCrmTelegramStatus, sendConfiguredCrmTelegram } from "@/lib/crmTelegram";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -10,11 +10,11 @@ export async function POST(req: NextRequest) {
   const me = await getCurrentUser();
   if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!canRunCheck(me.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  if (crmTelegramMode() === "off") {
+  if ((await getCrmTelegramStatus()).mode === "off") {
     return NextResponse.json({ error: "ยังไม่ได้ตั้งค่า Telegram" }, { status: 400 });
   }
   const origin = new URL(req.url).origin;
-  const result = await sendCrmTelegram({
+  const result = await sendConfiguredCrmTelegram({
     text: [
       "🧪 <b>ทดสอบแจ้งเตือน CRM / ลิงก์ส่ง SMS</b>",
       "━━━━━━━━━━━━━━━",

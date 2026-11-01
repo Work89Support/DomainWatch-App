@@ -32,18 +32,22 @@ export default function CrmLinksClient({
   initialLinks,
   canEdit,
   canCheck,
-  telegramMode,
+  crmTelegram,
 }: {
   initialLinks: CrmLinkRow[];
   canEdit: boolean;
   canCheck: boolean;
-  telegramMode: "crm" | "global" | "off";
+  crmTelegram: { mode: "crm" | "global" | "off"; hasDedicated: boolean; chatId: string };
 }) {
   const [links, setLinks] = useState(initialLinks);
   const [form, setForm] = useState(emptyForm);
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [showTelegram, setShowTelegram] = useState(false);
+  const [telegramToken, setTelegramToken] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState(crmTelegram.chatId);
+  const [telegramState, setTelegramState] = useState(crmTelegram);
 
   const totals = useMemo(() => ({
     total: links.length,
@@ -78,6 +82,37 @@ export default function CrmLinksClient({
     const response = await fetch("/api/crm-links/test-telegram", { method: "POST" });
     const data = await response.json().catch(() => ({}));
     setMessage(response.ok ? `ส่งข้อความทดสอบ Telegram แล้ว ${data.sent} กลุ่ม` : (data.error || "ส่ง Telegram ไม่สำเร็จ"));
+    setBusy(false);
+  }
+
+  async function saveTelegram() {
+    setBusy(true);
+    setMessage(null);
+    const response = await fetch("/api/crm-settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tgBotToken: telegramToken, tgChatId: telegramChatId }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) {
+      setTelegramState({ mode: "crm", hasDedicated: true, chatId: data.chatId });
+      setTelegramToken("");
+      setShowTelegram(false);
+      setMessage("บันทึก Telegram สำหรับ CRM แล้ว");
+    } else setMessage(data.error || "บันทึก Telegram ไม่สำเร็จ");
+    setBusy(false);
+  }
+
+  async function clearTelegram() {
+    setBusy(true);
+    const response = await fetch("/api/crm-settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clear: true }) });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) {
+      setTelegramState({ mode: data.mode || "off", hasDedicated: false, chatId: "" });
+      setTelegramChatId("");
+      setShowTelegram(false);
+      setMessage("ปิด Telegram สำหรับ CRM แล้ว");
+    }
     setBusy(false);
   }
 
@@ -132,9 +167,18 @@ export default function CrmLinksClient({
       <div className="card p-4 mb-6 flex flex-wrap items-center gap-3">
         <div className="text-lg">📢</div>
         <div className="flex-1"><div className="font-semibold text-slate-800">Telegram สำหรับ CRM</div><div className="text-xs text-slate-500">แจ้งเมื่อใช้ไม่ได้ครบ 2 รอบ และแจ้งกลับเมื่อใช้งานได้ครบ 2 รอบ</div></div>
-        <span className={`badge ${telegramMode === "off" ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>{telegramMode === "crm" ? "กลุ่ม CRM โดยเฉพาะ" : telegramMode === "global" ? "ใช้กลุ่มกลาง" : "ยังไม่ได้ตั้งค่า"}</span>
-        {canCheck && telegramMode !== "off" && <button className="btn-ghost text-xs" disabled={busy} onClick={testTelegram}>ส่งข้อความทดสอบ</button>}
+        <span className={`badge ${telegramState.mode === "off" ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>{telegramState.mode === "crm" ? "กลุ่ม CRM โดยเฉพาะ" : telegramState.mode === "global" ? "ใช้กลุ่มกลาง" : "ยังไม่ได้ตั้งค่า"}</span>
+        {canEdit && <button className="btn-ghost text-xs" onClick={() => setShowTelegram(true)}>ตั้งค่า Telegram</button>}
+        {canCheck && telegramState.mode !== "off" && <button className="btn-ghost text-xs" disabled={busy} onClick={testTelegram}>ส่งข้อความทดสอบ</button>}
       </div>
+
+      {showTelegram && <div className="card p-5 mb-6">
+        <div className="flex items-center justify-between mb-3"><h2 className="font-semibold text-slate-800">ตั้งค่า Telegram สำหรับ CRM</h2><button className="text-slate-400" onClick={() => setShowTelegram(false)}>ปิด</button></div>
+        <p className="text-xs text-slate-500 mb-3">ตั้ง Bot และกลุ่มรับแจ้งเฉพาะลิงก์ CRM ข้อมูลนี้ไม่กระทบ Telegram ของบริษัทอื่น</p>
+        <label className="text-sm text-slate-600">Bot Token<input type="password" className="input mt-1 mb-3" value={telegramToken} onChange={(event) => setTelegramToken(event.target.value)} placeholder={telegramState.hasDedicated ? "•••••• (ไม่กรอก = คงเดิม)" : "123456:ABC-DEF..."} autoComplete="off" /></label>
+        <label className="text-sm text-slate-600">Chat ID (คั่นด้วย , ได้)<input className="input mt-1" value={telegramChatId} onChange={(event) => setTelegramChatId(event.target.value)} placeholder="-1001234567890" /></label>
+        <div className="flex justify-between gap-2 mt-4">{telegramState.hasDedicated ? <button className="btn-ghost text-xs" disabled={busy} onClick={clearTelegram}>ปิดการแจ้งเตือน CRM</button> : <span />}<div className="flex gap-2"><button className="btn-ghost" onClick={() => setShowTelegram(false)}>ยกเลิก</button><button className="btn-primary" disabled={busy} onClick={saveTelegram}>{busy ? "กำลังบันทึก..." : "บันทึก"}</button></div></div>
+      </div>}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <StatCard label="ลิงก์ CRM ทั้งหมด" value={totals.total} tone="slate" />

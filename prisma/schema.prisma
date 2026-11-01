@@ -117,6 +117,15 @@ model CrmLink {
   @@index([lastStatus])
 }
 
+/// ปลายทาง Telegram สำหรับ CRM โดยเฉพาะ (singleton id=default)
+model CrmSetting {
+  id         String   @id @default("default")
+  tgBotToken String?
+  tgChatId   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
 /// โทรศัพท์ตรวจเครือข่ายมือถือ — token เก็บเฉพาะ hash และผูกได้ทีละเครื่อง
 model MobileAgent {
   id                String    @id @default(cuid())

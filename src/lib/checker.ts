@@ -10,9 +10,9 @@ import {
   oaRecoveredMessage,
   crmDownMessage,
   crmRecoveredMessage,
-  sendCrmTelegram,
   type TgMessage,
 } from "@/lib/telegram";
+import { sendConfiguredCrmTelegram } from "@/lib/crmTelegram";
 import { checkOa, enforceOaIdentityBaseline } from "@/lib/line";
 import { confirmCheckState } from "@/lib/checkState";
 import { Prisma, type LinkStatus } from "@prisma/client";
@@ -278,7 +278,7 @@ export async function runCrmChecks(): Promise<number> {
       },
     });
     if (link.notifyTelegram && becameDown) {
-      const sent = await sendCrmTelegram(crmDownMessage({
+      const sent = await sendConfiguredCrmTelegram(crmDownMessage({
         name: link.name,
         url: link.url,
         httpCode: result.httpCode,
@@ -287,7 +287,7 @@ export async function runCrmChecks(): Promise<number> {
       }));
       if (sent.ok) await prisma.crmLink.update({ where: { id: link.id }, data: { lastNotifiedAt: new Date() } });
     } else if (link.notifyTelegram && recovered) {
-      const sent = await sendCrmTelegram(crmRecoveredMessage({
+      const sent = await sendConfiguredCrmTelegram(crmRecoveredMessage({
         name: link.name,
         url: link.url,
         slow: state.status === "SLOW",
