@@ -54,6 +54,13 @@ export async function getBotInfo(token: string): Promise<BotInfo> {
 
 export type RichMenuLink = { label: string; url: string };
 
+export type DefaultRichMenuInspection = {
+  status: "READY" | "OA_MANAGER" | "NO_DEFAULT" | "NO_URI";
+  richMenuId: string | null;
+  links: RichMenuLink[];
+  note: string;
+};
+
 type LineAction = { type?: string; label?: string; uri?: string };
 type LineArea = { action?: LineAction };
 type LineRichMenu = { richMenuId?: string; areas?: LineArea[] };
@@ -70,6 +77,48 @@ function extractLinks(rm: LineRichMenu): RichMenuLink[] {
     out.push({ label: (a.label || "").trim() || "ลิงก์", url });
   }
   return out;
+}
+
+// ตรวจเฉพาะ default rich menu ที่ Messaging API มองเห็น
+// LINE ไม่เปิดรายละเอียดของ rich menu ที่สร้างด้วย OA Manager ผ่าน API
+export async function inspectDefaultRichMenu(token: string): Promise<DefaultRichMenuInspection> {
+  const defaultRes = await lineGet("/v2/bot/user/all/richmenu", token);
+  if (defaultRes.status === 401) throw new Error("TOKEN_INVALID");
+  if (defaultRes.status === 403) {
+    return {
+      status: "OA_MANAGER",
+      richMenuId: null,
+      links: [],
+      note: "LINE ไม่เปิดรายละเอียดเมนูนี้ผ่าน Messaging API — เมนูอาจถูกตั้งจาก LINE OA Manager",
+    };
+  }
+  if (defaultRes.status === 404) {
+    return {
+      status: "NO_DEFAULT",
+      richMenuId: null,
+      links: [],
+      note: "ยังไม่มี Default Rich Menu ที่ตั้งด้วย Messaging API",
+    };
+  }
+  if (!defaultRes.ok) throw new Error(`LINE_HTTP_${defaultRes.status}`);
+
+  const defaultJson = (await defaultRes.json()) as { richMenuId?: string };
+  const richMenuId = (defaultJson.richMenuId || "").trim();
+  if (!richMenuId) throw new Error("RICH_MENU_ID_MISSING");
+
+  const menuRes = await lineGet(`/v2/bot/richmenu/${richMenuId}`, token);
+  if (menuRes.status === 401 || menuRes.status === 403) throw new Error("TOKEN_INVALID");
+  if (!menuRes.ok) throw new Error(`LINE_HTTP_${menuRes.status}`);
+  const menu = (await menuRes.json()) as LineRichMenu;
+  const links = extractLinks(menu);
+  return {
+    status: links.length ? "READY" : "NO_URI",
+    richMenuId,
+    links,
+    note: links.length
+      ? `อ่าน Default Rich Menu จาก Messaging API ได้ ${links.length} ลิงก์`
+      : "พบ Default Rich Menu แต่ไม่มีปุ่มชนิด URL ให้ตรวจเทียบ",
+  };
 }
 
 // ดึงลิงก์จาก Rich Menu ของ OA — เลือก default ก่อน ถ้าไม่มีใช้เมนูแรกที่มีลิงก์

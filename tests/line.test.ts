@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkOa, enforceOaIdentityBaseline, getBotInfo, getRichMenuLinks } from "../src/lib/line";
+import { checkOa, enforceOaIdentityBaseline, getBotInfo, getRichMenuLinks, inspectDefaultRichMenu } from "../src/lib/line";
 
 const originalFetch = global.fetch;
 
@@ -118,4 +118,32 @@ test("getRichMenuLinks reads URI actions from the default API rich menu", async 
 
   const links = await getRichMenuLinks("test-token");
   assert.deepEqual(links, [{ label: "ทางเข้า", url: "https://example.com/login" }]);
+});
+
+test("inspectDefaultRichMenu reports an OA Manager default without pretending it is empty", async () => {
+  global.fetch = async () => new Response(JSON.stringify({ message: "Forbidden" }), { status: 403 });
+  const result = await inspectDefaultRichMenu("test-token");
+  assert.equal(result.status, "OA_MANAGER");
+  assert.equal(result.links.length, 0);
+  assert.match(result.note, /OA Manager/);
+});
+
+test("inspectDefaultRichMenu reads only the Messaging API default menu", async () => {
+  global.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/v2/bot/user/all/richmenu")) {
+      return new Response(JSON.stringify({ richMenuId: "richmenu-default" }), { status: 200 });
+    }
+    if (url.endsWith("/v2/bot/richmenu/richmenu-default")) {
+      return new Response(JSON.stringify({
+        richMenuId: "richmenu-default",
+        areas: [{ action: { type: "uri", label: "เข้าสู่ระบบ", uri: "https://example.com/login" } }],
+      }), { status: 200 });
+    }
+    return new Response("{}", { status: 404 });
+  };
+  const result = await inspectDefaultRichMenu("test-token");
+  assert.equal(result.status, "READY");
+  assert.equal(result.richMenuId, "richmenu-default");
+  assert.deepEqual(result.links, [{ label: "เข้าสู่ระบบ", url: "https://example.com/login" }]);
 });

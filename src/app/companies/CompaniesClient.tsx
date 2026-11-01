@@ -60,6 +60,15 @@ type RichMenuPreview = {
   url: string;
   exists: boolean;
 };
+type RichMenuComparison = {
+  sourceStatus: "READY" | "OA_MANAGER" | "NO_DEFAULT" | "NO_URI";
+  comparisonStatus: "MATCH" | "MISMATCH" | "UNAVAILABLE";
+  richMenuId: string | null;
+  matched: number;
+  missingInMaster: RichMenuPreview[];
+  missingInRichMenu: Array<{ id: string; label: string; url: string }>;
+  note: string;
+};
 
 function statusMeta(status: string) {
   if (status === "UP") return { dot: "bg-emerald-500", text: "ใช้งานได้", cls: "text-emerald-600", pill: "bg-emerald-50 text-emerald-700" };
@@ -457,6 +466,7 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
   const [savedToken, setSavedToken] = useState(group.hasToken);
   const [preview, setPreview] = useState<OaPreview | null>(null);
   const [menuPreview, setMenuPreview] = useState<RichMenuPreview[] | null>(null);
+  const [menuComparison, setMenuComparison] = useState<RichMenuComparison | null>(null);
   const oa = oaMeta(group.oaStatus);
   const canTest = savedToken || !!token.trim();
 
@@ -513,7 +523,7 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
   }
 
   async function previewMenu() {
-    setBusy(true); setMsg(null); setMenuPreview(null);
+    setBusy(true); setMsg(null); setMenuPreview(null); setMenuComparison(null);
     const res = await fetch(`/api/linegroups/${group.id}/import-richmenu?dryRun=1`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -523,7 +533,18 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
     setBusy(false);
     if (res.ok) {
       setMenuPreview(data.links || []);
-      setMsg(data.note || `ตัวอย่าง Rich Menu: จะเพิ่ม ${data.added} · มีอยู่แล้ว ${data.skipped}`);
+      setMenuComparison({
+        sourceStatus: data.sourceStatus,
+        comparisonStatus: data.comparisonStatus,
+        richMenuId: data.richMenuId,
+        matched: data.matched || 0,
+        missingInMaster: data.missingInMaster || [],
+        missingInRichMenu: data.missingInRichMenu || [],
+        note: data.note || "",
+      });
+      if (data.comparisonStatus === "MATCH") setMsg("ตรวจเทียบแล้ว: ลิงก์ใน Rich Menu ตรงกับ Master");
+      else if (data.comparisonStatus === "MISMATCH") setMsg("ตรวจเทียบแล้ว: พบลิงก์ที่ไม่ตรงกัน กรุณาตรวจรายการด้านล่าง");
+      else setMsg(data.note || "ยังตรวจเทียบอัตโนมัติไม่ได้");
     } else setMsg(data.error || "ดูตัวอย่างไม่สำเร็จ");
   }
 
@@ -581,20 +602,41 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
       )}
       {menuPreview && (
         <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
-          <div className="font-semibold text-sm mb-2">ตัวอย่างลิงก์จาก Rich Menu</div>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div className="font-semibold text-sm">ผลตรวจเทียบ Rich Menu กับ Master</div>
+            {menuComparison && (
+              <span className={`badge text-[10px] ${menuComparison.comparisonStatus === "MATCH" ? "bg-emerald-50 text-emerald-700" : menuComparison.comparisonStatus === "MISMATCH" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"}`}>
+                {menuComparison.comparisonStatus === "MATCH" ? "ตรงกัน" : menuComparison.comparisonStatus === "MISMATCH" ? "พบข้อมูลไม่ตรง" : "ตรวจเทียบไม่ได้"}
+              </span>
+            )}
+          </div>
+          {menuComparison && <div className="text-[11px] text-slate-500 mb-2">{menuComparison.note}</div>}
           {menuPreview.length === 0 ? (
-            <div className="text-xs text-slate-500">ไม่พบลิงก์ที่ Messaging API มองเห็น</div>
+            <div className="text-xs text-slate-500">ไม่มีลิงก์จาก Messaging API ให้เปรียบเทียบ</div>
           ) : (
             <div className="space-y-2 max-h-56 overflow-auto">
               {menuPreview.map((l, i) => (
                 <div key={`${l.url}-${i}`} className="text-xs border-b border-slate-100 pb-2 last:border-0">
                   <div className="flex items-center gap-2">
-                    <span className={`badge text-[10px] ${l.exists ? "bg-slate-100 text-slate-600" : "bg-emerald-50 text-emerald-700"}`}>{l.exists ? "มีแล้ว" : "จะเพิ่ม"}</span>
+                    <span className={`badge text-[10px] ${l.exists ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{l.exists ? "ตรง Master" : "ไม่มีใน Master"}</span>
                     <b>{l.label}</b>
                   </div>
                   <div className="text-slate-500 break-all mt-1">{l.url}</div>
                 </div>
               ))}
+            </div>
+          )}
+          {!!menuComparison?.missingInRichMenu.length && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2">
+              <div className="text-xs font-semibold text-amber-800 mb-1">มีใน Master แต่ไม่พบใน Rich Menu</div>
+              {menuComparison.missingInRichMenu.map((l) => (
+                <div key={l.id} className="text-[11px] text-amber-800 break-all py-1">• {l.label}: {l.url}</div>
+              ))}
+            </div>
+          )}
+          {menuComparison?.sourceStatus === "OA_MANAGER" && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+              เมนูนี้น่าจะสร้างจาก LINE OA Manager จึงอ่าน URL ผ่าน Messaging API ไม่ได้ ไม่ถือว่าเมนูหายหรือข้อมูลผิด
             </div>
           )}
         </div>
@@ -606,10 +648,15 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
         {(group.oaStatus === "IDENTITY_MISMATCH" || preview?.status === "IDENTITY_MISMATCH") && (
           <button className="btn-ghost text-sm border-red-200 text-red-700 disabled:opacity-60" disabled={busy || !savedToken} onClick={confirmIdentity}>ยืนยันตัวตน OA ใหม่</button>
         )}
-        <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy || !canTest} onClick={previewMenu}>ดูตัวอย่าง Rich Menu</button>
-        <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy || !savedToken || !menuPreview} onClick={importMenu} title={!savedToken ? "บันทึก token ก่อน" : !menuPreview ? "ดูตัวอย่างก่อนนำเข้า" : ""}>นำลิงก์เข้า Master</button>
+        <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy || !canTest} onClick={previewMenu}>ตรวจเทียบ Rich Menu กับ Master</button>
+        <button
+          className="btn-ghost text-sm disabled:opacity-60"
+          disabled={busy || !savedToken || !menuPreview?.length || menuComparison?.sourceStatus !== "READY"}
+          onClick={importMenu}
+          title={!savedToken ? "บันทึก token ก่อน" : menuComparison?.sourceStatus !== "READY" ? "นำเข้าได้เฉพาะ Rich Menu ที่ Messaging API อ่านได้" : !menuPreview?.length ? "ไม่พบลิงก์ให้นำเข้า" : ""}
+        >นำลิงก์เข้า Master</button>
       </div>
-      <div className="text-[11px] text-slate-400 mt-3">เริ่มจาก “ทดลองตรวจ — ไม่บันทึก” ได้ทันที ระบบจะไม่เก็บ Token หรือผลตรวจจนกว่าจะกดบันทึก</div>
+      <div className="text-[11px] text-slate-400 mt-3">เริ่มจาก “ทดลองตรวจ — ไม่บันทึก” ได้ทันที และปุ่ม “ตรวจเทียบ Rich Menu กับ Master” เป็นการอ่านอย่างเดียว ไม่เปลี่ยนเมนูที่ลูกค้าเห็น</div>
     </ModalShell>
   );
 }

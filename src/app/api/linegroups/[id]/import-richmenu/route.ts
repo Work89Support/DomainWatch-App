@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageCompanies } from "@/lib/permissions";
-import { getRichMenuLinks } from "@/lib/line";
+import { getRichMenuLinks, inspectDefaultRichMenu, type RichMenuLink } from "@/lib/line";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +26,15 @@ export async function POST(
   if (!token)
     return NextResponse.json({ error: "ยังไม่ได้ใส่ Channel Access Token" }, { status: 400 });
 
-  let links;
+  let links: RichMenuLink[];
+  let inspection: Awaited<ReturnType<typeof inspectDefaultRichMenu>> | null = null;
   try {
-    links = await getRichMenuLinks(token);
+    if (dryRun) {
+      inspection = await inspectDefaultRichMenu(token);
+      links = inspection.links;
+    } else {
+      links = await getRichMenuLinks(token);
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
@@ -38,10 +44,38 @@ export async function POST(
   }
 
   // สร้างเฉพาะลิงก์ที่ยังไม่มี (เทียบด้วย URL ในห้องนี้)
-  const existing = new Set(g.links.map((l) => l.url.trim()));
-  const preview = links.map((l) => ({ ...l, exists: existing.has(l.url.trim()) }));
+  const normalizeUrl = (raw: string) => {
+    const value = raw.trim();
+    try {
+      const parsed = new URL(value);
+      parsed.hash = "";
+      parsed.hostname = parsed.hostname.toLowerCase();
+      if (parsed.pathname === "/") parsed.pathname = "";
+      else parsed.pathname = parsed.pathname.replace(/\/$/, "");
+      return parsed.toString().replace(/\/$/, "");
+    } catch {
+      return value.replace(/\/$/, "");
+    }
+  };
+  const activeMaster = g.links.filter((l) => l.isActive);
+  const existing = new Set(activeMaster.map((l) => normalizeUrl(l.url)));
+  const observed = new Set(links.map((l) => normalizeUrl(l.url)));
+  const preview = links.map((l) => ({ ...l, exists: existing.has(normalizeUrl(l.url)) }));
   if (dryRun) {
     const skipped = preview.filter((l) => l.exists).length;
+    const expectedRichMenuLinks = activeMaster.filter(
+      (l) => (l.category || "").trim() === "ริชเมนู" || (l.note || "").toLowerCase().includes("rich menu")
+    );
+    const missingInMaster = preview.filter((l) => !l.exists);
+    const missingInRichMenu = expectedRichMenuLinks
+      .filter((l) => !observed.has(normalizeUrl(l.url)))
+      .map((l) => ({ id: l.id, label: l.name, url: l.url }));
+    const comparable = inspection?.status === "READY" || inspection?.status === "NO_URI";
+    const comparisonStatus = !comparable
+      ? "UNAVAILABLE"
+      : missingInMaster.length || missingInRichMenu.length
+        ? "MISMATCH"
+        : "MATCH";
     return NextResponse.json({
       ok: true,
       dryRun: true,
@@ -49,7 +83,13 @@ export async function POST(
       total: preview.length,
       added: preview.length - skipped,
       skipped,
-      note: preview.length ? null : "ไม่พบลิงก์ใน Rich Menu ที่ Messaging API มองเห็น",
+      sourceStatus: inspection?.status || "NO_DEFAULT",
+      richMenuId: inspection?.richMenuId || null,
+      comparisonStatus,
+      matched: skipped,
+      missingInMaster,
+      missingInRichMenu,
+      note: inspection?.note || "ตรวจ Rich Menu ไม่สำเร็จ",
     });
   }
 
