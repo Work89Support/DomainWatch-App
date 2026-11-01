@@ -67,10 +67,13 @@ export async function POST(
       (l) => (l.category || "").trim() === "ริชเมนู" || (l.note || "").toLowerCase().includes("rich menu")
     );
     const missingInMaster = preview.filter((l) => !l.exists);
-    const missingInRichMenu = expectedRichMenuLinks
+    const rawMissingInRichMenu = expectedRichMenuLinks
       .filter((l) => !observed.has(normalizeUrl(l.url)))
       .map((l) => ({ id: l.id, label: l.name, url: l.url }));
     const comparable = inspection?.status === "READY" || inspection?.status === "NO_URI";
+    // หาก LINE ไม่เปิดรายละเอียดเมนูให้ API ห้ามแสดง Master เป็น "ไม่พบใน Rich Menu"
+    // เพราะยังไม่มีหลักฐานว่าเมนูหายหรือ URL ผิดจริง
+    const missingInRichMenu = comparable ? rawMissingInRichMenu : [];
     const comparisonStatus = !comparable
       ? "UNAVAILABLE"
       : missingInMaster.length || missingInRichMenu.length

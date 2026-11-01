@@ -626,7 +626,7 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
               ))}
             </div>
           )}
-          {!!menuComparison?.missingInRichMenu.length && (
+          {menuComparison?.comparisonStatus !== "UNAVAILABLE" && !!menuComparison?.missingInRichMenu.length && (
             <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2">
               <div className="text-xs font-semibold text-amber-800 mb-1">มีใน Master แต่ไม่พบใน Rich Menu</div>
               {menuComparison.missingInRichMenu.map((l) => (
