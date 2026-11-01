@@ -3,17 +3,27 @@
 
 const LINE_TIMEOUT_MS = 12000;
 
-async function lineGet(path: string, token: string): Promise<Response> {
+async function lineRequest(
+  path: string,
+  token: string,
+  init: RequestInit = {},
+  dataApi = false
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), LINE_TIMEOUT_MS);
   try {
-    return await fetch(`https://api.line.me${path}`, {
-      headers: { Authorization: `Bearer ${token}` },
+    return await fetch(`${dataApi ? "https://api-data.line.me" : "https://api.line.me"}${path}`, {
+      ...init,
+      headers: { Authorization: `Bearer ${token}`, ...(init.headers || {}) },
       signal: controller.signal,
     });
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function lineGet(path: string, token: string): Promise<Response> {
+  return lineRequest(path, token);
 }
 
 export type BotInfo = {
@@ -64,6 +74,65 @@ export type DefaultRichMenuInspection = {
 type LineAction = { type?: string; label?: string; uri?: string };
 type LineArea = { action?: LineAction };
 type LineRichMenu = { richMenuId?: string; areas?: LineArea[] };
+
+export type RichMenuDraftConfig = {
+  size: { width: number; height: number };
+  selected: boolean;
+  name: string;
+  chatBarText: string;
+  areas: Array<{
+    bounds: { x: number; y: number; width: number; height: number };
+    action: { type: "uri"; label: string; uri: string };
+  }>;
+};
+
+async function lineError(res: Response): Promise<string> {
+  const body = await res.json().catch(() => ({})) as { message?: string; details?: Array<{ message?: string }> };
+  const detail = body.details?.map((d) => d.message).filter(Boolean).join(", ");
+  return detail || body.message || `LINE_HTTP_${res.status}`;
+}
+
+export async function validateRichMenuDraft(token: string, config: RichMenuDraftConfig): Promise<void> {
+  const res = await lineRequest("/v2/bot/richmenu/validate", token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+  if (res.status === 401 || res.status === 403) throw new Error("TOKEN_INVALID");
+  if (!res.ok) throw new Error(await lineError(res));
+}
+
+// สร้าง Rich Menu + อัปโหลดรูป แต่ยังไม่ผูกเป็น default จึงยังไม่กระทบลูกค้า
+export async function createRichMenuDraft(
+  token: string,
+  config: RichMenuDraftConfig,
+  image: Uint8Array,
+  contentType: "image/png" | "image/jpeg"
+): Promise<string> {
+  await validateRichMenuDraft(token, config);
+  const createRes = await lineRequest("/v2/bot/richmenu", token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+  if (createRes.status === 401 || createRes.status === 403) throw new Error("TOKEN_INVALID");
+  if (!createRes.ok) throw new Error(await lineError(createRes));
+  const created = await createRes.json() as { richMenuId?: string };
+  const richMenuId = (created.richMenuId || "").trim();
+  if (!richMenuId) throw new Error("LINE ไม่ส่ง richMenuId กลับมา");
+
+  const uploadRes = await lineRequest(`/v2/bot/richmenu/${richMenuId}/content`, token, {
+    method: "POST",
+    headers: { "Content-Type": contentType },
+    body: Buffer.from(image),
+  }, true);
+  if (!uploadRes.ok) {
+    // ลบ object ที่เพิ่งสร้างในคำสั่งนี้ เพื่อไม่ทิ้ง draft ที่ไม่มีรูปค้างใน LINE
+    await lineRequest(`/v2/bot/richmenu/${richMenuId}`, token, { method: "DELETE" }).catch(() => undefined);
+    throw new Error(await lineError(uploadRes));
+  }
+  return richMenuId;
+}
 
 function extractLinks(rm: LineRichMenu): RichMenuLink[] {
   const out: RichMenuLink[] = [];

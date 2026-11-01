@@ -50,6 +50,11 @@ model LineGroup {
   oaLastCheckedAt    DateTime?
   oaError            String?
 
+  // Rich Menu ที่สร้างผ่าน Messaging API เพื่อทดลอง (ยังไม่ตั้งเป็น Default)
+  richMenuDraftId        String?
+  richMenuDraftName      String?
+  richMenuDraftCreatedAt DateTime?
+
   createdAt DateTime @default(now())
 
   links Link[]

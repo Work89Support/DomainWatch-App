@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkOa, enforceOaIdentityBaseline, getBotInfo, getRichMenuLinks, inspectDefaultRichMenu } from "../src/lib/line";
+import { checkOa, createRichMenuDraft, enforceOaIdentityBaseline, getBotInfo, getRichMenuLinks, inspectDefaultRichMenu } from "../src/lib/line";
 
 const originalFetch = global.fetch;
 
@@ -146,4 +146,35 @@ test("inspectDefaultRichMenu reads only the Messaging API default menu", async (
   assert.equal(result.status, "READY");
   assert.equal(result.richMenuId, "richmenu-default");
   assert.deepEqual(result.links, [{ label: "เข้าสู่ระบบ", url: "https://example.com/login" }]);
+});
+
+test("createRichMenuDraft validates, creates and uploads without setting a default", async () => {
+  const calls: Array<{ url: string; method: string }> = [];
+  global.fetch = async (input, init) => {
+    const url = String(input);
+    const method = init?.method || "GET";
+    calls.push({ url, method });
+    if (url.endsWith("/v2/bot/richmenu/validate")) return new Response("{}", { status: 200 });
+    if (url.endsWith("/v2/bot/richmenu") && method === "POST") {
+      return new Response(JSON.stringify({ richMenuId: "richmenu-draft" }), { status: 200 });
+    }
+    if (url.includes("api-data.line.me/v2/bot/richmenu/richmenu-draft/content")) {
+      return new Response("{}", { status: 200 });
+    }
+    return new Response("{}", { status: 404 });
+  };
+  const config = {
+    size: { width: 2500, height: 1686 },
+    selected: true,
+    name: "PS8 draft",
+    chatBarText: "เมนู",
+    areas: [{
+      bounds: { x: 0, y: 0, width: 2500, height: 1686 },
+      action: { type: "uri" as const, label: "ทางเข้า", uri: "https://example.com" },
+    }],
+  };
+  const id = await createRichMenuDraft("test-token", config, new Uint8Array([1, 2, 3]), "image/jpeg");
+  assert.equal(id, "richmenu-draft");
+  assert.deepEqual(calls.map((c) => c.method), ["POST", "POST", "POST"]);
+  assert.equal(calls.some((c) => c.url.includes("/user/all/richmenu")), false);
 });

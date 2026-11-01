@@ -55,6 +55,9 @@ export default async function CompaniesPage() {
       oaHasPicture: g.oaHasPicture,
       oaLastCheckedAt: g.oaLastCheckedAt,
       oaError: g.oaError,
+      richMenuDraftId: g.richMenuDraftId,
+      richMenuDraftName: g.richMenuDraftName,
+      richMenuDraftCreatedAt: g.richMenuDraftCreatedAt,
     })),
   }));
 

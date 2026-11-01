@@ -32,6 +32,9 @@ type LineGroup = {
   oaHasPicture: boolean | null;
   oaLastCheckedAt: string | null;
   oaError: string | null;
+  richMenuDraftId: string | null;
+  richMenuDraftName: string | null;
+  richMenuDraftCreatedAt: string | null;
 };
 type Company = {
   id: string;
@@ -332,12 +335,12 @@ function LinkItem({ link, onClick }: { link: LinkLite; onClick: () => void }) {
 function ModalShell({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
-      <div className="card w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="card w-full max-w-md max-h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3 p-5 border-b border-slate-100">
           <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
           <button className="text-slate-400 hover:text-slate-600 text-2xl leading-none" onClick={onClose}>×</button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="p-5 overflow-y-auto">{children}</div>
       </div>
     </div>
   );
@@ -458,6 +461,39 @@ function CompanyTgModal({ company, onClose, onSaved }: { company: Company; onClo
   );
 }
 
+type RichMenuAreaDraft = { key: string; label: string; url: string };
+
+const PS8_RICH_MENU_AREAS: RichMenuAreaDraft[] = [
+  { key: "A", label: "ทางเข้า", url: "https://porsche88.pw" },
+  { key: "B", label: "ทางเข้า", url: "https://porsche88.pw" },
+  { key: "C", label: "ทางเข้า", url: "https://porsche88.pw" },
+  { key: "D", label: "การเงิน", url: "https://lin.ee/YQclkdP" },
+  { key: "E", label: "สำรอง", url: "https://sites.google.com/view/porsche88/home" },
+  { key: "F", label: "รับทรัพย์", url: "https://vimeo.com/983698969" },
+];
+
+async function compressRichMenuImage(file: File): Promise<{ blob: Blob; width: number; height: number }> {
+  const bitmap = await createImageBitmap(file);
+  if (bitmap.width !== 2500 || bitmap.height !== 1686) {
+    bitmap.close();
+    throw new Error(`ภาพมีขนาด ${bitmap.width}×${bitmap.height} px — ต้องเป็น 2500×1686 px`);
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) { bitmap.close(); throw new Error("เบราว์เซอร์เตรียมภาพไม่ได้"); }
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  for (const quality of [0.82, 0.75, 0.68, 0.6, 0.52]) {
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    if (blob && blob.size <= 1_000_000) return { blob, width: canvas.width, height: canvas.height };
+  }
+  throw new Error("บีบอัดภาพให้ต่ำกว่า 1 MB ไม่สำเร็จ กรุณาใช้ไฟล์ JPEG ที่เล็กลง");
+}
+
 function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; company: string; onClose: () => void; onSaved: () => void }) {
   const [token, setToken] = useState("");
   const [expectedName, setExpectedName] = useState(group.expectedOaName || "");
@@ -467,6 +503,14 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
   const [preview, setPreview] = useState<OaPreview | null>(null);
   const [menuPreview, setMenuPreview] = useState<RichMenuPreview[] | null>(null);
   const [menuComparison, setMenuComparison] = useState<RichMenuComparison | null>(null);
+  const isPs8Pilot = company.trim().toUpperCase() === "PS8" || (group.oaPremiumId || "").toLowerCase() === "@ps8sv";
+  const [showDraftBuilder, setShowDraftBuilder] = useState(false);
+  const [draftName, setDraftName] = useState("ฮาโลวีน 69 API Draft");
+  const [draftChatBar, setDraftChatBar] = useState("เมนู");
+  const [draftAreas, setDraftAreas] = useState<RichMenuAreaDraft[]>(PS8_RICH_MENU_AREAS);
+  const [draftFile, setDraftFile] = useState<File | null>(null);
+  const [draftValidated, setDraftValidated] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(group.richMenuDraftId);
   const oa = oaMeta(group.oaStatus);
   const canTest = savedToken || !!token.trim();
 
@@ -556,6 +600,53 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
     setBusy(false);
     if (res.ok) { setMsg(`ดึงลิงก์แล้ว: เพิ่มใหม่ ${data.added} · มีอยู่แล้ว ${data.skipped}`); onSaved(); }
     else setMsg(data.error || "ดึงไม่สำเร็จ");
+  }
+
+  function draftConfig() {
+    const columns = [
+      { x: 0, width: 833 },
+      { x: 833, width: 834 },
+      { x: 1667, width: 833 },
+    ];
+    return {
+      size: { width: 2500, height: 1686 },
+      selected: true,
+      name: draftName.trim(),
+      chatBarText: draftChatBar.trim(),
+      areas: draftAreas.map((area, index) => ({
+        bounds: { x: columns[index % 3].x, y: index < 3 ? 0 : 843, width: columns[index % 3].width, height: 843 },
+        action: { type: "uri" as const, label: area.label.trim(), uri: area.url.trim() },
+      })),
+    };
+  }
+
+  async function submitDraft(action: "validate" | "create") {
+    if (!savedToken) { setMsg("กรุณาบันทึก Channel Access Token ก่อน"); return; }
+    if (!draftFile) { setMsg("กรุณาเลือกไฟล์ SV.png ก่อน"); return; }
+    if (action === "create" && !confirm("ยืนยันสร้าง Rich Menu แบบร่างใน LINE? ขั้นตอนนี้ยังไม่ตั้งเป็น Default และลูกค้ายังไม่เห็นเมนูใหม่")) return;
+    setBusy(true); setMsg(action === "validate" ? "กำลังตรวจรูปและข้อมูลกับ LINE..." : "กำลังสร้างแบบร่างและอัปโหลดรูป...");
+    try {
+      const prepared = await compressRichMenuImage(draftFile);
+      const form = new FormData();
+      form.set("action", action);
+      form.set("config", JSON.stringify(draftConfig()));
+      form.set("image", prepared.blob, "PS8-Halloween69-richmenu.jpg");
+      const res = await fetch(`/api/linegroups/${group.id}/richmenu-draft`, { method: "POST", body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "ดำเนินการไม่สำเร็จ");
+      if (action === "validate") {
+        setDraftValidated(true);
+        setMsg(`ตรวจความพร้อมผ่าน — ภาพถูกบีบอัดเหลือ ${(prepared.blob.size / 1024).toFixed(0)} KB และยังไม่ได้สร้าง Rich Menu`);
+      } else {
+        setDraftId(data.richMenuId);
+        setMsg(`สร้างแบบร่างแล้ว: ${data.richMenuId} — ยังไม่ได้ตั้งเป็น Default`);
+      }
+    } catch (error) {
+      setDraftValidated(false);
+      setMsg(error instanceof Error ? error.message : "ดำเนินการไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -655,7 +746,56 @@ function RoomOaModal({ group, company, onClose, onSaved }: { group: LineGroup; c
           onClick={importMenu}
           title={!savedToken ? "บันทึก token ก่อน" : menuComparison?.sourceStatus !== "READY" ? "นำเข้าได้เฉพาะ Rich Menu ที่ Messaging API อ่านได้" : !menuPreview?.length ? "ไม่พบลิงก์ให้นำเข้า" : ""}
         >นำลิงก์เข้า Master</button>
+        {isPs8Pilot && (
+          <button className="btn-ghost text-sm" disabled={busy} onClick={() => setShowDraftBuilder((value) => !value)}>
+            {showDraftBuilder ? "ซ่อนแบบร่าง PS8" : "เตรียม Rich Menu API — PS8"}
+          </button>
+        )}
       </div>
+      {isPs8Pilot && showDraftBuilder && (
+        <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50/30 p-3">
+          <div className="font-semibold text-sm text-slate-800">แบบร่างทดลอง PS8 — 6 ช่อง (3×2)</div>
+          <div className="text-[11px] text-slate-500 mt-1">ตรวจความพร้อมได้โดยไม่เปลี่ยนเมนูจริง การสร้างแบบร่างก็ยังไม่ทำให้ลูกค้าเห็นจนกว่าจะตั้งเป็น Default ในขั้นถัดไป</div>
+          <label className="label mt-3">ชื่อ Rich Menu</label>
+          <input className="input mb-2" value={draftName} onChange={(e) => { setDraftName(e.target.value); setDraftValidated(false); }} />
+          <label className="label">ข้อความแถบเมนู</label>
+          <input className="input mb-2" maxLength={14} value={draftChatBar} onChange={(e) => { setDraftChatBar(e.target.value); setDraftValidated(false); }} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {draftAreas.map((area, index) => (
+              <div key={area.key} className="rounded-lg border border-slate-200 bg-white p-2">
+                <div className="text-xs font-semibold mb-1">ช่อง {area.key} — {area.label}</div>
+                <input
+                  className="input text-xs py-1.5"
+                  value={area.url}
+                  onChange={(e) => {
+                    const next = [...draftAreas];
+                    next[index] = { ...next[index], url: e.target.value };
+                    setDraftAreas(next);
+                    setDraftValidated(false);
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+          <label className="label mt-3">ภาพต้นฉบับ 2500×1686 px</label>
+          <input
+            type="file"
+            accept="image/png,image/jpeg"
+            className="block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:text-brand-700"
+            onChange={(e) => { setDraftFile(e.target.files?.[0] || null); setDraftValidated(false); }}
+          />
+          {draftFile && <div className="text-[11px] text-slate-500 mt-1">เลือกแล้ว: {draftFile.name} · ระบบจะบีบอัดสำเนาให้ไม่เกิน 1 MB อัตโนมัติ</div>}
+          {draftId && (
+            <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800 break-all">
+              แบบร่างใน LINE: <b>{draftId}</b><br />ยังไม่ได้ตั้งเป็น Default และยังไม่กระทบลูกค้า
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2 mt-3">
+            <button className="btn-ghost text-sm disabled:opacity-60" disabled={busy || !draftFile} onClick={() => submitDraft("validate")}>ตรวจความพร้อม — ไม่สร้าง</button>
+            <button className="btn-primary text-sm disabled:opacity-60" disabled={busy || !draftValidated || !!draftId} onClick={() => submitDraft("create")}>สร้างแบบร่างใน LINE</button>
+          </div>
+        </div>
+      )}
       <div className="text-[11px] text-slate-400 mt-3">เริ่มจาก “ทดลองตรวจ — ไม่บันทึก” ได้ทันที และปุ่ม “ตรวจเทียบ Rich Menu กับ Master” เป็นการอ่านอย่างเดียว ไม่เปลี่ยนเมนูที่ลูกค้าเห็น</div>
     </ModalShell>
   );
