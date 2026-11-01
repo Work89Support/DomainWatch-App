@@ -8,6 +8,7 @@ const baseNav = [
   { href: "/", label: "แดชบอร์ด", icon: "📊" },
   { href: "/companies", label: "บริษัท / ห้อง LINE", icon: "🏢" },
   { href: "/links", label: "Master Data ลิงก์", icon: "🔗" },
+  { href: "/crm", label: "CRM / ลิงก์ SMS", icon: "📨" },
   { href: "/incidents", label: "เหตุการณ์", icon: "🚨" },
   { href: "/report", label: "รายงานรอบวัน", icon: "📅" },
   { href: "/kpi", label: "KPI รายคน", icon: "🏆" },
@@ -15,11 +16,11 @@ const baseNav = [
 ];
 
 const allowedByRole: Record<AppRole, string[]> = {
-  ADMIN: ["/", "/companies", "/links", "/incidents", "/report", "/kpi", "/agents", "/users"],
-  ADMIN_LEAD: ["/", "/links", "/incidents", "/kpi"],
-  ADMIN_COMPANY: ["/", "/links", "/incidents", "/kpi"],
-  IT: ["/", "/links", "/incidents"],
-  MANAGEMENT: ["/", "/incidents", "/report", "/kpi"],
+  ADMIN: ["/", "/companies", "/links", "/crm", "/incidents", "/report", "/kpi", "/agents", "/users"],
+  ADMIN_LEAD: ["/", "/links", "/crm", "/incidents", "/kpi"],
+  ADMIN_COMPANY: ["/", "/links", "/crm", "/incidents", "/kpi"],
+  IT: ["/", "/links", "/crm", "/incidents"],
+  MANAGEMENT: ["/", "/crm", "/incidents", "/report", "/kpi"],
   SITE_STAFF: ["/agents"],
 };
 

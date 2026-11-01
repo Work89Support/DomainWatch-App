@@ -78,6 +78,14 @@ export function canRunCheck(role: AppRole): boolean {
   return role === "ADMIN" || role === "ADMIN_LEAD" || role === "ADMIN_COMPANY";
 }
 
+export function canViewCrmLinks(role: AppRole): boolean {
+  return ["ADMIN", "ADMIN_LEAD", "ADMIN_COMPANY", "IT", "MANAGEMENT"].includes(role);
+}
+
+export function canEditCrmLinks(role: AppRole): boolean {
+  return role === "ADMIN" || role === "ADMIN_LEAD" || role === "ADMIN_COMPANY";
+}
+
 export function canManageMobileAgents(role: AppRole): boolean {
   return role === "ADMIN";
 }

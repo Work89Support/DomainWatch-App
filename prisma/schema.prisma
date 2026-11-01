@@ -94,35 +94,54 @@ model Link {
   @@index([category])
 }
 
+/// ลิงก์สั้นสำหรับ CRM / SMS — แยกจาก Master Data และไม่สร้าง Incident/KPI/Telegram
+model CrmLink {
+  id             String     @id @default(cuid())
+  name           String
+  url            String     @unique
+  note           String?
+  isActive       Boolean    @default(true)
+  lastStatus     LinkStatus @default(UNKNOWN)
+  lastCheckedAt  DateTime?
+  lastHttpCode   Int?
+  lastResponseMs Int?
+  lastError      String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([isActive])
+  @@index([lastStatus])
+}
+
 /// โทรศัพท์ตรวจเครือข่ายมือถือ — token เก็บเฉพาะ hash และผูกได้ทีละเครื่อง
 model MobileAgent {
-  id              String    @id @default(cuid())
-  siteOwnerId     String?
-  siteOwner       User?     @relation("SiteDevices", fields: [siteOwnerId], references: [id], onDelete: SetNull)
-  siteAssignedAt  DateTime?
-  name            String
-  carrier         String    @default("TRUE")
-  isActive        Boolean   @default(true)
+  id                String    @id @default(cuid())
+  siteOwnerId       String?
+  siteOwner         User?     @relation("SiteDevices", fields: [siteOwnerId], references: [id], onDelete: SetNull)
+  siteAssignedAt    DateTime?
+  name              String
+  carrier           String    @default("TRUE")
+  isActive          Boolean   @default(true)
   emergencyLockedAt DateTime?
-  tokenHash       String?   @unique
-  deviceId        String?   @unique
-  deviceLabel     String?
-  appVersion      String?
-  networkType     String?
-  reportedCarrier String?
+  tokenHash         String?   @unique
+  deviceId          String?   @unique
+  deviceLabel       String?
+  appVersion        String?
+  networkType       String?
+  reportedCarrier   String?
   /// เส้นทางที่แอดมินกำหนด: CELLULAR_DIRECT หรือ VPN_DEFAULT
-  routeMode       String    @default("CELLULAR_DIRECT")
+  routeMode         String    @default("CELLULAR_DIRECT")
   /// เส้นทางที่แอปใช้จริงในรอบล่าสุด
-  lastRouteMode   String?
+  lastRouteMode     String?
   /// ตำแหน่งโดยประมาณของ Public IP ทางออกเท่านั้น — ไม่ใช่ GPS และไม่เก็บ IP
-  egressCountry   String?
-  egressRegion    String?
-  egressCity      String?
-  egressUpdatedAt DateTime?
-  enrolledAt      DateTime?
-  lastSeenAt      DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  egressCountry     String?
+  egressRegion      String?
+  egressCity        String?
+  egressUpdatedAt   DateTime?
+  enrolledAt        DateTime?
+  lastSeenAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   enrollments      MobileEnrollment[]
   urlStatuses      MobileUrlStatus[]
@@ -135,12 +154,13 @@ model MobileAgent {
 
 /// QR ผูกเครื่องแบบใช้ครั้งเดียว มีอายุสั้น และไม่เก็บรหัสจริง
 model AgentPresence {
-  id String @id @default(cuid())
-  agentId String
+  id        String   @id @default(cuid())
+  agentId   String
   agentName String
-  ownerId String?
-  kind String
+  ownerId   String?
+  kind      String
   createdAt DateTime @default(now())
+
   @@index([agentId, createdAt])
 }
 
@@ -285,22 +305,22 @@ model CheckLog {
 /// เหตุการณ์ลิงก์ล่ม 1 ครั้ง = 1 incident (เปิดตอนล่ม ปิดตอนกลับมาใช้ได้/แก้เสร็จ)
 model Incident {
   waitingDetails Json?
-  id     String @id @default(cuid())
-  linkId String
-  link   Link   @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  id             String @id @default(cuid())
+  linkId         String
+  link           Link   @relation(fields: [linkId], references: [id], onDelete: Cascade)
 
   status IncidentStatus @default(OPEN)
 
   // ---- Timeline หลัก (ใช้คำนวณ KPI) ----
-  detectedAt     DateTime  @default(now()) // บอทตรวจพบว่าล่ม + เริ่มใช้ไม่ได้ตอนไหน
-  notifiedAt     DateTime? // ส่งแจ้งเตือนสำเร็จ
-  adminAckAt     DateTime? // แอดมินรับทราบ (กดรับเรื่อง)
+  detectedAt       DateTime  @default(now()) // บอทตรวจพบว่าล่ม + เริ่มใช้ไม่ได้ตอนไหน
+  notifiedAt       DateTime? // ส่งแจ้งเตือนสำเร็จ
+  adminAckAt       DateTime? // แอดมินรับทราบ (กดรับเรื่อง)
   adminAckUserName String?
-  itAckUserName String?
-  adminUpdatedAt DateTime? // แอดมินอัพเดต/บันทึกลิงก์ใหม่ในระบบ = จบหน้าที่แอดมิน
-  itAckAt        DateTime? // IT รับเรื่อง
-  itResolvedAt   DateTime? // IT ชี้แจงสาเหตุ + ให้ลิงก์สำรองแล้ว
-  resolvedAt     DateTime? // ปิดเคส (ลิงก์กลับมาใช้ได้)
+  itAckUserName    String?
+  adminUpdatedAt   DateTime? // แอดมินอัพเดต/บันทึกลิงก์ใหม่ในระบบ = จบหน้าที่แอดมิน
+  itAckAt          DateTime? // IT รับเรื่อง
+  itResolvedAt     DateTime? // IT ชี้แจงสาเหตุ + ให้ลิงก์สำรองแล้ว
+  resolvedAt       DateTime? // ปิดเคส (ลิงก์กลับมาใช้ได้)
 
   // ---- รายละเอียด ----
   cause       String? // สาเหตุที่ IT ชี้แจง เช่น โดนบล็อกโดเมน
@@ -350,21 +370,21 @@ model User {
   itIncidents           Incident[]           @relation("ITIncidents")
   adminNetworkIncidents NetworkIncident[]    @relation("AdminNetworkIncidents")
   companyAssignments    UserCompany[]
-  siteDevices           MobileAgent[] @relation("SiteDevices")
+  siteDevices           MobileAgent[]        @relation("SiteDevices")
   passwordResetTokens   PasswordResetToken[]
 }
 
 /// Ownership snapshots are retained even if a device or user is deleted.
 model AgentAssignment {
-  id            String   @id @default(cuid())
-  agentId       String
-  agentName     String
+  id              String   @id @default(cuid())
+  agentId         String
+  agentName       String
   previousOwnerId String?
-  ownerId       String?
-  ownerName     String?
-  assignedById  String
-  assignedByName String
-  createdAt     DateTime @default(now())
+  ownerId         String?
+  ownerName       String?
+  assignedById    String
+  assignedByName  String
+  createdAt       DateTime @default(now())
 
   @@index([agentId, createdAt])
   @@index([ownerId, createdAt])

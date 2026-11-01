@@ -232,8 +232,37 @@ export type CheckSummary = {
   pending: number;
   newIncidents: number;
   recovered: number;
+  crmChecked: number;
   ranAt: string;
 };
+
+export async function runCrmChecks(): Promise<number> {
+  const links = await prisma.crmLink.findMany({ where: { isActive: true } });
+  if (links.length === 0) return 0;
+
+  const uniqueUrls = Array.from(new Set(links.map((link) => urlKey(link.url))));
+  const results = new Map<string, ProbeResult>();
+  await forEachConcurrent(uniqueUrls, Math.min(CONCURRENCY, 32), async (url) => {
+    results.set(url, await probe(url));
+  });
+
+  const checkedAt = new Date();
+  await forEachConcurrent(links, Math.min(WRITE_CONCURRENCY, 12), async (link) => {
+    const result = results.get(urlKey(link.url));
+    if (!result) return;
+    await prisma.crmLink.update({
+      where: { id: link.id },
+      data: {
+        lastStatus: classifyProbeStatus(result),
+        lastCheckedAt: checkedAt,
+        lastHttpCode: result.httpCode,
+        lastResponseMs: result.responseMs,
+        lastError: result.error,
+      },
+    });
+  });
+  return links.length;
+}
 
 export async function forEachConcurrent<T>(
   items: T[],
@@ -316,10 +345,12 @@ export async function runCheck(): Promise<CheckSummary> {
     pending: 0,
     newIncidents: 0,
     recovered: 0,
+    crmChecked: 0,
     ranAt: new Date().toISOString(),
   };
   // OA เป็นงานอิสระ จึงเริ่มพร้อมกับการตรวจ URL แทนการรอต่อท้ายรอบ
   const oaChecksPromise = runOaChecks(routes);
+  const crmChecksPromise = runCrmChecks();
 
   // URL เดียวอาจอยู่หลายห้อง: ยิงจริงครั้งเดียวแล้วใช้ผลร่วมกัน
   const uniqueUrls = Array.from(new Set(links.map((link) => urlKey(link.url))));
@@ -475,6 +506,7 @@ export async function runCheck(): Promise<CheckSummary> {
   });
 
   await oaChecksPromise;
+  summary.crmChecked = await crmChecksPromise;
 
   return summary;
 }
